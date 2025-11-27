@@ -1,27 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
-import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
-import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
+import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
+import { Check, Sword, Shield, Cross, Zap, Save, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { doc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
 
-const Register: React.FC = () => {
-  const { currentUser, signInWithGoogle, login, signup } = useAuth();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const navigate = useNavigate();
+const Profile: React.FC = () => {
+  const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  
-  // Auth Form State
-  const [isLoginMode, setIsLoginMode] = useState(true);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPass, setAuthPass] = useState('');
+  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [profileExists, setProfileExists] = useState(false);
 
-  // Profile Form State
+  // Form State
   const [formData, setFormData] = useState({
     displayName: '',
     inGameId: '',
@@ -34,55 +31,51 @@ const Register: React.FC = () => {
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   useEffect(() => {
-    const fetchGuilds = async () => {
-      const q = query(collection(db, "guilds"), orderBy("name"));
-      const snapshot = await getDocs(q);
-      const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
-      setGuilds(guildsData);
-      if (guildsData.length > 0) {
-        setFormData(prev => ({ ...prev, guildId: guildsData[0].id }));
+    const fetchData = async () => {
+      if (!currentUser) return;
+      
+      try {
+        // Fetch Guilds
+        const q = query(collection(db, "guilds"), orderBy("name"));
+        const snapshot = await getDocs(q);
+        const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
+        setGuilds(guildsData);
+
+        // Fetch Current Profile
+        const docRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          setProfileExists(true);
+          const data = docSnap.data() as UserProfile;
+          setFormData({
+            displayName: data.displayName,
+            inGameId: data.inGameId,
+            role: data.role,
+            guildId: data.guildId
+          });
+          setSelectedWeapons(data.weapons || []);
+          if (data.photoURL) {
+              setSelectedAvatar(data.photoURL);
+          }
+        } else {
+            setProfileExists(false);
+            // Pre-fill email name if available
+            if (currentUser.displayName) {
+                setFormData(prev => ({...prev, displayName: currentUser.displayName!}));
+            }
+            if (guildsData.length > 0) {
+                setFormData(prev => ({...prev, guildId: guildsData[0].id}));
+            }
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchGuilds();
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      setFormData(prev => ({ ...prev, displayName: currentUser.displayName || '' }));
-      if (currentUser.photoURL) {
-          // If the user's photoURL is in our preset list, select it. Otherwise default to first preset.
-          if (PRESET_AVATARS.includes(currentUser.photoURL)) {
-             setSelectedAvatar(currentUser.photoURL);
-          }
-      }
-    }
+    fetchData();
   }, [currentUser]);
-
-  const getFirebaseErrorMessage = (code: string) => {
-    switch (code) {
-      case 'auth/invalid-credential': return 'Incorrect email or password.';
-      case 'auth/user-not-found': return 'No account found with this email.';
-      case 'auth/email-already-in-use': return 'Email is already registered.';
-      case 'auth/weak-password': return 'Password should be at least 6 characters.';
-      case 'auth/network-request-failed': return 'Network error. Check your connection.';
-      default: return 'An unexpected error occurred. Please try again.';
-    }
-  };
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (isLoginMode) {
-        await login(authEmail, authPass);
-      } else {
-        await signup(authEmail, authPass);
-      }
-      navigate('/'); // Safe Redirect
-    } catch (error: any) {
-      const msg = getFirebaseErrorMessage(error.code);
-      showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
-    }
-  };
 
   const getAvailableWeapons = (role: RoleType): Weapon[] => {
     if (role === RoleType.HYBRID) {
@@ -95,12 +88,15 @@ const Register: React.FC = () => {
   };
 
   useEffect(() => {
-    const available = getAvailableWeapons(formData.role);
-    const validSelections = selectedWeapons.filter(w => available.includes(w));
-    if (validSelections.length !== selectedWeapons.length) {
-      setSelectedWeapons(validSelections);
+    // Only filter if not loading to avoid clearing weapons on initial load before role is set
+    if (!isLoading) {
+      const available = getAvailableWeapons(formData.role);
+      const validSelections = selectedWeapons.filter(w => available.includes(w));
+      if (validSelections.length !== selectedWeapons.length) {
+        setSelectedWeapons(validSelections);
+      }
     }
-  }, [formData.role]);
+  }, [formData.role, isLoading]);
 
   const handleWeaponToggle = (weapon: Weapon) => {
     if (selectedWeapons.includes(weapon)) {
@@ -119,30 +115,39 @@ const Register: React.FC = () => {
       return;
     }
 
-    if (!currentUser) {
-      showAlert("Please sign in first.", 'error');
-      return;
-    }
+    if (!currentUser) return;
 
+    setIsSaving(true);
+    setSaveSuccess(false);
     try {
-      await setDoc(doc(db, "users", currentUser.uid), {
-        uid: currentUser.uid,
+      const dataToSave: any = {
         inGameId: formData.inGameId,
         displayName: formData.displayName,
         role: formData.role,
         weapons: selectedWeapons,
         guildId: formData.guildId,
         photoURL: selectedAvatar,
-        status: 'online',
         email: currentUser.email,
-        systemRole: 'Member' // Default system role
-      });
+        uid: currentUser.uid
+      };
 
-      showAlert("Profile Created Successfully!", 'success', "Welcome!");
-      navigate('/');
+      // If creating a new profile, set default system fields
+      if (!profileExists) {
+        dataToSave.systemRole = 'Member';
+        dataToSave.status = 'online';
+      }
+
+      // Use setDoc with merge: true to handle both create and update
+      await setDoc(doc(db, "users", currentUser.uid), dataToSave, { merge: true });
+      
+      setProfileExists(true); // Now it exists
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error("Error creating profile:", error);
-      showAlert("Failed to save profile.", 'error');
+      console.error("Error updating profile:", error);
+      showAlert("Failed to update profile.", 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -162,72 +167,19 @@ const Register: React.FC = () => {
 
   const availableWeapons = getAvailableWeapons(formData.role);
 
+  if (!currentUser) return <div className="p-8 text-center">Please sign in to edit your profile.</div>;
+  if (isLoading) return <div className="p-8 text-center">Loading Profile...</div>;
+
   return (
     <div className="max-w-4xl mx-auto py-10 px-4">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Join the Black Rose</h2>
-        <p className="text-zinc-500 dark:text-zinc-400 mt-2">Complete your profile to access the guild network.</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+           <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Edit Profile</h2>
+           <p className="text-zinc-500 dark:text-zinc-400 mt-2">Update your guild credentials and loadout.</p>
+        </div>
       </div>
 
-      {!currentUser ? (
-        <div className="max-w-md mx-auto bg-white dark:bg-zinc-900 p-8 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800">
-          <div className="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
-            <button 
-              onClick={() => setIsLoginMode(true)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${isLoginMode ? 'border-rose-900 text-rose-900 dark:text-rose-500' : 'border-transparent text-zinc-500'}`}
-            >
-              Sign In
-            </button>
-            <button 
-              onClick={() => setIsLoginMode(false)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${!isLoginMode ? 'border-rose-900 text-rose-900 dark:text-rose-500' : 'border-transparent text-zinc-500'}`}
-            >
-              Sign Up
-            </button>
-          </div>
-          
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Email</label>
-              <input 
-                type="email" 
-                required 
-                className="w-full px-4 py-2 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Password</label>
-              <input 
-                type="password" 
-                required 
-                className="w-full px-4 py-2 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                value={authPass}
-                onChange={e => setAuthPass(e.target.value)}
-              />
-            </div>
-            <button type="submit" className="w-full bg-rose-900 text-white py-2 rounded-lg font-medium hover:bg-rose-950 transition-colors">
-              {isLoginMode ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <div className="my-6 flex items-center">
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-            <span className="px-4 text-xs text-zinc-400 uppercase">Or continue with</span>
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-          </div>
-
-          <button 
-            onClick={signInWithGoogle} 
-            className="w-full flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
-            Google
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-8 bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+      <form onSubmit={handleSubmit} className="space-y-8 bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
           {/* Section 1: Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
@@ -237,7 +189,6 @@ const Register: React.FC = () => {
                   type="text" 
                   required
                   className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
-                  placeholder="Your In-Game Name"
                   value={formData.displayName}
                   onChange={e => setFormData({...formData, displayName: e.target.value})}
                 />
@@ -248,26 +199,22 @@ const Register: React.FC = () => {
                   type="text" 
                   required
                   className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
-                  placeholder="e.g. 1234567"
                   value={formData.inGameId}
                   onChange={e => setFormData({...formData, inGameId: e.target.value})}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Guild Branch</label>
-                {guilds.length === 0 ? (
-                    <div className="text-sm text-red-500 border border-red-200 bg-red-50 p-2 rounded">System Not Initialized. Contact Admin.</div>
-                ) : (
-                  <select 
-                    className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
-                    value={formData.guildId}
-                    onChange={e => setFormData({...formData, guildId: e.target.value})}
-                  >
+                <select 
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
+                  value={formData.guildId}
+                  onChange={e => setFormData({...formData, guildId: e.target.value})}
+                >
+                    <option value="" disabled>Select Guild</option>
                     {guilds.map(g => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
-                  </select>
-                )}
+                </select>
               </div>
             </div>
 
@@ -275,7 +222,7 @@ const Register: React.FC = () => {
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">Choose Avatar</label>
               <div className="flex flex-col items-center gap-3">
                   <button 
-                    type="button" 
+                    type="button"
                     onClick={() => setIsAvatarModalOpen(true)}
                     className="group relative w-32 h-32 rounded-full border-4 border-rose-900 overflow-hidden bg-zinc-100 dark:bg-zinc-800 hover:ring-4 hover:ring-rose-900/20 transition-all"
                   >
@@ -352,14 +299,17 @@ const Register: React.FC = () => {
           <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
             <button 
               type="submit"
-              className="bg-rose-900 hover:bg-rose-950 text-white px-8 py-3 rounded-lg font-medium shadow-lg shadow-rose-900/20 transition-all transform active:scale-95 w-full md:w-auto disabled:opacity-50"
-              disabled={!currentUser}
+              disabled={isSaving}
+              className={`px-8 py-3 rounded-lg font-medium shadow-lg transition-all transform active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  saveSuccess 
+                  ? 'bg-green-600 text-white shadow-green-900/20' 
+                  : 'bg-rose-900 hover:bg-rose-950 text-white shadow-rose-900/20'
+              }`}
             >
-              Create Profile
+              {isSaving ? 'Saving...' : saveSuccess ? <><Check size={18} /> Saved!</> : <><Save size={18} /> Save Changes</>}
             </button>
           </div>
-        </form>
-      )}
+      </form>
 
       <AvatarSelectionModal 
         isOpen={isAvatarModalOpen}
@@ -371,4 +321,4 @@ const Register: React.FC = () => {
   );
 };
 
-export default Register;
+export default Profile;

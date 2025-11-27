@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
@@ -13,11 +14,12 @@ import {
   Swords,
   X,
   Moon,
-  Sun
+  Sun,
+  UserCircle
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -56,18 +58,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch User Profile for Admin Check
+  // Fetch User Profile to check System Role
   useEffect(() => {
-    if (!currentUser) {
+    if (currentUser) {
+      const unsub = onSnapshot(doc(db, "users", currentUser.uid), (doc) => {
+        if (doc.exists()) {
+          setUserProfile(doc.data() as UserProfile);
+        }
+      });
+      return () => unsub();
+    } else {
       setUserProfile(null);
-      return;
     }
-    const unsub = onSnapshot(doc(db, "users", currentUser.uid), (doc) => {
-      if (doc.exists()) {
-        setUserProfile(doc.data() as UserProfile);
-      }
-    });
-    return () => unsub();
   }, [currentUser]);
 
   const toggleDarkMode = () => {
@@ -95,8 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Logic: Show Admin if Logged In AND (System Role is Admin/Officer OR System is Empty)
-  const canSeeAdmin = currentUser && (
+  const showAdmin = currentUser && (
     (userProfile?.systemRole === 'Admin' || userProfile?.systemRole === 'Officer') || 
     guilds.length === 0
   );
@@ -179,25 +180,35 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          <div className="mt-8 px-4 mb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            System
-          </div>
+          {showAdmin && (
+            <>
+              <div className="mt-8 px-4 mb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                System
+              </div>
 
-          {canSeeAdmin && (
-            <NavLink to="/admin" className={navClass} onClick={handleLinkClick}>
-              <Settings size={18} />
-              Admin
-            </NavLink>
+              <NavLink to="/admin" className={navClass} onClick={handleLinkClick}>
+                <Settings size={18} />
+                Admin
+              </NavLink>
+            </>
           )}
           
-          <NavLink to="/register" className={navClass} onClick={handleLinkClick}>
-            <PlusCircle size={18} />
-            Join Guild
-          </NavLink>
+          {!currentUser && (
+            <NavLink to="/register" className={navClass} onClick={handleLinkClick}>
+              <PlusCircle size={18} />
+              Join Guild
+            </NavLink>
+          )}
 
         </nav>
 
         <div className="p-4 border-t border-zinc-800 space-y-2">
+          {currentUser && (
+            <NavLink to="/profile" className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white">
+               <UserCircle size={18} />
+               <span className="text-sm font-medium">My Profile</span>
+            </NavLink>
+          )}
           <button 
             onClick={toggleDarkMode}
             className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"

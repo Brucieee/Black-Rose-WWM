@@ -1,6 +1,9 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, googleProvider } from '../services/firebase';
+import { auth, googleProvider, db } from '../services/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useAlert } from './AlertContext';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -22,21 +25,31 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showAlert } = useAlert();
+
+  const updateUserStatus = async (uid: string, status: 'online' | 'offline') => {
+    try {
+      await updateDoc(doc(db, "users", uid), { status });
+    } catch (error) {
+      // Silently fail if profile doesn't exist yet (e.g. during first registration)
+      console.log("Status update skipped (profile might not exist yet)");
+    }
+  };
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
+      await updateUserStatus(res.user.uid, 'online');
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
-        // Ignore this specific error, it just means they clicked X
         return;
       }
       console.error("Error signing in", error);
       if (error.code === 'auth/unauthorized-domain') {
-        const domain = window.location.hostname;
-        alert(`Configuration Error: Domain not authorized.\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add: ${domain}`);
+        const domain = window.location.hostname || window.location.host || 'your-app-domain';
+        showAlert(`Configuration Error: Domain not authorized. Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add: ${domain}`, 'error', 'Domain Not Whitelisted');
       } else {
-        alert(`Sign in failed: ${error.message}`);
+        showAlert(`Sign in failed: ${error.message}`, 'error', 'Google Sign In Failed');
       }
     }
   };
@@ -44,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, pass: string) => {
     try {
       const res = await createUserWithEmailAndPassword(auth, email, pass);
+      // Don't set status here, let Register page handle profile creation first
       return res.user;
     } catch (error: any) {
       console.error("Signup error", error);
@@ -54,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, pass: string) => {
     try {
       const res = await signInWithEmailAndPassword(auth, email, pass);
+      await updateUserStatus(res.user.uid, 'online');
       return res.user;
     } catch (error: any) {
       console.error("Login error", error);
@@ -62,6 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (currentUser) {
+      await updateUserStatus(currentUser.uid, 'offline');
+    }
     await signOut(auth);
   };
 
@@ -69,6 +87,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
+      if (user) {
+        // Mark as online when session is restored
+        updateUserStatus(user.uid, 'online');
+      }
     });
     return unsubscribe;
   }, []);

@@ -1,16 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { useParams } from 'react-router-dom';
-import { MOCK_EVENTS, MOCK_USERS } from '../services/mockData';
+import { useParams, useNavigate } from 'react-router-dom';
+import { MOCK_EVENTS } from '../services/mockData';
 import { Party, RoleType, Guild } from '../types';
-import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, X, Activity } from 'lucide-react';
+import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
+import { useAlert } from '../contexts/AlertContext';
+import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 
 const GuildDashboard: React.FC = () => {
   const { guildId } = useParams<{ guildId: string }>();
-  const { currentUser, signInWithGoogle } = useAuth();
+  const { currentUser } = useAuth();
+  const { showAlert } = useAlert();
+  const navigate = useNavigate();
   
   // Real Data State
   const [guild, setGuild] = useState<Guild | null>(null);
@@ -18,6 +22,8 @@ const GuildDashboard: React.FC = () => {
   
   // Real-time parties from Firestore
   const [parties, setParties] = useState<Party[]>([]);
+  const [memberCount, setMemberCount] = useState(0);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
   const [newPartyData, setNewPartyData] = useState({
@@ -42,8 +48,8 @@ const GuildDashboard: React.FC = () => {
     });
 
     // Fetch Parties
-    const q = query(collection(db, "parties"), where("guildId", "==", guildId));
-    const unsubParties = onSnapshot(q, (snapshot) => {
+    const qParties = query(collection(db, "parties"), where("guildId", "==", guildId));
+    const unsubParties = onSnapshot(qParties, (snapshot) => {
       const partiesData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -51,9 +57,16 @@ const GuildDashboard: React.FC = () => {
       setParties(partiesData);
     });
 
+    // Fetch Real Member Count
+    const qUsers = query(collection(db, "users"), where("guildId", "==", guildId));
+    const unsubUsers = onSnapshot(qUsers, (snapshot) => {
+      setMemberCount(snapshot.size);
+    });
+
     return () => {
         unsubGuild();
         unsubParties();
+        unsubUsers();
     };
   }, [guildId]);
 
@@ -67,7 +80,7 @@ const GuildDashboard: React.FC = () => {
   const handleCreateParty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
-      alert("You must be logged in!");
+      navigate('/register');
       return;
     }
 
@@ -94,13 +107,13 @@ const GuildDashboard: React.FC = () => {
       setNewPartyData({ name: '', activity: '', maxMembers: 5 });
     } catch (error) {
       console.error("Error creating party:", error);
-      alert("Failed to create party. Check console.");
+      showAlert("Failed to create party. Check console.", 'error');
     }
   };
 
   const joinParty = async (partyId: string, currentMembers: any[]) => {
     if (!currentUser) {
-      signInWithGoogle();
+      navigate('/register');
       return;
     }
 
@@ -124,6 +137,7 @@ const GuildDashboard: React.FC = () => {
   };
 
   const kickMember = async (partyId: string, memberUid: string, memberData: any) => {
+    console.log(`Attempting to kick member ${memberUid} from party ${partyId}`);
     if (!window.confirm("Are you sure you want to kick this member?")) return;
     
     try {
@@ -131,43 +145,34 @@ const GuildDashboard: React.FC = () => {
       await updateDoc(partyRef, {
         currentMembers: arrayRemove(memberData)
       });
+      console.log("Member kicked successfully.");
     } catch (error) {
       console.error("Error kicking member:", error);
+      showAlert("Failed to kick member. Check console.", 'error');
     }
   };
 
   const deleteParty = async (partyId: string) => {
+    console.log(`Attempting to delete party: ${partyId}`);
     if (!window.confirm("Disband this party?")) return;
     try {
       await deleteDoc(doc(db, "parties", partyId));
+      console.log("Party deleted successfully.");
     } catch (error) {
       console.error("Error deleting party:", error);
+      showAlert("Failed to delete party. Check console.", 'error');
     }
   };
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      setIsCreateModalOpen(false);
-    }
-  };
-
-  // Mock member count based on guild ID for display purposes
-  const memberCount = MOCK_USERS.filter(u => u.guildId === guildId).length + 42; 
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-6">
       
-      {/* Title & Breadcrumbs */}
+      {/* Title */}
       <div className="mb-8">
-        <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 mb-1">
-          <span>Guild Branches</span>
-          <span>/</span>
-          <span className="text-zinc-900 dark:text-zinc-100 font-medium">{guild.name}</span>
-        </div>
         <div className="flex justify-between items-center">
            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{guild.name} Dashboard</h1>
            {!currentUser && (
-             <button onClick={signInWithGoogle} className="text-sm bg-rose-900 text-white px-4 py-2 rounded">
+             <button onClick={() => navigate('/register')} className="text-sm bg-rose-900 text-white px-4 py-2 rounded">
                Login to Join Parties
              </button>
            )}
@@ -218,7 +223,7 @@ const GuildDashboard: React.FC = () => {
               Party Finder
             </h2>
             <button 
-              onClick={() => currentUser ? setIsCreateModalOpen(true) : signInWithGoogle()}
+              onClick={() => currentUser ? setIsCreateModalOpen(true) : navigate('/register')}
               className="flex items-center gap-2 bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-950 transition-colors shadow-sm shadow-rose-900/20"
             >
               <Plus size={16} />
@@ -375,100 +380,16 @@ const GuildDashboard: React.FC = () => {
               </div>
             )}
           </div>
-
-          <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 dark:from-zinc-900 dark:to-black rounded-xl p-6 text-white">
-            <h3 className="font-bold mb-2">Need Help?</h3>
-            <p className="text-sm text-zinc-400 mb-4">Contact your branch officers if you need assistance with parties or events.</p>
-            <div className="flex -space-x-2">
-               {[1,2,3].map(i => (
-                 <div key={i} className="w-8 h-8 rounded-full bg-zinc-700 border-2 border-zinc-800 flex items-center justify-center text-xs">?</div>
-               ))}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Create Party Modal */}
-      {isCreateModalOpen && createPortal(
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-          onClick={handleBackdropClick}
-        >
-          <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
-              <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Create New Party</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleCreateParty} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Party Name</label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. Daily Dungeon Run"
-                  className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-rose-900/20 outline-none bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                  value={newPartyData.name}
-                  onChange={e => setNewPartyData({...newPartyData, name: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Activity Type</label>
-                <select 
-                  className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-rose-900/20 outline-none bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                  value={newPartyData.activity}
-                  onChange={e => setNewPartyData({...newPartyData, activity: e.target.value})}
-                  required
-                >
-                  <option value="" disabled>Select Activity</option>
-                  <option value="Raid">Raid</option>
-                  <option value="Dungeon">Dungeon</option>
-                  <option value="PvP Arena">PvP Arena</option>
-                  <option value="World Boss">World Boss</option>
-                  <option value="Questing">Questing</option>
-                  <option value="Social">Social / Chill</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Max Members</label>
-                <div className="flex items-center gap-4">
-                  <input 
-                    type="range" 
-                    min="2" 
-                    max="10" 
-                    step="1"
-                    className="w-full accent-rose-900"
-                    value={newPartyData.maxMembers}
-                    onChange={e => setNewPartyData({...newPartyData, maxMembers: parseInt(e.target.value)})}
-                  />
-                  <span className="font-mono font-bold text-lg text-rose-900 dark:text-rose-500 w-8 text-center">{newPartyData.maxMembers}</span>
-                </div>
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="flex-1 px-4 py-2 bg-rose-900 text-white rounded-lg hover:bg-rose-950 font-medium shadow-lg shadow-rose-900/20"
-                >
-                  Create Party
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
+      <CreatePartyModal 
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleCreateParty}
+        data={newPartyData}
+        onChange={setNewPartyData}
+      />
 
     </div>
   );

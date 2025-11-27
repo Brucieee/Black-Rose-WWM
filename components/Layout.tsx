@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
@@ -23,17 +24,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <main className="flex-1 md:ml-64 p-0 mt-16 md:mt-0 transition-[margin] duration-300 flex flex-col min-h-screen">
         <div className="flex-1">
           {children}
-        </div>
-        
-        {/* Helper Footer for Firebase Config */}
-        <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 text-center">
-          <p className="text-xs text-zinc-400">
-            Firebase Configuration Helper: Add this domain to Authorized Domains:
-            <br />
-            <span className="inline-block mt-1 font-mono font-bold bg-zinc-200 dark:bg-zinc-800 text-rose-700 dark:text-rose-500 px-2 py-1 rounded select-all cursor-text">
-              {window.location.hostname}
-            </span>
-          </p>
         </div>
       </main>
     </div>

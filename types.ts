@@ -1,3 +1,4 @@
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -34,7 +35,7 @@ export interface UserProfile {
   inGameId: string;
   displayName: string;
   role: RoleType;
-  systemRole: 'Member' | 'Officer' | 'Admin'; // Added System Role
+  systemRole: 'Member' | 'Officer' | 'Admin';
   weapons: Weapon[];
   guildId: string;
   photoURL?: string;
@@ -45,7 +46,7 @@ export interface UserProfile {
 export interface Guild {
   id: string;
   name: string;
-  primaryGame: string;
+  primaryGame?: string;
 }
 
 export interface GuildEvent {
@@ -94,7 +95,19 @@ export interface QueueEntry {
   guildId: string;
 }
 
+export interface Boss {
+  name: string;
+  imageUrl: string;
+}
+
+export interface ScheduleSlot {
+  day: string;
+  time: string;
+}
+
 export interface BreakingArmyConfig {
-  currentBoss: string;
+  currentBoss: Record<string, string>; // guildId -> bossName
+  schedules: Record<string, ScheduleSlot[]>; // guildId -> [{day, time}]
   recentWinners: string[];
+  bossPool: Boss[];
 }

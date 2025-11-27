@@ -1,3 +1,4 @@
+
 import { Guild, GuildEvent, Party, RoleType, UserProfile, LeaderboardEntry, BreakingArmyConfig, QueueEntry } from "../types";
 
 export const MOCK_GUILDS: Guild[] = [
@@ -55,8 +56,22 @@ export const MOCK_PARTIES: Party[] = [
 ];
 
 export const BREAKING_ARMY_CONFIG: BreakingArmyConfig = {
-  currentBoss: 'Grand General of the Eternal Abyss',
-  recentWinners: ['u99', 'u98'] 
+  currentBoss: {
+    'g1': 'Grand General of the Eternal Abyss',
+    'g2': 'Grand General of the Eternal Abyss',
+    'g3': 'Black God of Wealth',
+  },
+  schedules: {
+    'g1': [{ day: 'Wednesday', time: '20:00' }, { day: 'Friday', time: '20:00' }],
+    'g2': [{ day: 'Wednesday', time: '21:00' }, { day: 'Friday', time: '21:00' }]
+  },
+  recentWinners: ['u99', 'u98'],
+  bossPool: [
+    { name: 'Grand General of the Eternal Abyss', imageUrl: '' },
+    { name: 'Black God of Wealth', imageUrl: '' },
+    { name: 'Dao Lord', imageUrl: '' },
+    { name: 'Heartseeker', imageUrl: '' }
+  ]
 };
 
 export const MOCK_QUEUE: QueueEntry[] = [
@@ -101,3 +116,30 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = Array.from({ length: 50 }).m
     status: 'verified'
   };
 });
+
+export const PRESET_AVATARS = [
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Ninefold_Freedom.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Blazing_Midnight.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Heavenly_Frost.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/New_Wings.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Change_of_Heart.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Hundred_Acts.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_XII.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_X.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_VIII.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_VI.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_IV.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_II.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Worldly_Bond.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Silent_Current.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Wild_Flame.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Water_Dragon_Hymn.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Veteran_Warrior.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Heart_of_the_Healer.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_XI.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_IX.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_VII.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_V.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_III.jpg",
+  "https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/avatars/Initial_I.jpg"
+];
