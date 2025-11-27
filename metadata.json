@@ -1,0 +1,7 @@
+{
+  "name": "Black Rose Guild Manager",
+  "description": "A comprehensive guild management dashboard for Black Rose, featuring role management, real-time party finding, and event tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,100 @@
+export enum RoleType {
+  DPS = 'DPS',
+  TANK = 'Tank',
+  HEALER = 'Healer',
+  HYBRID = 'Hybrid'
+}
+
+export const WEAPON_LIST = [
+  "Heavenquaker Spear", "Infernal Twinblades", "Inkwell Fan", 
+  "Mortal Rope Dart", "Nameless Spear", "Nameless Sword", 
+  "Vernal Umbrella", "Panacea Fan", "Soulshade Umbrella", 
+  "Stormbreaker Spear", "Strategic Sword", "Thundercry Blade"
+] as const;
+
+export type Weapon = typeof WEAPON_LIST[number];
+
+export const WEAPON_ROLE_MAP: Record<Weapon, RoleType[]> = {
+  "Heavenquaker Spear": [RoleType.DPS],
+  "Infernal Twinblades": [RoleType.DPS],
+  "Inkwell Fan": [RoleType.DPS],
+  "Mortal Rope Dart": [RoleType.DPS],
+  "Nameless Spear": [RoleType.DPS],
+  "Nameless Sword": [RoleType.DPS],
+  "Vernal Umbrella": [RoleType.DPS],
+  "Strategic Sword": [RoleType.DPS],
+  "Panacea Fan": [RoleType.HEALER],
+  "Soulshade Umbrella": [RoleType.HEALER],
+  "Stormbreaker Spear": [RoleType.TANK],
+  "Thundercry Blade": [RoleType.TANK]
+};
+
+export interface UserProfile {
+  uid: string;
+  inGameId: string;
+  displayName: string;
+  role: RoleType;
+  systemRole: 'Member' | 'Officer' | 'Admin'; // Added System Role
+  weapons: Weapon[];
+  guildId: string;
+  photoURL?: string;
+  status: 'online' | 'offline' | 'in-game';
+  email?: string | null;
+}
+
+export interface Guild {
+  id: string;
+  name: string;
+  primaryGame: string;
+}
+
+export interface GuildEvent {
+  id: string;
+  guildId?: string;
+  title: string;
+  date: string;
+  description: string;
+  type: 'Raid' | 'PvP' | 'Social' | 'Meeting';
+}
+
+export interface Party {
+  id: string;
+  guildId: string;
+  name: string;
+  activity: string;
+  leaderId: string;
+  leaderName: string;
+  maxMembers: number;
+  currentMembers: {
+    uid: string;
+    name: string;
+    role: RoleType;
+    photoURL?: string;
+  }[];
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  rank: number;
+  playerName: string;
+  playerUid: string;
+  branch: string;
+  boss: string;
+  time: string;
+  date: string;
+  proofUrl?: string;
+  status: 'verified' | 'pending';
+}
+
+export interface QueueEntry {
+  uid: string;
+  name: string;
+  role: RoleType;
+  joinedAt: Date;
+  guildId: string;
+}
+
+export interface BreakingArmyConfig {
+  currentBoss: string;
+  recentWinners: string[];
+}
