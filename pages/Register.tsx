@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { doc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -13,7 +12,14 @@ import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal'
 const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup } = useAuth();
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const navigate = useNavigate();
+  
+  // Handle both v5 and v6 router hooks for compatibility
+  const navigate = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
+  const safeNavigate = (path: string) => {
+    if (typeof navigate === 'function') navigate(path);
+    else if (navigate && navigate.push) navigate.push(path);
+  };
+
   const { showAlert } = useAlert();
   
   // Auth Form State
@@ -77,7 +83,7 @@ const Register: React.FC = () => {
       } else {
         await signup(authEmail, authPass);
       }
-      navigate('/'); // Safe Redirect
+      safeNavigate('/'); // Safe Redirect
     } catch (error: any) {
       const msg = getFirebaseErrorMessage(error.code);
       showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
@@ -139,7 +145,7 @@ const Register: React.FC = () => {
       });
 
       showAlert("Profile Created Successfully!", 'success', "Welcome!");
-      navigate('/');
+      safeNavigate('/');
     } catch (error) {
       console.error("Error creating profile:", error);
       showAlert("Failed to save profile.", 'error');

@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { BREAKING_ARMY_CONFIG, MOCK_GUILDS, MOCK_EVENTS } from '../services/mockData';
-import { Plus, Trash2, Calendar, Database, ListOrdered, Crown, Check, RefreshCw, UserCog, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, Calendar, Database, ListOrdered, Crown, Check, RefreshCw, UserCog, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, Bug } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry } from '../types';
 import { db } from '../services/firebase';
-import { collection, addDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, arrayUnion, writeBatch, arrayRemove } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, arrayUnion, writeBatch, arrayRemove, getDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { CreateGuildModal } from '../components/modals/CreateGuildModal';
@@ -16,7 +16,7 @@ const Admin: React.FC = () => {
   const { showAlert } = useAlert();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
-  // Tabs: 'guilds' is now Admin only. 'leaderboard' is new.
+  // Tabs
   const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'users' | 'leaderboard'>('events');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -111,6 +111,18 @@ const Admin: React.FC = () => {
     };
   }, [currentUser]);
 
+  // Debug Helper
+  const debugDataStructure = () => {
+    console.group("Admin Debug Data");
+    console.log("Guilds:", guilds);
+    console.log("Events:", events);
+    console.log("Leaderboard:", leaderboard);
+    console.log("Users:", allUsers);
+    console.log("Boss Pool:", bossPool);
+    console.groupEnd();
+    showAlert("Debug data logged to console", 'info');
+  };
+
   // --- Handlers ---
 
   const handleInitialize = async () => {
@@ -146,9 +158,9 @@ const Admin: React.FC = () => {
           showAlert("System Initialized with Default Data!", 'success');
       }
       console.log("Initialization complete.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Initialization failed:", error);
-      showAlert("Initialization failed. Check console.", 'error');
+      showAlert(`Initialization failed: ${error.message}`, 'error');
     }
   };
 
@@ -160,17 +172,23 @@ const Admin: React.FC = () => {
       await setDoc(doc(db, "guilds", newGuildData.id), newGuildData);
       setIsCreateModalOpen(false);
       console.log("Guild created.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating guild:", error);
-      showAlert("Failed to create guild", 'error');
+      showAlert(`Failed to create guild: ${error.message}`, 'error');
     }
   };
 
-  const handleDeleteGuild = async (id: string) => {
+  const handleDeleteGuild = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log("Attempting to delete guild ID:", id);
-    if (!id) return;
+    
+    if (!id) {
+        console.error("No guild ID provided");
+        return;
+    }
+    
     if (!window.confirm("Delete this branch?")) return;
-    console.log("Confirmation received. Deleting guild...");
     
     try {
       const guildRef = doc(db, "guilds", id);
@@ -178,9 +196,14 @@ const Admin: React.FC = () => {
       await deleteDoc(guildRef);
       console.log("Guild deleted successfully.");
       showAlert("Guild deleted", 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting guild:", error);
-      showAlert("Failed to delete guild. Check console.", 'error');
+      
+      if (error.code === 'permission-denied') {
+          showAlert("Permission Denied: Check Firebase Firestore Rules.", 'error');
+      } else {
+          showAlert(`Failed to delete guild: ${error.message}`, 'error');
+      }
     }
   };
 
@@ -190,23 +213,23 @@ const Admin: React.FC = () => {
     
     try {
       if (editingEventId) {
-          // Update
           await updateDoc(doc(db, "events", editingEventId), eventForm);
           showAlert("Event updated", 'success');
           setEditingEventId(null);
       } else {
-          // Create
           await addDoc(collection(db, "events"), eventForm);
           showAlert("Event scheduled", 'success');
       }
       setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving event:", error);
-      showAlert("Failed to save event", 'error');
+      showAlert(`Failed to save event: ${error.message}`, 'error');
     }
   };
 
-  const handleEditEvent = (event: GuildEvent) => {
+  const handleEditEvent = (e: React.MouseEvent, event: GuildEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
       setEditingEventId(event.id);
       setEventForm({
           title: event.title,
@@ -222,21 +245,39 @@ const Admin: React.FC = () => {
       setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
   };
 
-  const handleDeleteEvent = async (id: string) => {
+  const handleDeleteEvent = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log("Attempting to delete event ID:", id);
-    if (!id) return;
+    
+    if (!id) {
+        console.error("No event ID provided");
+        return;
+    }
+
     if(!window.confirm("Delete this event?")) return;
-    console.log("Confirmation received. Deleting event...");
 
     try {
       const eventRef = doc(db, "events", id);
-      console.log("Targeting document path:", eventRef.path);
+      console.log("Targeting document for deletion:", eventRef.path);
+      
+      // Verify existence first
+      const docSnap = await getDoc(eventRef);
+      if (!docSnap.exists()) {
+          console.warn("Document does not exist in Firestore.");
+          // We can proceed to delete anyway, or alert user. 
+      }
+
       await deleteDoc(eventRef);
       console.log("Event deleted successfully.");
       showAlert("Event deleted", 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting event:", error);
-      showAlert("Failed to delete event", 'error');
+      if (error.code === 'permission-denied') {
+          showAlert("Permission Denied: Check Firebase Rules.", 'error');
+      } else {
+          showAlert(`Failed to delete event: ${error.message}`, 'error');
+      }
     }
   };
 
@@ -245,54 +286,55 @@ const Admin: React.FC = () => {
     if (!bossForm.name) return;
     
     try {
-      // Read-Modify-Write pattern for robustness
       const newPool = [...bossPool];
-
       if (editingBossOriginalName) {
-          // Edit existing
           const index = newPool.findIndex(b => b.name === editingBossOriginalName);
           if (index !== -1) {
               newPool[index] = bossForm;
           }
       } else {
-          // Add new
           newPool.push(bossForm);
       }
 
-      // Use setDoc merge to update the array
       await setDoc(doc(db, "system", "breakingArmy"), { bossPool: newPool }, { merge: true });
       
       setBossForm({ name: '', imageUrl: '' });
       setEditingBossOriginalName(null);
       console.log("Boss saved successfully.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving boss:", error);
-      showAlert("Failed to save boss", 'error');
+      showAlert(`Failed to save boss: ${error.message}`, 'error');
     }
   };
 
-  const handleEditBoss = (boss: Boss) => {
+  const handleEditBoss = (e: React.MouseEvent, boss: Boss) => {
+      e.stopPropagation();
+      e.preventDefault();
       setBossForm(boss);
       setEditingBossOriginalName(boss.name);
   };
 
-  const handleDeleteBoss = async (bossName: string) => {
+  const handleDeleteBoss = async (e: React.MouseEvent, bossName: string) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log("Attempting to delete boss:", bossName);
+    if (!bossName) return;
     if (!window.confirm(`Delete ${bossName}?`)) return;
     
-    console.log("Confirmation received. Removing boss from pool...");
     try {
       const newPool = bossPool.filter(b => b.name !== bossName);
-      console.log("New boss pool length:", newPool.length);
-      
-      // Use setDoc with merge to safely overwrite the array
+      // Use setDoc with merge to ensure robust updating of the array
       await setDoc(doc(db, "system", "breakingArmy"), { bossPool: newPool }, { merge: true });
       
       console.log("Boss deleted successfully.");
       showAlert("Boss deleted", 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting boss:", error);
-      showAlert("Failed to delete boss. Check console.", 'error');
+      if (error.code === 'permission-denied') {
+          showAlert("Permission Denied: Check Firebase Rules.", 'error');
+      } else {
+          showAlert(`Failed to delete boss: ${error.message}`, 'error');
+      }
     }
   };
 
@@ -330,7 +372,8 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleResetQueue = async () => {
+  const handleResetQueue = async (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!window.confirm("Clear entire queue? This cannot be undone.")) return;
     console.log("Resetting queue using batch operation...");
     try {
@@ -340,13 +383,15 @@ const Admin: React.FC = () => {
         await batch.commit();
         console.log("Queue cleared.");
         showAlert("Queue cleared successfully", 'success');
-    } catch (e) {
-        console.error("Error clearing queue:", e);
-        showAlert("Failed to clear queue", 'error');
+    } catch (error: any) {
+        console.error("Error clearing queue:", error);
+        showAlert(`Failed to clear queue: ${error.message}`, 'error');
     }
   };
 
-  const handleRemoveWinner = async (uid: string) => {
+  const handleRemoveWinner = async (e: React.MouseEvent, uid: string) => {
+      e.stopPropagation();
+      e.preventDefault();
       console.log("Removing winner cooldown for:", uid);
       if(!window.confirm("Remove this user from Recent Winners/Cooldown?")) return;
       try {
@@ -355,9 +400,9 @@ const Admin: React.FC = () => {
         });
         console.log("User removed from cooldown.");
         showAlert("User removed from cooldown", 'success');
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error removing winner:", err);
-        showAlert("Failed to update winners list", 'error');
+        showAlert(`Failed to update winners list: ${err.message}`, 'error');
       }
   };
 
@@ -365,10 +410,10 @@ const Admin: React.FC = () => {
     if (!window.confirm("Reset ALL cooldowns?")) return;
     try {
       await setDoc(doc(db, "system", "breakingArmy"), { recentWinners: [] }, { merge: true });
-      console.log("Cooldowns reset.");
       showAlert("All cooldowns reset", 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error resetting cooldowns:", error);
+      showAlert(`Failed to reset cooldowns: ${error.message}`, 'error');
     }
   };
 
@@ -377,17 +422,14 @@ const Admin: React.FC = () => {
     if (!selectedWinner) return;
 
     try {
-      // Delete from queue
-      const qSnap = await getDocs(collection(db, "queue"));
-      const entryDoc = qSnap.docs.find(d => d.data().uid === selectedWinner.uid);
-      if (entryDoc) await deleteDoc(entryDoc.ref);
+      // Direct deletion by ID since we use UID as Document ID for Queue entries
+      console.log("Processing winner:", selectedWinner.uid);
+      await deleteDoc(doc(db, "queue", selectedWinner.uid));
 
-      // Add to Cooldown
       await setDoc(doc(db, "system", "breakingArmy"), {
         recentWinners: arrayUnion(selectedWinner.uid)
       }, { merge: true });
 
-      // Post to Leaderboard
       await addDoc(collection(db, "leaderboard"), {
           rank: 0, 
           playerName: selectedWinner.name,
@@ -401,9 +443,9 @@ const Admin: React.FC = () => {
 
       setIsWinnerModalOpen(false);
       showAlert(`Winner Declared: ${selectedWinner.name}`, 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error confirming winner:", error);
-      showAlert("Failed to declare winner", 'error');
+      showAlert(`Failed to declare winner: ${error.message}`, 'error');
     }
   };
 
@@ -424,25 +466,34 @@ const Admin: React.FC = () => {
           showAlert("Leaderboard entry updated", 'success');
           setIsLeaderboardModalOpen(false);
           setEditingLeaderboardEntry(null);
-      } catch (err) {
+      } catch (err: any) {
           console.error("Error updating leaderboard:", err);
-          showAlert("Failed to update entry", 'error');
+          showAlert(`Failed to update entry: ${err.message}`, 'error');
       }
   };
 
-  const handleDeleteLeaderboardEntry = async (id: string) => {
+  const handleDeleteLeaderboardEntry = async (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      e.preventDefault();
       console.log("Attempting to delete leaderboard entry:", id);
+      if(!id) return;
       if(!window.confirm("Delete this leaderboard entry?")) return;
-      console.log("Confirmation received. Deleting...");
+      
       try {
         const lbRef = doc(db, "leaderboard", id);
-        console.log("Targeting path:", lbRef.path);
+        console.log("Deleting doc:", lbRef.path);
+        
         await deleteDoc(lbRef);
         console.log("Leaderboard entry deleted.");
         showAlert("Entry deleted", 'success');
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting leaderboard entry:", error);
-        showAlert("Failed to delete entry", 'error');
+        console.error("Error Code:", error.code);
+        if (error.code === 'permission-denied') {
+            showAlert("Permission Denied: Check Firebase Rules.", 'error');
+        } else {
+            showAlert(`Failed to delete entry: ${error.message}`, 'error');
+        }
       }
   };
 
@@ -451,22 +502,29 @@ const Admin: React.FC = () => {
     try {
       await updateDoc(doc(db, "users", uid), { systemRole: newRole });
       console.log(`Role updated for ${uid} to ${newRole}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating role:", error);
+      showAlert(`Failed to update role: ${error.message}`, 'error');
     }
   };
 
-  const handleKickUser = async (user: UserProfile) => {
+  const handleKickUser = async (e: React.MouseEvent, user: UserProfile) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log("Attempting to kick/delete user:", user.uid);
     if (!window.confirm(`Kick ${user.displayName}? This deletes their profile data.`)) return;
-    console.log("Confirmation received. Deleting user...");
+    
     try {
         await deleteDoc(doc(db, "users", user.uid));
         console.log("User deleted successfully.");
         showAlert("User kicked/deleted", 'success');
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error deleting user:", error);
-        showAlert("Failed to delete user. Check permissions.", 'error');
+        if (error.code === 'permission-denied') {
+            showAlert("Permission Denied: Check Firebase Rules.", 'error');
+        } else {
+            showAlert(`Failed to delete user: ${error.message}`, 'error');
+        }
     }
   };
 
@@ -492,11 +550,15 @@ const Admin: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Administration</h2>
         <div className="flex gap-2">
-            <button onClick={handleInitialize} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium">
+            <button onClick={debugDataStructure} type="button" className="bg-zinc-800 text-white px-3 py-2 rounded-lg hover:bg-zinc-700 flex items-center gap-2 text-xs font-mono">
+                <Bug size={14} /> Debug
+            </button>
+            <button onClick={handleInitialize} type="button" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium">
                 <Database size={16} /> Initialize System
             </button>
             {activeTab === 'guilds' && isAdmin && (
             <button 
+                type="button"
                 onClick={() => setIsCreateModalOpen(true)}
                 className="bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-zinc-800 flex items-center gap-2 text-sm font-medium"
             >
@@ -534,7 +596,7 @@ const Admin: React.FC = () => {
                        <td className="px-6 py-4 text-zinc-400 font-mono text-xs">{g.id}</td>
                        <td className="px-6 py-4 font-medium text-zinc-900 dark:text-zinc-100">{g.name}</td>
                        <td className="px-6 py-4 text-right">
-                         <button onClick={() => handleDeleteGuild(g.id)} className="text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                         <button type="button" onClick={(e) => handleDeleteGuild(e, g.id)} className="text-red-600 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                        </td>
                      </tr>
                    ))}
@@ -566,12 +628,12 @@ const Admin: React.FC = () => {
              </div>
              <textarea placeholder="Description" value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className="p-2 border rounded h-24 w-full mb-4 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
              <div className="flex gap-2">
-                <button onClick={handleSaveEvent} className="bg-rose-900 text-white px-4 py-2 rounded-md hover:bg-rose-950 flex gap-2">
+                <button type="button" onClick={handleSaveEvent} className="bg-rose-900 text-white px-4 py-2 rounded-md hover:bg-rose-950 flex gap-2">
                     {editingEventId ? <Save size={16} /> : <Calendar size={16} />}
                     {editingEventId ? "Update Event" : "Schedule"}
                 </button>
                 {editingEventId && (
-                    <button onClick={handleCancelEditEvent} className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 px-4 py-2 rounded-md hover:bg-zinc-300">
+                    <button type="button" onClick={handleCancelEditEvent} className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 px-4 py-2 rounded-md hover:bg-zinc-300">
                         Cancel Edit
                     </button>
                 )}
@@ -588,8 +650,8 @@ const Admin: React.FC = () => {
                         <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => handleEditEvent(event)} className="text-zinc-400 hover:text-blue-600 p-2"><Edit size={18} /></button>
-                        <button onClick={() => handleDeleteEvent(event.id)} className="text-zinc-400 hover:text-red-600 p-2"><Trash2 size={18} /></button>
+                        <button type="button" onClick={(e) => handleEditEvent(e, event)} className="text-zinc-400 hover:text-blue-600 p-2"><Edit size={18} /></button>
+                        <button type="button" onClick={(e) => handleDeleteEvent(e, event.id)} className="text-zinc-400 hover:text-red-600 p-2"><Trash2 size={18} /></button>
                       </div>
                   </div>
              ))}
@@ -629,7 +691,7 @@ const Admin: React.FC = () => {
                                         <Clock size={14} className="text-zinc-400" />
                                         <span className="text-sm dark:text-zinc-200 font-medium">{slot.day} @ {slot.time}</span>
                                     </div>
-                                    <button onClick={() => handleRemoveSchedule(idx)} className="text-zinc-400 hover:text-red-600"><X size={14} /></button>
+                                    <button type="button" onClick={() => handleRemoveSchedule(idx)} className="text-zinc-400 hover:text-red-600"><X size={14} /></button>
                                 </div>
                             ))}
                         </div>
@@ -638,15 +700,15 @@ const Admin: React.FC = () => {
                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
                              </select>
                              <input type="time" value={newSchedule.time} onChange={e => setNewSchedule({...newSchedule, time: e.target.value})} className="w-24 p-2 border rounded dark:bg-zinc-800 dark:text-white text-sm" />
-                             <button onClick={handleAddSchedule} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 px-3 rounded"><Plus size={16} /></button>
+                             <button type="button" onClick={handleAddSchedule} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 px-3 rounded"><Plus size={16} /></button>
                         </div>
                      </div>
                      
                      <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
                         <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Global Actions</label>
                         <div className="flex gap-2">
-                            <button onClick={handleResetQueue} className="flex-1 text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded flex gap-2 items-center justify-center border border-red-100 dark:border-red-900/30 hover:bg-red-100 text-xs font-bold"><Trash2 size={14} /> Clear All Queues</button>
-                            <button onClick={handleResetCooldowns} className="flex-1 text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded flex gap-2 items-center justify-center border border-blue-100 dark:border-blue-900/30 hover:bg-blue-100 text-xs font-bold"><RefreshCw size={14} /> Reset Cooldowns</button>
+                            <button type="button" onClick={handleResetQueue} className="flex-1 text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded flex gap-2 items-center justify-center border border-red-100 dark:border-red-900/30 hover:bg-red-100 text-xs font-bold"><Trash2 size={14} /> Clear All Queues</button>
+                            <button type="button" onClick={handleResetCooldowns} className="flex-1 text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded flex gap-2 items-center justify-center border border-blue-100 dark:border-blue-900/30 hover:bg-blue-100 text-xs font-bold"><RefreshCw size={14} /> Reset Cooldowns</button>
                         </div>
                      </div>
                  </div>
@@ -671,7 +733,7 @@ const Admin: React.FC = () => {
                                         <tr key={entry.uid}>
                                         <td className="px-4 py-3 font-bold text-zinc-900 dark:text-zinc-100">{entry.name}</td>
                                         <td className="px-4 py-3 text-right">
-                                            <button onClick={() => { setSelectedWinner(entry); setIsWinnerModalOpen(true); }} className="bg-yellow-100 text-yellow-700 p-1.5 rounded hover:bg-yellow-200" title="Declare Winner"><Crown size={16} /></button>
+                                            <button type="button" onClick={() => { setSelectedWinner(entry); setIsWinnerModalOpen(true); }} className="bg-yellow-100 text-yellow-700 p-1.5 rounded hover:bg-yellow-200" title="Declare Winner"><Crown size={16} /></button>
                                         </td>
                                         </tr>
                                     ))
@@ -701,7 +763,7 @@ const Admin: React.FC = () => {
                                                 <tr key={uid}>
                                                     <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{u?.displayName || uid}</td>
                                                     <td className="px-4 py-3 text-right">
-                                                        <button onClick={() => handleRemoveWinner(uid)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
+                                                        <button type="button" onClick={(e) => handleRemoveWinner(e, uid)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16} /></button>
                                                     </td>
                                                 </tr>
                                             );
@@ -720,11 +782,11 @@ const Admin: React.FC = () => {
                 <div className="flex gap-2 mb-4">
                     <input type="text" placeholder="Boss Name" value={bossForm.name} onChange={e => setBossForm({...bossForm, name: e.target.value})} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:text-white" />
                     <input type="text" placeholder="Image URL (Optional)" value={bossForm.imageUrl} onChange={e => setBossForm({...bossForm, imageUrl: e.target.value})} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:text-white" />
-                    <button onClick={handleSaveBoss} className="bg-zinc-900 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <button type="button" onClick={handleSaveBoss} className="bg-zinc-900 text-white px-4 py-2 rounded flex items-center gap-2">
                         {editingBossOriginalName ? <Save size={16} /> : <Plus size={16} />}
                         {editingBossOriginalName ? "Save Changes" : "Add Boss"}
                     </button>
-                    {editingBossOriginalName && <button onClick={() => { setEditingBossOriginalName(null); setBossForm({name:'', imageUrl:''}); }} className="bg-zinc-200 text-zinc-700 px-3 rounded">Cancel</button>}
+                    {editingBossOriginalName && <button type="button" onClick={() => { setEditingBossOriginalName(null); setBossForm({name:'', imageUrl:''}); }} className="bg-zinc-200 text-zinc-700 px-3 rounded">Cancel</button>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto custom-scrollbar">
                     {bossPool.map(b => (
@@ -736,8 +798,8 @@ const Admin: React.FC = () => {
                                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{b.name}</span>
                              </div>
                              <div className="flex gap-1">
-                                 <button onClick={() => handleEditBoss(b)} className="text-zinc-400 hover:text-blue-500 p-1"><Edit size={14} /></button>
-                                 <button onClick={() => handleDeleteBoss(b.name)} className="text-zinc-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                                 <button type="button" onClick={(e) => handleEditBoss(e, b)} className="text-zinc-400 hover:text-blue-500 p-1"><Edit size={14} /></button>
+                                 <button type="button" onClick={(e) => handleDeleteBoss(e, b.name)} className="text-zinc-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
                              </div>
                         </div>
                     ))}
@@ -752,7 +814,7 @@ const Admin: React.FC = () => {
               <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
                   <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex justify-between items-center">
                       <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Leaderboard Records</h3>
-                      <button onClick={() => { setEditingLeaderboardEntry({id:'', rank:0, playerName:'', playerUid:'', branch:guilds[0]?.name, boss:bossPool[0]?.name, time:'', date:new Date().toISOString().split('T')[0], status:'verified'}); setIsLeaderboardModalOpen(true); }} className="text-xs bg-zinc-900 text-white px-3 py-1.5 rounded hover:bg-zinc-800">Add Record Manually</button>
+                      <button type="button" onClick={() => { setEditingLeaderboardEntry({id:'', rank:0, playerName:'', playerUid:'', branch:guilds[0]?.name, boss:bossPool[0]?.name, time:'', date:new Date().toISOString().split('T')[0], status:'verified'}); setIsLeaderboardModalOpen(true); }} className="text-xs bg-zinc-900 text-white px-3 py-1.5 rounded hover:bg-zinc-800">Add Record Manually</button>
                   </div>
                   <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm">
@@ -775,8 +837,8 @@ const Admin: React.FC = () => {
                                       <td className="px-6 py-3 text-zinc-500">{entry.date}</td>
                                       <td className="px-6 py-3 text-zinc-500">{entry.branch}</td>
                                       <td className="px-6 py-3 text-right">
-                                          <button onClick={() => { setEditingLeaderboardEntry(entry); setIsLeaderboardModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-2"><Edit size={16} /></button>
-                                          <button onClick={() => handleDeleteLeaderboardEntry(entry.id)} className="text-red-600 hover:text-red-800 p-2"><Trash2 size={16} /></button>
+                                          <button type="button" onClick={() => { setEditingLeaderboardEntry(entry); setIsLeaderboardModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-2"><Edit size={16} /></button>
+                                          <button type="button" onClick={(e) => handleDeleteLeaderboardEntry(e, entry.id)} className="text-red-600 hover:text-red-800 p-2"><Trash2 size={16} /></button>
                                       </td>
                                   </tr>
                               ))}
@@ -829,7 +891,7 @@ const Admin: React.FC = () => {
                           </select>
                        </td>
                        <td className="px-6 py-3 text-right">
-                          <button onClick={() => handleKickUser(user)} className="text-red-500 hover:bg-red-50 p-2 rounded" title="Kick User (Delete Profile)"><Trash2 size={16} /></button>
+                          <button type="button" onClick={(e) => handleKickUser(e, user)} className="text-red-500 hover:bg-red-50 p-2 rounded" title="Kick User (Delete Profile)"><Trash2 size={16} /></button>
                        </td>
                      </tr>
                    ))}

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { MOCK_EVENTS } from '../services/mockData';
 import { Party, RoleType, Guild } from '../types';
 import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, Activity } from 'lucide-react';
@@ -11,10 +10,16 @@ import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 
 const GuildDashboard: React.FC = () => {
-  const { guildId } = useParams<{ guildId: string }>();
+  const params = ReactRouterDOM.useParams();
+  const guildId = params.guildId;
+  const navigateHook = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
+  const navigate = (path: string) => {
+    if (typeof navigateHook === 'function') navigateHook(path);
+    else if (navigateHook && navigateHook.push) navigateHook.push(path);
+  };
+
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  const navigate = useNavigate();
   
   // Real Data State
   const [guild, setGuild] = useState<Guild | null>(null);
@@ -105,9 +110,9 @@ const GuildDashboard: React.FC = () => {
 
       setIsCreateModalOpen(false);
       setNewPartyData({ name: '', activity: '', maxMembers: 5 });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating party:", error);
-      showAlert("Failed to create party. Check console.", 'error');
+      showAlert(`Failed to create party: ${error.message}`, 'error');
     }
   };
 
@@ -136,7 +141,9 @@ const GuildDashboard: React.FC = () => {
     }
   };
 
-  const kickMember = async (partyId: string, memberUid: string, memberData: any) => {
+  const kickMember = async (e: React.MouseEvent, partyId: string, memberUid: string, memberData: any) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log(`Attempting to kick member ${memberUid} from party ${partyId}`);
     if (!window.confirm("Are you sure you want to kick this member?")) return;
     
@@ -146,21 +153,27 @@ const GuildDashboard: React.FC = () => {
         currentMembers: arrayRemove(memberData)
       });
       console.log("Member kicked successfully.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error kicking member:", error);
-      showAlert("Failed to kick member. Check console.", 'error');
+      showAlert(`Failed to kick member: ${error.message}`, 'error');
     }
   };
 
-  const deleteParty = async (partyId: string) => {
+  const deleteParty = async (e: React.MouseEvent, partyId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
     console.log(`Attempting to delete party: ${partyId}`);
     if (!window.confirm("Disband this party?")) return;
     try {
       await deleteDoc(doc(db, "parties", partyId));
       console.log("Party deleted successfully.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting party:", error);
-      showAlert("Failed to delete party. Check console.", 'error');
+      if (error.code === 'permission-denied') {
+          showAlert("Permission Denied: Check Firebase Rules.", 'error');
+      } else {
+          showAlert(`Failed to delete party: ${error.message}`, 'error');
+      }
     }
   };
 
@@ -172,7 +185,7 @@ const GuildDashboard: React.FC = () => {
         <div className="flex justify-between items-center">
            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{guild.name} Dashboard</h1>
            {!currentUser && (
-             <button onClick={() => navigate('/register')} className="text-sm bg-rose-900 text-white px-4 py-2 rounded">
+             <button type="button" onClick={() => navigate('/register')} className="text-sm bg-rose-900 text-white px-4 py-2 rounded">
                Login to Join Parties
              </button>
            )}
@@ -223,6 +236,7 @@ const GuildDashboard: React.FC = () => {
               Party Finder
             </h2>
             <button 
+              type="button"
               onClick={() => currentUser ? setIsCreateModalOpen(true) : navigate('/register')}
               className="flex items-center gap-2 bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-950 transition-colors shadow-sm shadow-rose-900/20"
             >
@@ -236,6 +250,7 @@ const GuildDashboard: React.FC = () => {
               <div className="py-12 text-center bg-white dark:bg-zinc-900 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-800">
                 <p className="text-zinc-500 dark:text-zinc-400">No active parties in this branch.</p>
                 <button 
+                  type="button"
                   onClick={() => setIsCreateModalOpen(true)}
                   className="text-rose-900 dark:text-rose-500 font-medium mt-2 hover:underline"
                 >
@@ -260,7 +275,8 @@ const GuildDashboard: React.FC = () => {
                        </span>
                        {currentUser?.uid === party.leaderId && (
                          <button 
-                           onClick={() => deleteParty(party.id)}
+                           type="button"
+                           onClick={(e) => deleteParty(e, party.id)}
                            className="text-zinc-400 hover:text-red-600 p-1" 
                            title="Disband Party"
                          >
@@ -304,7 +320,8 @@ const GuildDashboard: React.FC = () => {
                             {/* Kick Button: Only visible if Current User is Leader AND target is not themselves */}
                             {currentUser && party.leaderId === currentUser.uid && member.uid !== currentUser.uid && (
                               <button 
-                                onClick={() => kickMember(party.id, member.uid, member)}
+                                type="button"
+                                onClick={(e) => kickMember(e, party.id, member.uid, member)}
                                 className="text-zinc-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all"
                                 title="Kick Member"
                               >
@@ -336,6 +353,7 @@ const GuildDashboard: React.FC = () => {
                       </button>
                     ) : (
                       <button 
+                        type="button"
                         onClick={() => joinParty(party.id, party.currentMembers)}
                         disabled={party.currentMembers.length >= party.maxMembers}
                         className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

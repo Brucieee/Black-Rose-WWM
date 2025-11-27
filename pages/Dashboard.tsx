@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { UserProfile, RoleType, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot } from '../types';
+import * as ReactRouterDOM from 'react-router-dom';
+import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { collection, query, onSnapshot, orderBy, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAlert } from '../contexts/AlertContext';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
@@ -13,7 +12,11 @@ import { QueueModal } from '../components/modals/QueueModal';
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  const navigate = useNavigate();
+  const navigateHook = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
+  const navigate = (path: string) => {
+    if (typeof navigateHook === 'function') navigateHook(path);
+    else if (navigateHook && navigateHook.push) navigateHook.push(path);
+  };
   
   // Real Data State
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -28,13 +31,14 @@ const Dashboard: React.FC = () => {
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
   const [recentWinners, setRecentWinners] = useState<string[]>([]);
-  const [bossImageUrl, setBossImageUrl] = useState<string>('');
+  const [bossPool, setBossPool] = useState<{name: string, imageUrl: string}[]>([]);
   const [bossNames, setBossNames] = useState<string[]>([]);
 
   // Modals
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [selectedQueueGuildId, setSelectedQueueGuildId] = useState<string>('');
+  const [selectedQueueBossImage, setSelectedQueueBossImage] = useState<string>('');
 
   // Forms & Filters
   const [leaderboardBranch, setLeaderboardBranch] = useState('All');
@@ -55,15 +59,11 @@ const Dashboard: React.FC = () => {
         setCurrentBossMap(data.currentBoss || {});
         setSchedulesMap(data.schedules || {});
         setRecentWinners(data.recentWinners || []);
+        setBossPool(data.bossPool || []);
         
         // Update Boss Names for Filters
         const names = data.bossPool?.map(b => b.name) || [];
         setBossNames(names);
-        
-        // Find Boss Image for primary branch or first available
-        const firstActiveBoss = Object.values(data.currentBoss || {})[0];
-        const current = data.bossPool?.find(b => b.name === firstActiveBoss);
-        setBossImageUrl(current?.imageUrl || '');
       }
     });
 
@@ -128,12 +128,23 @@ const Dashboard: React.FC = () => {
     showAlert("Left Queue", 'info');
   };
 
+  const formatTime12Hour = (time24: string) => {
+    if (!time24) return '';
+    const [hours, minutes] = time24.split(':');
+    let h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // the hour '0' should be '12'
+    return `${h}:${minutes} ${ampm}`;
+  };
+
   const getScheduleDisplay = (guildId: string) => {
       const slots = schedulesMap[guildId] || [];
       if (slots.length === 0) return { days: 'Not Scheduled', time: '' };
       
       const days = slots.map(s => s.day.substring(0, 3)).join(' / ');
-      const time = slots[0].time; // Simplifying to show first time
+      // Format the time of the first slot
+      const time = formatTime12Hour(slots[0].time); 
       return { days, time };
   };
 
@@ -163,21 +174,9 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Breaking Army Card */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[400px] relative">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[400px]">
           
-          {/* Background Image Overlay if Boss has Image */}
-          {bossImageUrl && (
-            <div 
-              className="absolute inset-0 opacity-10 pointer-events-none z-0"
-              style={{
-                backgroundImage: `url(${bossImageUrl})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center'
-              }}
-            />
-          )}
-
-          <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 bg-rose-50/50 dark:bg-rose-950/20 flex-shrink-0 flex justify-between items-center z-10 relative">
+          <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 bg-rose-50/50 dark:bg-rose-950/20 flex-shrink-0 flex justify-between items-center relative">
              <div>
                <div className="flex items-center gap-2 mb-1">
                  <Calendar className="text-rose-900 dark:text-rose-500 w-5 h-5" />
@@ -186,23 +185,40 @@ const Dashboard: React.FC = () => {
                <p className="text-xs text-rose-700 dark:text-rose-400 font-medium ml-7 opacity-80">Weekly Boss Battles</p>
              </div>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1 z-10 relative">
+          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1 relative">
              {guilds.map((guild) => {
                const schedule = getScheduleDisplay(guild.id);
-               const boss = currentBossMap[guild.id] || 'TBD';
+               const bossName = currentBossMap[guild.id] || 'TBD';
+               const bossData = bossPool.find(b => b.name === bossName);
+               const bossImage = bossData?.imageUrl || 'https://via.placeholder.com/150';
                
                return (
-               <div key={guild.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border border-zinc-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm">
-                  <div className="flex flex-col max-w-[50%]">
-                    <div className="font-bold text-zinc-800 dark:text-zinc-200">{guild.name}</div>
-                    <div className="text-xs text-rose-700 dark:text-rose-400 font-medium truncate" title={`Boss: ${boss}`}>Boss: {boss}</div>
+               <div key={guild.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border border-zinc-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80">
+                  <div className="flex items-center gap-4">
+                    {/* Hexagon Avatar */}
+                    <div className="w-12 h-12 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
+                        <img src={bossImage} alt={bossName} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex flex-col">
+                        <div className="font-bold text-zinc-800 dark:text-zinc-200">{guild.name}</div>
+                        <div className="text-xs text-rose-700 dark:text-rose-400 font-medium truncate max-w-[150px]" title={`Boss: ${bossName}`}>{bossName}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-4 text-sm flex-shrink-0">
                     <div className="flex flex-col items-end">
                        <span className="text-zinc-500 dark:text-zinc-400 font-medium text-xs">{schedule.days}</span>
                        <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{schedule.time}</span>
                     </div>
-                    <button onClick={() => { setSelectedQueueGuildId(guild.id); setIsQueueModalOpen(true); }} className="bg-zinc-100 dark:bg-zinc-700 hover:bg-rose-900 hover:text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1"><ListOrdered size={14} /> Queue</button>
+                    <button 
+                        onClick={() => { 
+                            setSelectedQueueGuildId(guild.id); 
+                            setSelectedQueueBossImage(bossImage);
+                            setIsQueueModalOpen(true); 
+                        }} 
+                        className="bg-zinc-100 dark:bg-zinc-700 hover:bg-rose-900 hover:text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors"
+                    >
+                        <ListOrdered size={14} /> Queue
+                    </button>
                   </div>
                </div>
              )})}
@@ -259,7 +275,7 @@ const Dashboard: React.FC = () => {
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
           <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-xl flex items-center gap-2"><Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Guild Events</h3>
-          <Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></Link>
+          <ReactRouterDOM.Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></ReactRouterDOM.Link>
         </div>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {events.map(event => {
@@ -290,6 +306,7 @@ const Dashboard: React.FC = () => {
         onClose={() => setIsQueueModalOpen(false)}
         guildName={guilds.find(g => g.id === selectedQueueGuildId)?.name || ''}
         bossName={currentBossMap[selectedQueueGuildId] || 'Boss TBD'}
+        bossImageUrl={selectedQueueBossImage}
         queue={currentBranchQueue}
         currentUserUid={currentUser?.uid}
         isCooldown={!!isCooldown}

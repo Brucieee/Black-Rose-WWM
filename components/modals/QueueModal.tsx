@@ -9,6 +9,7 @@ interface QueueModalProps {
   onClose: () => void;
   guildName: string;
   bossName: string;
+  bossImageUrl?: string;
   queue: QueueEntry[];
   currentUserUid?: string;
   isCooldown: boolean;
@@ -21,6 +22,7 @@ export const QueueModal: React.FC<QueueModalProps> = ({
   onClose,
   guildName,
   bossName,
+  bossImageUrl,
   queue,
   currentUserUid,
   isCooldown,
@@ -40,7 +42,12 @@ export const QueueModal: React.FC<QueueModalProps> = ({
 
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-lg flex flex-col max-h-[85vh]">
-       <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+       <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex gap-4 items-center">
+         {bossImageUrl && (
+             <div className="w-16 h-16 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
+                <img src={bossImageUrl} alt={bossName} className="w-full h-full object-cover" />
+             </div>
+         )}
          <div>
             <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Queue: {guildName}</h3>
             <p className="text-rose-700 dark:text-rose-400 font-medium text-sm mt-1">{bossName}</p>

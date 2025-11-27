@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { MemoryRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
@@ -12,6 +11,12 @@ import Profile from './pages/Profile';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
+// Destructure components safely from the namespace import to handle potential v5/v6 mismatches
+const Router = ReactRouterDOM.HashRouter;
+const Routes = (ReactRouterDOM as any).Routes || (ReactRouterDOM as any).Switch;
+const Route = ReactRouterDOM.Route;
+const Navigate = (ReactRouterDOM as any).Navigate || (ReactRouterDOM as any).Redirect;
+
 function App() {
   return (
     <AlertProvider>
@@ -19,7 +24,10 @@ function App() {
         <Router>
           <Layout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard />}>
+                {/* Fallback for v5 Route syntax which uses children/render instead of element prop */}
+                {!React.isValidElement(<Dashboard />) && <Dashboard />}
+              </Route>
               <Route path="/register" element={<Register />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/members" element={<Members />} />

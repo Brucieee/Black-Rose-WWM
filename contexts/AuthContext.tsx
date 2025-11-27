@@ -1,16 +1,18 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider, db } from '../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAlert } from './AlertContext';
+import firebase from 'firebase/compat/app';
+
+// Define User type based on Firebase v8 compatibility
+type User = firebase.User;
 
 interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signup: (email: string, pass: string) => Promise<User>;
-  login: (email: string, pass: string) => Promise<User>;
+  signup: (email: string, pass: string) => Promise<any>;
+  login: (email: string, pass: string) => Promise<any>;
   logout: () => Promise<void>;
 }
 
@@ -38,8 +40,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     try {
-      const res = await signInWithPopup(auth, googleProvider);
-      await updateUserStatus(res.user.uid, 'online');
+      // Use v8 style auth instance method
+      const res = await auth.signInWithPopup(googleProvider);
+      if (res.user) {
+        await updateUserStatus(res.user.uid, 'online');
+      }
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
         return;
@@ -56,8 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = async (email: string, pass: string) => {
     try {
-      const res = await createUserWithEmailAndPassword(auth, email, pass);
-      // Don't set status here, let Register page handle profile creation first
+      const res = await auth.createUserWithEmailAndPassword(email, pass);
       return res.user;
     } catch (error: any) {
       console.error("Signup error", error);
@@ -67,8 +71,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string) => {
     try {
-      const res = await signInWithEmailAndPassword(auth, email, pass);
-      await updateUserStatus(res.user.uid, 'online');
+      const res = await auth.signInWithEmailAndPassword(email, pass);
+      if (res.user) {
+        await updateUserStatus(res.user.uid, 'online');
+      }
       return res.user;
     } catch (error: any) {
       console.error("Login error", error);
@@ -80,11 +86,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser) {
       await updateUserStatus(currentUser.uid, 'offline');
     }
-    await signOut(auth);
+    await auth.signOut();
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    // Use v8 style onAuthStateChanged on auth instance
+    const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
       setLoading(false);
       if (user) {
