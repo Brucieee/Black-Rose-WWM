@@ -42,7 +42,23 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     // FIX: Use Firebase v8 compat syntax
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild))));
-    const unsubEvents = db.collection("events").orderBy("date", "asc").onSnapshot(snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent))));
+    
+    // Fetch events and sort manually
+    const unsubEvents = db.collection("events").onSnapshot(snap => {
+      const allEvents = snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent));
+      const now = new Date();
+      
+      const upcoming = allEvents
+        .filter(e => new Date(e.date) >= now)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Earliest first
+        
+      const past = allEvents
+        .filter(e => new Date(e.date) < now)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Most recent past first
+        
+      setEvents([...upcoming, ...past]);
+    });
+
     const unsubLeaderboard = db.collection("leaderboard").orderBy("time", "asc").onSnapshot(snap => setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry))));
     
     // FIFO Queue: Order by joinedAt ascending

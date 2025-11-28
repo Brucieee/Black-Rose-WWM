@@ -122,3 +122,16 @@ export interface BreakingArmyConfig {
   recentWinners: CooldownEntry[];
   bossPool: Boss[];
 }
+
+export interface LeaveRequest {
+  id: string;
+  uid: string;
+  displayName: string;
+  inGameId: string;
+  guildId: string;
+  guildName: string;
+  startDate: string;
+  endDate: string;
+  timestamp: string;
+  reason?: string;
+}

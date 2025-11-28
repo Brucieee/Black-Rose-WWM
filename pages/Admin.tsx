@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle, Search, User, ListOrdered } from 'lucide-react';
-import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog } from '../types';
+import { Plus, Trash2, Calendar, Database, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle, Search, User, ListOrdered, Plane } from 'lucide-react';
+import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -17,7 +17,7 @@ const Admin: React.FC = () => {
   const { showAlert } = useAlert();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'users' | 'leaderboard' | 'winnerLogs'>('guilds');
+  const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'users' | 'leaderboard' | 'winnerLogs' | 'leaves'>('guilds');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGuildData, setNewGuildData] = useState({ name: '', id: '', memberCap: 80});
@@ -26,6 +26,7 @@ const Admin: React.FC = () => {
   const [events, setEvents] = useState<GuildEvent[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [winnerLogs, setWinnerLogs] = useState<WinnerLog[]>([]);
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
@@ -63,6 +64,9 @@ const Admin: React.FC = () => {
     message: string;
     action: () => Promise<void>;
   }>({ isOpen: false, title: '', message: '', action: async () => {} });
+
+  // Filter state for Leaves
+  const [leaveBranchFilter, setLeaveBranchFilter] = useState('All');
 
   const isAdmin = userProfile?.systemRole === 'Admin';
   const isOfficer = userProfile?.systemRole === 'Officer';
@@ -106,6 +110,10 @@ const Admin: React.FC = () => {
       setWinnerLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as WinnerLog)));
     });
 
+    const unsubLeaves = db.collection("leaves").orderBy("timestamp", "desc").onSnapshot(snap => {
+      setLeaves(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaveRequest)));
+    });
+
     const unsubConfig = db.collection("system").doc("breakingArmy").onSnapshot(snap => {
       if (snap.exists) {
         const data = snap.data() as BreakingArmyConfig;
@@ -126,7 +134,7 @@ const Admin: React.FC = () => {
     });
 
     return () => {
-      unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs();
+      unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves();
     };
   }, [isAdmin, selectedBranchId]);
 
@@ -485,6 +493,23 @@ const Admin: React.FC = () => {
       );
   };
   
+  const handleDeleteLeave = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    openDeleteModal(
+      "Delete Leave Request?",
+      "Are you sure you want to remove this request?",
+      async () => {
+        try {
+          await db.collection("leaves").doc(id).delete();
+          showAlert("Request removed.", 'info');
+        } catch (error: any) {
+          showAlert(`Failed to delete: ${error.message}`, 'error');
+        }
+      }
+    );
+  };
+  
   const handleUpdateRole = async (uid: string, newRole: 'Member' | 'Officer' | 'Admin') => {
       await db.collection("users").doc(uid).update({ systemRole: newRole });
       showAlert("User role updated", 'success');
@@ -545,6 +570,8 @@ const Admin: React.FC = () => {
     (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase()))
   );
 
+  const filteredLeaves = leaves.filter(l => leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter);
+
   // Access checks
   if (!currentUser) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Please Sign In.</div>;
   if (guilds.length > 0 && userProfile && !isAdmin && !isOfficer) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Admins/Officers only.</div>;
@@ -577,6 +604,7 @@ const Admin: React.FC = () => {
         {(isAdmin || isOfficer) && <button onClick={() => setActiveTab('breakingArmy')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'breakingArmy' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Breaking Army</button>}
         {isAdmin && <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'leaderboard' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Leaderboard</button>}
         {isAdmin && <button onClick={() => setActiveTab('winnerLogs')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'winnerLogs' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Winner Logs</button>}
+        {(isAdmin || isOfficer) && <button onClick={() => setActiveTab('leaves')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'leaves' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Leaves</button>}
         {isAdmin && <button onClick={() => setActiveTab('users')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'users' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>User Management</button>}
       </div>
       
@@ -915,7 +943,58 @@ const Admin: React.FC = () => {
         </div>
       )}
 
-      {/* 6. USER MANAGEMENT TAB (Admin Only) */}
+      {/* 6. LEAVES TAB (Admin/Officer) */}
+      {activeTab === 'leaves' && (isAdmin || isOfficer) && (
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+            <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">Leave Requests</h3>
+            <select 
+                className="w-full sm:w-auto p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm"
+                value={leaveBranchFilter}
+                onChange={(e) => setLeaveBranchFilter(e.target.value)}
+            >
+                <option value="All">All Branches</option>
+                {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+              <tr>
+                <th className="px-4 py-3">Member</th>
+                <th className="px-4 py-3">Branch</th>
+                <th className="px-4 py-3">Reason</th>
+                <th className="px-4 py-3">From</th>
+                <th className="px-4 py-3">Until</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {filteredLeaves.map(leave => (
+                <tr key={leave.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                    <div>{leave.displayName}</div>
+                    <div className="text-xs text-zinc-500 font-mono">{leave.inGameId}</div>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{leave.guildName}</td>
+                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 italic">{leave.reason || '-'}</td>
+                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">{formatDateMMDDYYYY(leave.startDate)}</td>
+                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">{formatDateMMDDYYYY(leave.endDate)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={(e) => handleDeleteLeave(e, leave.id)} className="text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
+                  </td>
+                </tr>
+              ))}
+              {filteredLeaves.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No pending leave requests.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 7. USER MANAGEMENT TAB (Admin Only) */}
       {activeTab === 'users' && isAdmin && (
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
             <div className="mb-4 relative">
@@ -928,22 +1007,22 @@ const Admin: React.FC = () => {
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
             </div>
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm table-fixed">
                 <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">ID</th><th className="px-4 py-3">Branch</th><th className="px-4 py-3">System Role</th><th className="px-4 py-3 text-right">Actions</th></tr>
+                    <tr><th className="px-4 py-3 w-1/4">Name</th><th className="px-4 py-3 w-1/6">ID</th><th className="px-4 py-3 w-1/4">Branch</th><th className="px-4 py-3 w-1/4">System Role</th><th className="px-4 py-3 text-right">Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {filteredUsers.map(user => (
                         <tr key={user.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                            <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-2 truncate">
                                 <img src={user.photoURL || 'https://via.placeholder.com/150'} className="w-6 h-6 rounded-full" />
                                 {user.displayName}
                             </td>
                             <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{user.inGameId}</td>
-                            <td className="px-4 py-3 text-zinc-500">{guilds.find(g => g.id === user.guildId)?.name}</td>
+                            <td className="px-4 py-3 text-zinc-500 truncate">{guilds.find(g => g.id === user.guildId)?.name}</td>
                             <td className="px-4 py-3">
                                 <select 
-                                    className="bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100 pr-8"
+                                    className="border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs pr-8 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                                     value={user.systemRole}
                                     onChange={(e) => handleUpdateRole(user.uid, e.target.value as any)}
                                 >

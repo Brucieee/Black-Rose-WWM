@@ -15,10 +15,12 @@ import {
   X,
   Moon,
   Sun,
+  Plane
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { FileLeaveModal } from './modals/FileLeaveModal';
 
 const { NavLink } = ReactRouterDOM as any;
 
@@ -33,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { logout, currentUser } = useAuth();
+  const [isFileLeaveModalOpen, setIsFileLeaveModalOpen] = useState(false);
 
   useEffect(() => {
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -101,6 +104,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Updated online check: using lastSeen with 3 min threshold
   const isOnline = userProfile?.status === 'online' && (!userProfile.lastSeen || (Date.now() - new Date(userProfile.lastSeen).getTime() < 3 * 60 * 1000));
 
+  const userGuildName = userProfile?.guildId ? guilds.find(g => g.id === userProfile.guildId)?.name : '';
+
   return (
     <>
       {isOpen && (
@@ -163,6 +168,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <Users size={18} />
             Members
           </NavLink>
+
+          {userProfile?.guildId && (
+            <button
+              onClick={() => setIsFileLeaveModalOpen(true)}
+              className={`${navLinkClasses} w-full text-left`}
+            >
+              <Plane size={18} />
+              File Leave
+            </button>
+          )}
 
           <NavLink 
             to="/alliances" 
@@ -274,6 +289,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         )}
       </aside>
+
+      {userProfile && (
+        <FileLeaveModal 
+          isOpen={isFileLeaveModalOpen} 
+          onClose={() => setIsFileLeaveModalOpen(false)} 
+          userProfile={userProfile}
+          guildName={userGuildName || ''}
+        />
+      )}
     </>
   );
 };
