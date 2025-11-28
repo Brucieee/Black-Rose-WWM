@@ -671,19 +671,19 @@ const Admin: React.FC = () => {
                 {editingEventId ? "Edit Event" : "Create New Event"}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <input type="text" placeholder="Title" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-              <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white">
+              <input type="text" placeholder="Title" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} className="p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white" />
+              <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className="p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white">
                 <option value="">Global / All Branches</option>
                 {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-               <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value as any})} className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white">
+               <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value as any})} className="p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white">
                   <option>Raid</option><option>PvP</option><option>Meeting</option><option>Social</option>
                 </select>
-               <input type="datetime-local" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+               <input type="datetime-local" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className="p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white" />
              </div>
-             <textarea placeholder="Description" value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className="p-2 border rounded h-24 w-full mb-4 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+             <textarea placeholder="Description" value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className="p-2 border rounded h-24 w-full mb-4 bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white" />
              <div className="flex gap-2">
                 <button type="button" onClick={handleSaveEvent} className="bg-rose-900 text-white px-4 py-2 rounded-md hover:bg-rose-950 flex gap-2">
                     {editingEventId ? <Save size={16} /> : <Calendar size={16} />}
@@ -724,7 +724,7 @@ const Admin: React.FC = () => {
                  <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
                      <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 flex-wrap gap-4">
                         <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuration</h3>
-                        <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)} className="p-2 border rounded dark:bg-zinc-800 dark:text-white text-sm">
+                        <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)} className="p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm min-w-[150px]">
                             {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                         </select>
                      </div>
@@ -740,7 +740,7 @@ const Admin: React.FC = () => {
                                         <Skull size={20} className="text-zinc-300 dark:text-zinc-600" />
                                     )}
                                 </div>
-                                <select value={currentBranchBoss} onChange={e => handleUpdateCurrentBoss(e.target.value)} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white">
+                                <select value={currentBranchBoss} onChange={e => handleUpdateCurrentBoss(e.target.value)} className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white">
                                     <option value="">Select Boss...</option>
                                     {bossPool.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
                                 </select>
@@ -755,7 +755,7 @@ const Admin: React.FC = () => {
                                 <div key={idx} className="flex justify-between items-center p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded border dark:border-zinc-700">
                                     <div className="flex items-center gap-2">
                                         <Clock size={14} className="text-zinc-400" />
-                                        <span className="text-sm dark:text-zinc-200 font-medium">
+                                        <span className="text-sm text-zinc-800 dark:text-zinc-200 font-medium">
                                             {slot.day} @ {formatTime12Hour(slot.time)}
                                         </span>
                                     </div>
@@ -764,10 +764,10 @@ const Admin: React.FC = () => {
                             ))}
                         </div>
                         <div className="flex gap-2">
-                             <select value={newSchedule.day} onChange={e => setNewSchedule({...newSchedule, day: e.target.value})} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:text-white text-sm">
+                             <select value={newSchedule.day} onChange={e => setNewSchedule({...newSchedule, day: e.target.value})} className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm">
                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
                              </select>
-                             <input type="time" value={newSchedule.time} onChange={e => setNewSchedule({...newSchedule, time: e.target.value})} className="w-24 p-2 border rounded dark:bg-zinc-800 dark:text-white text-sm" />
+                             <input type="time" value={newSchedule.time} onChange={e => setNewSchedule({...newSchedule, time: e.target.value})} className="w-24 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm" />
                              <button type="button" onClick={handleAddSchedule} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 px-3 rounded"><Plus size={16} /></button>
                         </div>
                      </div>
@@ -859,8 +859,8 @@ const Admin: React.FC = () => {
                 <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-6">
                     <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2"><Skull size={18} /> Bosses</h4>
                     <div className="flex gap-2 mb-4">
-                        <input type="text" placeholder="Boss Name" value={bossForm.name} onChange={e => setBossForm({...bossForm, name: e.target.value})} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:text-white" />
-                        <input type="text" placeholder="Image URL (Optional)" value={bossForm.imageUrl} onChange={e => setBossForm({...bossForm, imageUrl: e.target.value})} className="flex-1 p-2 border rounded dark:bg-zinc-800 dark:text-white" />
+                        <input type="text" placeholder="Boss Name" value={bossForm.name} onChange={e => setBossForm({...bossForm, name: e.target.value})} className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white" />
+                        <input type="text" placeholder="Image URL (Optional)" value={bossForm.imageUrl} onChange={e => setBossForm({...bossForm, imageUrl: e.target.value})} className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white" />
                         <button type="button" onClick={handleSaveBoss} className="bg-zinc-900 text-white px-4 py-2 rounded flex items-center gap-2">
                             {editingBossOriginalName ? <Save size={16} /> : <Plus size={16} />}
                             {editingBossOriginalName ? "Save Changes" : "Add Boss"}
@@ -1005,7 +1005,7 @@ const Admin: React.FC = () => {
                           <select 
                             value={user.systemRole || 'Member'} 
                             onChange={(e) => handleUpdateRole(user.uid, e.target.value as any)}
-                            className="bg-zinc-100 dark:bg-zinc-800 border-none rounded px-2 py-1 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                            className="bg-zinc-100 dark:bg-zinc-800 border-none rounded pl-2 pr-6 py-1 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 cursor-pointer"
                           >
                              <option value="Member">Member</option>
                              <option value="Officer">Officer</option>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 // FIX: Using named imports for react-router-dom v6.
 // FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
@@ -99,6 +100,7 @@ const GuildDashboard: React.FC = () => {
   const canCreateParty = currentUserProfile?.guildId === guildId;
 
   const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId || e.guildId === '');
+  const onlineMembers = allUsers.filter(u => u.guildId === guildId && u.status === 'online');
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
     setDeleteConf({ isOpen: true, title, message, action });
@@ -222,6 +224,25 @@ const GuildDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {/* Online Members Section */}
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
+             <h3 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div> Online Members ({onlineMembers.length})
+             </h3>
+             {onlineMembers.length === 0 ? (
+                 <p className="text-xs text-zinc-400 italic">No members currently online.</p>
+             ) : (
+                 <div className="flex flex-wrap gap-2">
+                    {onlineMembers.map(u => (
+                        <div key={u.uid} className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-full border border-zinc-100 dark:border-zinc-700" title={u.displayName}>
+                            <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-5 h-5 rounded-full object-cover" />
+                            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{u.displayName}</span>
+                        </div>
+                    ))}
+                 </div>
+             )}
+          </div>
+
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><Sword className="text-rose-900 dark:text-rose-500" />Party Finder</h2>
             <button 
