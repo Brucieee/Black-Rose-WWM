@@ -299,13 +299,13 @@ const Dashboard: React.FC = () => {
                   <span className="text-xs font-bold text-zinc-500 uppercase">{eventDate.toLocaleDateString(undefined, { month: 'short' })}</span>
                   <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{eventDate.getDate()}</span>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-xs font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded">{event.type}</span>
                     <span className="text-xs font-medium text-zinc-400">• {branchName}</span>
                   </div>
                   <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                  <p className="text-zinc-500 text-sm">{event.description}</p>
+                  <p className="text-zinc-500 text-sm line-clamp-2">{event.description}</p>
                 </div>
               </div>
             );

@@ -71,7 +71,7 @@ const GuildDashboard: React.FC = () => {
     const qUsersInGuild = query(collection(db, "users"), where("guildId", "==", guildId));
     const unsubUsersCount = onSnapshot(qUsersInGuild, (snapshot) => setMemberCount(snapshot.size));
 
-    const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as GuildEvent)));
+    const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuildEvent))));
 
     return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); };
   }, [guildId, currentUser]);
@@ -96,6 +96,8 @@ const GuildDashboard: React.FC = () => {
   }, [parties, allUsers]);
   
   const isUserInAnyParty = parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
+  const canCreateParty = currentUserProfile?.guildId === guildId;
+
   const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId || e.guildId === '');
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
@@ -106,6 +108,7 @@ const GuildDashboard: React.FC = () => {
     e.preventDefault();
     if (!currentUserProfile) return navigate('/profile');
     if (isUserInAnyParty) return showAlert("You are already in a party.", 'error');
+    if (!canCreateParty) return showAlert("You can only create parties in your own branch.", 'error');
 
     try {
       await addDoc(collection(db, "parties"), {
@@ -128,10 +131,18 @@ const GuildDashboard: React.FC = () => {
       showAlert(`Failed to create party: ${error.message}`, 'error');
     }
   };
+  
+  const handleJoinClick = (party: Party) => {
+    if (!currentUserProfile) return navigate('/register');
+    if (isUserInAnyParty) return showAlert("You are already in another party.", 'error', "Cannot Join");
+    if (party.currentMembers.length >= party.maxMembers) return showAlert("This party is already full.", 'error', "Party Full");
+
+    joinParty(party);
+  };
+
 
   const joinParty = async (party: Party) => {
     if (!currentUserProfile) return navigate('/profile');
-    if (isUserInAnyParty) return showAlert("You are already in another party.", 'error');
 
     try {
       await updateDoc(doc(db, "parties", party.id), {
@@ -218,7 +229,8 @@ const GuildDashboard: React.FC = () => {
             <button 
               type="button"
               onClick={() => currentUser ? setIsCreateModalOpen(true) : navigate('/register')}
-              disabled={isUserInAnyParty}
+              disabled={isUserInAnyParty || !canCreateParty}
+              title={!canCreateParty ? "You can only create parties in your own branch" : isUserInAnyParty ? "You are already in a party" : "Create a new party"}
               className="flex items-center gap-2 bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-950 transition-colors shadow-sm shadow-rose-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={16} />
@@ -261,7 +273,7 @@ const GuildDashboard: React.FC = () => {
                     {isUserInThisParty ? (
                       <button onClick={() => leaveParty(party)} className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-sm font-medium rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-600 flex items-center gap-2"><LogOut size={14}/>Leave Party</button>
                     ) : (
-                      <button onClick={() => joinParty(party)} disabled={party.currentMembers.length >= party.maxMembers || isUserInAnyParty} className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{party.currentMembers.length >= party.maxMembers ? 'Party Full' : 'Join Party'}</button>
+                      <button onClick={() => handleJoinClick(party)} className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors">{party.currentMembers.length >= party.maxMembers ? 'Party Full' : 'Join Party'}</button>
                     )}
                   </div>
                 </div>
