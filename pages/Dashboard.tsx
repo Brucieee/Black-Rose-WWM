@@ -18,6 +18,7 @@ const Dashboard: React.FC = () => {
     if (typeof navigateHook === 'function') navigateHook(path);
     else if (navigateHook && navigateHook.push) navigateHook.push(path);
   };
+  const Link = ReactRouterDOM.Link;
   
   // Real Data State
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -287,7 +288,7 @@ const Dashboard: React.FC = () => {
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
           <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-xl flex items-center gap-2"><Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Guild Events</h3>
-          <ReactRouterDOM.Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></ReactRouterDOM.Link>
+          <Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></Link>
         </div>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {events.map(event => {

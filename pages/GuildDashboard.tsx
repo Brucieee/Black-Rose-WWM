@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile } from '../types';
@@ -19,6 +18,8 @@ const GuildDashboard: React.FC = () => {
     if (typeof navigateHook === 'function') navigateHook(path);
     else if (navigateHook && navigateHook.push) navigateHook.push(path);
   };
+  const Link = ReactRouterDOM.Link;
+
 
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
@@ -259,7 +260,11 @@ const GuildDashboard: React.FC = () => {
                        return (
                        <div key={member.uid} className="flex items-center justify-between group">
                           <div className="flex items-center gap-3">
-                            <div className="relative"><img src={latestProfile?.photoURL || 'https://via.placeholder.com/150'} alt="" className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 object-cover" />{member.uid === party.leaderId && (<div className="absolute -top-1 -right-1 bg-yellow-400 text-white rounded-full p-0.5" title="Party Leader"><Crown size={8} fill="currentColor" /></div>)}</div>
+                            <div className="relative">
+                                <img src={latestProfile?.photoURL || 'https://via.placeholder.com/150'} alt="" className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 object-cover" />
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-800 ${latestProfile?.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                {member.uid === party.leaderId && (<div className="absolute -top-1 -right-1 bg-yellow-400 text-white rounded-full p-0.5" title="Party Leader"><Crown size={8} fill="currentColor" /></div>)}
+                            </div>
                             <div className="flex flex-col"><span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{latestProfile?.displayName || member.name}</span><span className={`text-[10px] uppercase font-bold ${member.role === RoleType.DPS ? 'text-red-700 dark:text-red-400' : member.role === RoleType.TANK ? 'text-yellow-700 dark:text-yellow-400' : member.role === RoleType.HEALER ? 'text-green-700 dark:text-green-400' : 'text-purple-700 dark:text-purple-400'}`}>{member.role}</span></div>
                           </div>
                           <div className="flex items-center gap-2">{currentUser && party.leaderId === currentUser.uid && member.uid !== currentUser.uid && (<button type="button" onClick={(e) => kickMember(e, party, member.uid)} className="text-zinc-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all" title="Kick Member"><Trash2 size={14} /></button>)}</div>
@@ -281,10 +286,32 @@ const GuildDashboard: React.FC = () => {
             
           </div>
         </div>
-
+        
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><Calendar className="text-rose-900 dark:text-rose-500" />Branch Events</h2>
-          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">{branchEvents.length === 0 ? (<p className="text-zinc-500 dark:text-zinc-400 text-sm text-center py-4">No upcoming events scheduled for this branch.</p>) : (<div className="space-y-4">{branchEvents.map(event => (<div key={event.id} className="flex gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0"><div className="flex-col flex items-center bg-rose-50 dark:bg-rose-900/20 text-rose-900 dark:text-rose-400 rounded p-2 min-w-[50px] h-fit"><span className="text-xs font-bold">{new Date(event.date).toLocaleDateString(undefined, {month:'short'})}</span><span className="text-lg font-bold">{new Date(event.date).getDate()}</span></div><div className="min-w-0"><h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{event.title}</h4><p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">{event.description}</p><span className="inline-block mt-2 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded uppercase tracking-wider">{event.type}</span></div></div>))}</div>)}</div>
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
+            {branchEvents.length === 0 ? (
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center py-4">No upcoming events scheduled for this branch.</p>
+            ) : (
+              <div className="space-y-4">
+                {branchEvents.map(event => (
+                  <Link to="/events" key={event.id} className="block group">
+                    <div className="flex gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/50 p-2 rounded-lg transition-colors">
+                      <div className="flex-col flex items-center bg-rose-50 dark:bg-rose-900/20 text-rose-900 dark:text-rose-400 rounded p-2 min-w-[50px] h-fit">
+                        <span className="text-xs font-bold">{new Date(event.date).toLocaleDateString(undefined, {month:'short'})}</span>
+                        <span className="text-lg font-bold">{new Date(event.date).getDate()}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{event.title}</h4>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">{event.description}</p>
+                        <span className="inline-block mt-2 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded uppercase tracking-wider">{event.type}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
