@@ -54,7 +54,7 @@ const Events: React.FC = () => {
                   </div>
 
                   {/* Event Details */}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         event.type === 'Raid' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300' :
@@ -68,7 +68,7 @@ const Events: React.FC = () => {
                       </span>
                     </div>
                     <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{event.title}</h4>
-                    <p className="text-zinc-500 dark:text-zinc-400 text-sm">{event.description}</p>
+                    <p className="text-zinc-500 dark:text-zinc-400 text-sm line-clamp-2">{event.description}</p>
                   </div>
 
                   {/* Time / Action */}

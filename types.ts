@@ -1,4 +1,5 @@
 
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -46,7 +47,6 @@ export interface UserProfile {
 export interface Guild {
   id: string;
   name: string;
-  primaryGame?: string;
 }
 
 export interface GuildEvent {
@@ -70,6 +70,7 @@ export interface Party {
     uid: string;
     name: string;
     role: RoleType;
+    // FIX: Added optional photoURL to align with its usage in mock data and components.
     photoURL?: string;
   }[];
 }
@@ -86,6 +87,8 @@ export interface LeaderboardEntry {
   proofUrl?: string;
   status: 'verified' | 'pending';
 }
+
+export interface WinnerLog extends LeaderboardEntry {}
 
 export interface QueueEntry {
   uid: string;

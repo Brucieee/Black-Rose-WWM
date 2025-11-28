@@ -1,12 +1,13 @@
 
+
 import { Guild, GuildEvent, Party, RoleType, UserProfile, LeaderboardEntry, BreakingArmyConfig, QueueEntry } from "../types";
 
 export const MOCK_GUILDS: Guild[] = [
-  { id: 'g1', name: 'Black Rose I', primaryGame: 'MMORPG X' },
-  { id: 'g2', name: 'Black Rose II', primaryGame: 'MMORPG X' },
-  { id: 'g3', name: 'Black Rose III', primaryGame: 'MMORPG Y' },
-  { id: 'g4', name: 'Black Rose IV', primaryGame: 'MMORPG X' },
-  { id: 'g5', name: 'Black Rose V', primaryGame: 'MMORPG Z' },
+  { id: 'g1', name: 'Black Rose I' },
+  { id: 'g2', name: 'Black Rose II' },
+  { id: 'g3', name: 'Black Rose III' },
+  { id: 'g4', name: 'Black Rose IV' },
+  { id: 'g5', name: 'Black Rose V' },
 ];
 
 export const MOCK_USERS: UserProfile[] = [
