@@ -1,11 +1,8 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Save, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-// FIX: Removed unused Firestore v9 imports.
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -37,14 +34,14 @@ const Profile: React.FC = () => {
       
       try {
         // Fetch Guilds
-        // FIX: Updated Firestore query to v8 compat syntax.
+        // FIX: Use Firebase v8 compat syntax
         const q = db.collection("guilds").orderBy("name");
         const snapshot = await q.get();
         const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
         setGuilds(guildsData);
 
         // Fetch Current Profile
-        // FIX: Updated Firestore query to v8 compat syntax.
+        // FIX: Use Firebase v8 compat syntax
         const docRef = db.collection("users").doc(currentUser.uid);
         const docSnap = await docRef.get();
         
@@ -99,7 +96,7 @@ const Profile: React.FC = () => {
         setSelectedWeapons(validSelections);
       }
     }
-  }, [formData.role, isLoading]);
+  }, [formData.role, isLoading, selectedWeapons]);
 
   const handleWeaponToggle = (weapon: Weapon) => {
     if (selectedWeapons.includes(weapon)) {
@@ -141,7 +138,7 @@ const Profile: React.FC = () => {
       }
 
       // Use setDoc with merge: true to handle both create and update
-      // FIX: Updated Firestore write to v8 compat syntax.
+      // FIX: Use Firebase v8 compat syntax
       await db.collection("users").doc(currentUser.uid).set(dataToSave, { merge: true });
       
       setProfileExists(true); // Now it exists
@@ -251,7 +248,7 @@ const Profile: React.FC = () => {
                   onClick={() => setFormData({...formData, role})}
                   className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
                     formData.role === role 
-                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white ring-opacity-60' 
+                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-opacity-60' 
                       : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'
                   }`}
                 >

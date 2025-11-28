@@ -33,6 +33,7 @@ const Register: React.FC = () => {
 
   useEffect(() => {
     const fetchGuilds = async () => {
+      // FIX: Use Firebase v8 compat syntax
       const q = db.collection("guilds").orderBy("name");
       const snapshot = await q.get();
       const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
@@ -97,7 +98,7 @@ const Register: React.FC = () => {
     if (validSelections.length !== selectedWeapons.length) {
       setSelectedWeapons(validSelections);
     }
-  }, [formData.role]);
+  }, [formData.role, selectedWeapons]);
 
   const handleWeaponToggle = (weapon: Weapon) => {
     if (selectedWeapons.includes(weapon)) {
@@ -122,6 +123,7 @@ const Register: React.FC = () => {
     }
 
     try {
+      // FIX: Use Firebase v8 compat syntax
       const userDocRef = db.collection("users").doc(currentUser.uid);
       await userDocRef.set({
         uid: currentUser.uid,
@@ -296,7 +298,7 @@ const Register: React.FC = () => {
                   onClick={() => setFormData({...formData, role})}
                   className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
                     formData.role === role 
-                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white ring-opacity-60' 
+                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-opacity-60' 
                       : 'border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'
                   }`}
                 >

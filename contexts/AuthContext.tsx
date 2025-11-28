@@ -1,17 +1,16 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, googleProvider, db } from '../services/firebase';
 import { useAlert } from './AlertContext';
-// FIX: Switched to Firebase v8 compat by removing v9 function imports. User type is now firebase.User.
+// FIX: Import firebase compat app for User type
 import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
 
+// FIX: Define correct types for compat library
 interface AuthContextType {
   currentUser: firebase.User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
-  signup: (email: string, pass: string) => Promise<any>;
-  login: (email: string, pass: string) => Promise<any>;
+  signup: (email: string, pass: string) => Promise<firebase.auth.UserCredential>;
+  login: (email: string, pass: string) => Promise<firebase.auth.UserCredential>;
   logout: () => Promise<void>;
 }
 
@@ -24,15 +23,20 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // FIX: Use firebase.User type
   const [currentUser, setCurrentUser] = useState<firebase.User | null>(null);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlert();
 
   const updateUserStatus = async (uid: string, status: 'online' | 'offline' | 'away') => {
     try {
-      // FIX: Changed to v8 compat firestore syntax
+      // FIX: Use Firebase v8 compat syntax
       const userDocRef = db.collection("users").doc(uid);
-      await userDocRef.update({ status });
+      // Check if doc exists before updating
+      const docSnap = await userDocRef.get();
+      if (docSnap.exists) {
+        await userDocRef.update({ status });
+      }
     } catch (error) {
       console.log("Status update skipped (profile might not exist yet)");
     }
@@ -40,13 +44,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     try {
-      // FIX: Changed to v8 compat auth syntax
+      // FIX: Use Firebase v8 compat syntax
       const res = await auth.signInWithPopup(googleProvider);
       if (res.user) {
         await updateUserStatus(res.user.uid, 'online');
       }
     } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by--user') {
+      if (error.code === 'auth/popup-closed-by-user') {
         return;
       }
       console.error("Error signing in", error);
@@ -60,12 +64,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = (email: string, pass: string) => {
-    // FIX: Changed to v8 compat auth syntax
+    // FIX: Use Firebase v8 compat syntax
     return auth.createUserWithEmailAndPassword(email, pass);
   };
 
   const login = async (email: string, pass: string) => {
-    // FIX: Changed to v8 compat auth syntax
+    // FIX: Use Firebase v8 compat syntax
     const res = await auth.signInWithEmailAndPassword(email, pass);
     if (res.user) {
       await updateUserStatus(res.user.uid, 'online');
@@ -77,12 +81,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser) {
       await updateUserStatus(currentUser.uid, 'offline');
     }
-    // FIX: Changed to v8 compat auth syntax
+    // FIX: Use Firebase v8 compat syntax
     await auth.signOut();
   };
 
   useEffect(() => {
-    // FIX: Changed to v8 compat auth syntax
+    // FIX: Use Firebase v8 compat syntax
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
       setLoading(false);
@@ -105,6 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const handleBeforeUnload = () => {
+      // This is a best-effort attempt. Modern browsers may not guarantee its execution.
       updateUserStatus(currentUser.uid, 'offline');
     };
 

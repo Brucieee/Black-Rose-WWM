@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile } from '../types';
-import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut } from 'lucide-react';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -73,6 +73,7 @@ const GuildDashboard: React.FC = () => {
   useEffect(() => {
     if (!guildId) return;
 
+    // FIX: Use Firebase v8 compat syntax
     const guildRef = db.collection("guilds").doc(guildId);
     const unsubGuild = guildRef.onSnapshot(docSnap => {
       if (docSnap.exists) setGuild({ id: docSnap.id, ...docSnap.data() } as Guild);
@@ -104,6 +105,7 @@ const GuildDashboard: React.FC = () => {
     const cleanupInterval = setInterval(() => {
       if (!parties.length || !allUsers.length) return;
 
+      // FIX: Use Firebase v8 compat syntax for batch writes
       const batch = db.batch();
 
       parties.forEach(party => {
@@ -121,6 +123,7 @@ const GuildDashboard: React.FC = () => {
         
         if (membersToRemove.length > 0) {
             const partyRef = db.collection("parties").doc(party.id);
+            // FIX: Use FieldValue for arrayRemove
             batch.update(partyRef, { currentMembers: firebase.firestore.FieldValue.arrayRemove(...membersToRemove) });
         }
       });
@@ -158,6 +161,7 @@ const GuildDashboard: React.FC = () => {
     }
 
     try {
+        // FIX: Use Firebase v8 compat syntax
         await db.collection("parties").add({
             ...newPartyData,
             guildId: guildId,
@@ -201,6 +205,7 @@ const GuildDashboard: React.FC = () => {
   
   const joinParty = async (party: Party) => {
     if (!currentUserProfile) return;
+    // FIX: Use Firebase v8 compat syntax
     const partyRef = db.collection("parties").doc(party.id);
     await partyRef.update({
         currentMembers: firebase.firestore.FieldValue.arrayUnion({
@@ -214,6 +219,7 @@ const GuildDashboard: React.FC = () => {
 
   const leaveParty = async (party: Party) => {
     if (!currentUserProfile) return;
+    // FIX: Use Firebase v8 compat syntax
     const partyRef = db.collection("parties").doc(party.id);
 
     if (currentUserProfile.uid === party.leaderId) {
@@ -248,6 +254,7 @@ const GuildDashboard: React.FC = () => {
         async () => {
             const memberToRemove = party.currentMembers.find(m => m.uid === memberUid);
             if (memberToRemove) {
+                // FIX: Use Firebase v8 compat syntax
                 await db.collection("parties").doc(party.id).update({
                     currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove)
                 });
@@ -376,7 +383,7 @@ const GuildDashboard: React.FC = () => {
                               className="w-10 h-10 rounded-full border-2 border-white dark:border-zinc-800 shadow-sm object-cover"
                               title={`${member.name} (${member.role})`}
                             />
-                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
                             {/* Role Badge */}
                             <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-white dark:border-zinc-800
                                 ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}

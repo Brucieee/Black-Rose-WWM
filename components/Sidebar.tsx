@@ -19,6 +19,8 @@ import {
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
+
 
 interface SidebarProps {
   isOpen: boolean;
@@ -43,8 +45,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   }, []);
 
   useEffect(() => {
-    const q = db.collection("guilds").orderBy("name");
-    const unsubscribe = q.onSnapshot((snapshot) => {
+    const q = query(collection(db, "guilds"), orderBy("name"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const guildsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -56,8 +58,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (currentUser) {
-      const unsub = db.collection("users").doc(currentUser.uid).onSnapshot((doc) => {
-        if (doc.exists) {
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const unsub = onSnapshot(userDocRef, (doc) => {
+        if (doc.exists()) {
           setUserProfile(doc.data() as UserProfile);
         }
       });
@@ -227,7 +230,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   alt="Avatar" 
                   className="w-9 h-9 rounded-full object-cover bg-zinc-800"
                 />
-                <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 ${userProfile?.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 ${userProfile?.status === 'online' ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-bold text-zinc-200 truncate leading-tight">

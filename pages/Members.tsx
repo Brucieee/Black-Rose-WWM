@@ -1,10 +1,7 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, RoleType, Guild } from '../types';
 import { Search, ShieldCheck, ChevronDown } from 'lucide-react';
 import { db } from '../services/firebase';
-// FIX: Removed unused Firestore v9 imports.
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 
 const Members: React.FC = () => {
@@ -17,14 +14,16 @@ const Members: React.FC = () => {
 
   useEffect(() => {
     // Real-time Users
-    // FIX: Updated Firestore query to v8 compat syntax.
-    const unsubscribe = db.collection("users").onSnapshot((snapshot) => {
+    // FIX: Use Firebase v8 compat syntax
+    const usersCollection = db.collection("users");
+    const unsubscribe = usersCollection.onSnapshot((snapshot) => {
       setUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
     });
     
     // Fetch Guilds for name resolution
-    // FIX: Updated Firestore query to v8 compat syntax.
-    db.collection("guilds").get().then(snapshot => {
+    // FIX: Use Firebase v8 compat syntax
+    const guildsCollection = db.collection("guilds");
+    guildsCollection.get().then(snapshot => {
       setGuilds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
     });
 
@@ -112,7 +111,7 @@ const Members: React.FC = () => {
                   alt={user.displayName} 
                   className="w-12 h-12 rounded-full object-cover border-2 border-zinc-100 dark:border-zinc-700 group-hover:border-rose-100 dark:group-hover:border-rose-900/50"
                 />
-                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${user.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${user.status === 'online' ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
                 {user.systemRole && user.systemRole !== 'Member' && (
                   <div className="absolute -top-1 -right-1 bg-rose-900 text-white p-0.5 rounded-full border border-white dark:border-zinc-900" title={user.systemRole}>
                     <ShieldCheck size={12} />

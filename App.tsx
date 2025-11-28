@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
@@ -17,7 +17,7 @@ function App() {
   return (
     <AlertProvider>
       <AuthProvider>
-        <Router>
+        <HashRouter>
           <Layout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -31,7 +31,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
-        </Router>
+        </HashRouter>
       </AuthProvider>
     </AlertProvider>
   );

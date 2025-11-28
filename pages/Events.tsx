@@ -1,9 +1,6 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { db } from '../services/firebase';
-// FIX: Removed unused Firestore v9 imports.
 import { GuildEvent, Guild } from '../types';
 
 const Events: React.FC = () => {
@@ -11,13 +8,15 @@ const Events: React.FC = () => {
   const [guilds, setGuilds] = useState<Guild[]>([]);
 
   useEffect(() => {
-    // FIX: Updated Firestore query to v8 compat syntax.
-    const unsubEvents = db.collection("events").orderBy("date", "desc").onSnapshot(snap => {
+    // FIX: Use Firebase v8 compat syntax
+    const qEvents = db.collection("events").orderBy("date", "desc");
+    const unsubEvents = qEvents.onSnapshot(snap => {
       setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuildEvent)));
     });
     
-    // FIX: Updated Firestore query to v8 compat syntax.
-    db.collection("guilds").get().then(snap => {
+    // FIX: Use Firebase v8 compat syntax
+    const guildsCollection = db.collection("guilds");
+    guildsCollection.get().then(snap => {
       setGuilds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
     });
 
@@ -72,7 +71,6 @@ const Events: React.FC = () => {
                       </span>
                     </div>
                     <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
-                    {/* Added whitespace-pre-wrap and break-words for long descriptions */}
                     <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-words min-w-0 leading-relaxed">
                       {event.description}
                     </p>

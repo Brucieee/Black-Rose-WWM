@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
