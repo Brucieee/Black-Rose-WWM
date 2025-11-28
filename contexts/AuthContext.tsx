@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, googleProvider, db } from '../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -29,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlert();
 
-  const updateUserStatus = async (uid: string, status: 'online' | 'offline') => {
+  const updateUserStatus = async (uid: string, status: 'online' | 'offline' | 'away') => {
     try {
       await updateDoc(doc(db, "users", uid), { status });
     } catch (error) {
@@ -102,17 +103,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  // Handle user closing tab
+  // Handle visibility change and tab closing
   useEffect(() => {
     if (!currentUser) return;
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        updateUserStatus(currentUser.uid, 'away');
+      } else {
+        updateUserStatus(currentUser.uid, 'online');
+      }
+    };
+
     const handleBeforeUnload = () => {
+      // Best effort update
       updateUserStatus(currentUser.uid, 'offline');
     };
 
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [currentUser]);

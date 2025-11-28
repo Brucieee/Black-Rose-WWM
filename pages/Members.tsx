@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, RoleType, Guild } from '../types';
-import { Search, ShieldCheck } from 'lucide-react';
+import { Search, ShieldCheck, ChevronDown } from 'lucide-react';
 import { db } from '../services/firebase';
 import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
@@ -28,12 +29,19 @@ const Members: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.displayName.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = filterRole === 'All' || user.role === filterRole;
-    const matchesGuild = filterGuild === 'All' || user.guildId === filterGuild;
-    return matchesSearch && matchesRole && matchesGuild;
-  });
+  const sortedAndFilteredUsers = users
+    .sort((a, b) => {
+      if (a.status === 'online' && b.status !== 'online') return -1;
+      if (b.status === 'online' && a.status !== 'online') return 1;
+      return a.displayName.localeCompare(b.displayName);
+    })
+    .filter(user => {
+      const matchesSearch = user.displayName.toLowerCase().includes(search.toLowerCase());
+      const matchesRole = filterRole === 'All' || user.role === filterRole;
+      const matchesGuild = filterGuild === 'All' || user.guildId === filterGuild;
+      return matchesSearch && matchesRole && matchesGuild;
+    });
+
 
   const getRoleBadge = (role: RoleType) => {
     switch (role) {
@@ -63,27 +71,33 @@ const Members: React.FC = () => {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <select 
-            className="w-full sm:w-auto px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
-            value={filterRole}
-            onChange={e => setFilterRole(e.target.value)}
-          >
-            <option value="All">All Roles</option>
-            {Object.values(RoleType).map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select 
-            className="w-full sm:w-auto px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
-            value={filterGuild}
-            onChange={e => setFilterGuild(e.target.value)}
-          >
-            <option value="All">All Branches</option>
-            {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+          <div className="relative w-full sm:w-40">
+            <select 
+              className="w-full appearance-none pl-3 pr-8 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
+              value={filterRole}
+              onChange={e => setFilterRole(e.target.value)}
+            >
+              <option value="All">All Roles</option>
+              {Object.values(RoleType).map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
+          </div>
+          <div className="relative w-full sm:w-40">
+            <select 
+              className="w-full appearance-none pl-3 pr-8 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
+              value={filterGuild}
+              onChange={e => setFilterGuild(e.target.value)}
+            >
+              <option value="All">All Branches</option>
+              {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredUsers.map(user => (
+        {sortedAndFilteredUsers.map(user => (
           <div 
             key={user.uid}
             onClick={() => setSelectedUser(user)}

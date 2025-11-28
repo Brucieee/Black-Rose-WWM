@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { BaseModal } from './BaseModal';
 
@@ -6,7 +7,7 @@ interface CreateGuildModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
-  data: { name: string; id: string };
+  data: { name: string; id: string; memberCap: number };
   onChange: (data: any) => void;
 }
 
@@ -30,6 +31,14 @@ export const CreateGuildModal: React.FC<CreateGuildModalProps> = ({ isOpen, onCl
             required 
             value={data.id} 
             onChange={e => onChange({...data, id: e.target.value})} 
+            className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" 
+          />
+          <input 
+            type="number" 
+            placeholder="Member Cap" 
+            required 
+            value={data.memberCap} 
+            onChange={e => onChange({...data, memberCap: parseInt(e.target.value) || 0})} 
             className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" 
           />
           <button type="submit" className="w-full bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors">Create</button>

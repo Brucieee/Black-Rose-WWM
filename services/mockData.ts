@@ -3,11 +3,11 @@
 import { Guild, GuildEvent, Party, RoleType, UserProfile, LeaderboardEntry, BreakingArmyConfig, QueueEntry } from "../types";
 
 export const MOCK_GUILDS: Guild[] = [
-  { id: 'g1', name: 'Black Rose I' },
-  { id: 'g2', name: 'Black Rose II' },
-  { id: 'g3', name: 'Black Rose III' },
-  { id: 'g4', name: 'Black Rose IV' },
-  { id: 'g5', name: 'Black Rose V' },
+  { id: 'g1', name: 'Black Rose I', memberCap: 80 },
+  { id: 'g2', name: 'Black Rose II', memberCap: 80 },
+  { id: 'g3', name: 'Black Rose III', memberCap: 50 },
+  { id: 'g4', name: 'Black Rose IV', memberCap: 50 },
+  { id: 'g5', name: 'Black Rose V', memberCap: 50 },
 ];
 
 export const MOCK_USERS: UserProfile[] = [

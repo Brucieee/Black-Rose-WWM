@@ -40,13 +40,14 @@ export interface UserProfile {
   weapons: Weapon[];
   guildId: string;
   photoURL?: string;
-  status: 'online' | 'offline' | 'in-game';
+  status: 'online' | 'offline' | 'away' | 'in-game';
   email?: string | null;
 }
 
 export interface Guild {
   id: string;
   name: string;
+  memberCap: number;
 }
 
 export interface GuildEvent {
@@ -70,7 +71,6 @@ export interface Party {
     uid: string;
     name: string;
     role: RoleType;
-    // FIX: Added optional photoURL to align with its usage in mock data and components.
     photoURL?: string;
   }[];
 }

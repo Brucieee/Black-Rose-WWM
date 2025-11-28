@@ -69,7 +69,7 @@ const Events: React.FC = () => {
                       </span>
                     </div>
                     <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
-                    {/* Updated classes: whitespace-pre-wrap handles newlines, break-words handles long words without breaking mid-word */}
+                    {/* Added whitespace-pre-wrap and break-words for long descriptions */}
                     <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-words min-w-0 leading-relaxed">
                       {event.description}
                     </p>

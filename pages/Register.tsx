@@ -1,13 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { doc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
-// FIX: Using named import for useNavigate from react-router-dom v6.
-// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
-import * as ReactRouterDOM from 'react-router-dom';
-const useNavigate = ReactRouterDOM.useNavigate;
+// FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
+import { useHistory } from 'react-router-dom';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -16,12 +15,8 @@ const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup } = useAuth();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   
-  // FIX: Standardizing on react-router-dom v6 hooks.
-  const navigate = useNavigate();
-  const safeNavigate = (path: string) => {
-    navigate(path);
-  };
-
+  // FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
+  const history = useHistory();
   const { showAlert } = useAlert();
   
   // Auth Form State
@@ -85,7 +80,8 @@ const Register: React.FC = () => {
       } else {
         await signup(authEmail, authPass);
       }
-      safeNavigate('/'); // Safe Redirect
+      // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
+      history.push('/'); // Safe Redirect
     } catch (error: any) {
       const msg = getFirebaseErrorMessage(error.code);
       showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
@@ -147,7 +143,8 @@ const Register: React.FC = () => {
       });
 
       showAlert("Profile Created Successfully!", 'success', "Welcome!");
-      safeNavigate('/');
+      // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
+      history.push('/');
     } catch (error) {
       console.error("Error creating profile:", error);
       showAlert("Failed to save profile.", 'error');
@@ -196,7 +193,7 @@ const Register: React.FC = () => {
           
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Email</label>
+              <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-300 mb-1">Email</label>
               <input 
                 type="email" 
                 required 
@@ -206,7 +203,7 @@ const Register: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Password</label>
+              <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-300 mb-1">Password</label>
               <input 
                 type="password" 
                 required 
@@ -244,7 +241,7 @@ const Register: React.FC = () => {
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
                   placeholder="Your In-Game Name"
                   value={formData.displayName}
                   onChange={e => setFormData({...formData, displayName: e.target.value})}
@@ -255,7 +252,7 @@ const Register: React.FC = () => {
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
                   placeholder="e.g. 1234567"
                   value={formData.inGameId}
                   onChange={e => setFormData({...formData, inGameId: e.target.value})}
@@ -267,7 +264,7 @@ const Register: React.FC = () => {
                     <div className="text-sm text-red-500 border border-red-200 bg-red-50 p-2 rounded">System Not Initialized. Contact Admin.</div>
                 ) : (
                   <select 
-                    className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
+                    className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
                     value={formData.guildId}
                     onChange={e => setFormData({...formData, guildId: e.target.value})}
                   >

@@ -1,10 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
-// FIX: Using named imports for react-router-dom v6.
-// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
-import * as ReactRouterDOM from 'react-router-dom';
-const useNavigate = ReactRouterDOM.useNavigate;
-const Link = ReactRouterDOM.Link;
+// FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
+import { useHistory, Link } from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
@@ -16,8 +14,8 @@ import { QueueModal } from '../components/modals/QueueModal';
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  // FIX: Using react-router-dom v6 hooks.
-  const navigate = useNavigate();
+  // FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
+  const history = useHistory();
   
   // Real Data State
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -98,7 +96,8 @@ const Dashboard: React.FC = () => {
 
   const handleJoinQueue = async () => {
     if (!currentUserProfile) {
-        navigate('/register');
+        // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
+        history.push('/register');
         return;
     }
     if (currentUserProfile.guildId !== selectedQueueGuildId) {
