@@ -4,7 +4,10 @@ import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { doc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+// FIX: Using named import for useNavigate from react-router-dom v6.
+// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
 import * as ReactRouterDOM from 'react-router-dom';
+const useNavigate = ReactRouterDOM.useNavigate;
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -13,11 +16,10 @@ const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup } = useAuth();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   
-  // Handle both v5 and v6 router hooks for compatibility
-  const navigate = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
+  // FIX: Standardizing on react-router-dom v6 hooks.
+  const navigate = useNavigate();
   const safeNavigate = (path: string) => {
-    if (typeof navigate === 'function') navigate(path);
-    else if (navigate && navigate.push) navigate.push(path);
+    navigate(path);
   };
 
   const { showAlert } = useAlert();

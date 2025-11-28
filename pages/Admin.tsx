@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { BREAKING_ARMY_CONFIG, MOCK_GUILDS, MOCK_EVENTS } from '../services/mockData';
 import { Plus, Trash2, Calendar, Database, ListOrdered, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift } from 'lucide-react';
@@ -315,7 +313,6 @@ const Admin: React.FC = () => {
       setBossForm({ name: '', imageUrl: '' });
       setEditingBossOriginalName(null);
       console.log("Boss saved successfully.");
-// FIX: Corrected syntax for catch block. Was `catch (error: any) => {` which is invalid.
     } catch (error: any) {
       console.error("Error saving boss:", error);
       showAlert(`Failed to save boss: ${error.message}`, 'error');
@@ -725,7 +722,7 @@ const Admin: React.FC = () => {
              
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                  <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
-                     <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                     <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 flex-wrap gap-4">
                         <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuration</h3>
                         <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)} className="p-2 border rounded dark:bg-zinc-800 dark:text-white text-sm">
                             {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}

@@ -1,6 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
+// FIX: Using named imports for react-router-dom v6.
+// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
 import * as ReactRouterDOM from 'react-router-dom';
+const useParams = ReactRouterDOM.useParams;
+const useNavigate = ReactRouterDOM.useNavigate;
+const Link = ReactRouterDOM.Link;
 import { Party, RoleType, Guild, GuildEvent, UserProfile } from '../types';
 import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,14 +15,10 @@ import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
 const GuildDashboard: React.FC = () => {
-  const params = ReactRouterDOM.useParams();
+  // FIX: Using react-router-dom v6 hooks.
+  const params = useParams();
   const guildId = params.guildId;
-  const navigateHook = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
-  const navigate = (path: string) => {
-    if (typeof navigateHook === 'function') navigateHook(path);
-    else if (navigateHook && navigateHook.push) navigateHook.push(path);
-  };
-  const Link = ReactRouterDOM.Link;
+  const navigate = useNavigate();
 
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();

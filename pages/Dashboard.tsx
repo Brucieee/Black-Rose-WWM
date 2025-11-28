@@ -1,7 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
+// FIX: Using named imports for react-router-dom v6.
+// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
 import * as ReactRouterDOM from 'react-router-dom';
+const useNavigate = ReactRouterDOM.useNavigate;
+const Link = ReactRouterDOM.Link;
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
@@ -13,12 +16,8 @@ import { QueueModal } from '../components/modals/QueueModal';
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  const navigateHook = ReactRouterDOM.useNavigate ? ReactRouterDOM.useNavigate() : (ReactRouterDOM as any).useHistory?.();
-  const navigate = (path: string) => {
-    if (typeof navigateHook === 'function') navigateHook(path);
-    else if (navigateHook && navigateHook.push) navigateHook.push(path);
-  };
-  const Link = ReactRouterDOM.Link;
+  // FIX: Using react-router-dom v6 hooks.
+  const navigate = useNavigate();
   
   // Real Data State
   const [guilds, setGuilds] = useState<Guild[]>([]);

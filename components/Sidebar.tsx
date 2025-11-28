@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+// FIX: The import for NavLink is correct for react-router-dom v6. The reported error is likely a symptom of inconsistent react-router-dom usage elsewhere in the project.
+// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
+import * as ReactRouterDOM from 'react-router-dom';
+const NavLink = ReactRouterDOM.NavLink;
 import { 
   LayoutDashboard, 
   Users, 

@@ -1,6 +1,11 @@
-
 import React from 'react';
+// FIX: Using named imports for react-router-dom v6 and aliasing HashRouter to Router.
+// FIX: Switched to a namespace import to resolve potential module resolution issues with named exports.
 import * as ReactRouterDOM from 'react-router-dom';
+const Router = ReactRouterDOM.HashRouter;
+const Routes = ReactRouterDOM.Routes;
+const Route = ReactRouterDOM.Route;
+const Navigate = ReactRouterDOM.Navigate;
 import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
@@ -13,11 +18,7 @@ import Alliances from './pages/Alliances';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
-// Destructure components safely from the namespace import to handle potential v5/v6 mismatches
-const Router = ReactRouterDOM.HashRouter;
-const Routes = (ReactRouterDOM as any).Routes || (ReactRouterDOM as any).Switch;
-const Route = ReactRouterDOM.Route;
-const Navigate = (ReactRouterDOM as any).Navigate || (ReactRouterDOM as any).Redirect;
+// FIX: Removing compatibility code for react-router-dom v5/v6. Standardizing on v6.
 
 function App() {
   return (
@@ -26,10 +27,8 @@ function App() {
         <Router>
           <Layout>
             <Routes>
-              <Route path="/" element={<Dashboard />}>
-                {/* Fallback for v5 Route syntax which uses children/render instead of element prop */}
-                {!React.isValidElement(<Dashboard />) && <Dashboard />}
-              </Route>
+              {/* FIX: Using self-closing Route component with 'element' prop, standard for v6. */}
+              <Route path="/" element={<Dashboard />} />
               <Route path="/register" element={<Register />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/members" element={<Members />} />
