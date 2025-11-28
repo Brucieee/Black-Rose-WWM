@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile } from '../types';
 import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,9 +7,11 @@ import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
+import { UserProfileModal } from '../components/modals/UserProfileModal';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
+const { useParams, useNavigate, Link } = ReactRouterDOM as any;
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T>();
@@ -21,7 +22,7 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 const GuildDashboard: React.FC = () => {
-  const { guildId } = useParams<{ guildId: string }>();
+  const { guildId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
@@ -34,6 +35,7 @@ const GuildDashboard: React.FC = () => {
   const [memberCount, setMemberCount] = useState(0);
   const [events, setEvents] = useState<GuildEvent[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   const [newPartyData, setNewPartyData] = useState({
     name: '',
@@ -50,6 +52,16 @@ const GuildDashboard: React.FC = () => {
 
   const prevParties = usePrevious(parties);
 
+  // Helper to check if a user is online based on lastSeen (within 3 mins)
+  const isUserOnline = (user: UserProfile) => {
+      if (user.status === 'online') {
+          if (!user.lastSeen) return true; // Legacy support
+          const diff = Date.now() - new Date(user.lastSeen).getTime();
+          return diff < 3 * 60 * 1000; // 3 minutes
+      }
+      return false;
+  };
+
   useEffect(() => {
     if (!currentUser || !prevParties || !allUsers.length) return;
   
@@ -59,7 +71,10 @@ const GuildDashboard: React.FC = () => {
       const userPartyNow = parties.find(p => p.id === userPartyBefore.id);
       if (!userPartyNow) {
         const leader = allUsers.find(u => u.uid === userPartyBefore.leaderId);
-        if (leader && leader.status === 'offline') {
+        // Check if leader went offline
+        const isLeaderOnline = leader ? isUserOnline(leader) : false;
+        
+        if (leader && !isLeaderOnline) {
           showAlert(
             "Your party was disbanded because the leader went offline.", 
             'info', 
@@ -111,14 +126,17 @@ const GuildDashboard: React.FC = () => {
       parties.forEach(party => {
         const leader = allUsers.find(u => u.uid === party.leaderId);
         
-        if (leader && leader.status === 'offline') {
+        // Use lastSeen check for leader
+        const isLeaderOnline = leader ? isUserOnline(leader) : false;
+
+        if (leader && !isLeaderOnline) {
           batch.delete(db.collection("parties").doc(party.id));
           return;
         }
 
         const membersToRemove = party.currentMembers.filter(member => {
             const memberProfile = allUsers.find(u => u.uid === member.uid);
-            return memberProfile && memberProfile.status === 'offline' && member.uid !== party.leaderId;
+            return memberProfile && !isUserOnline(memberProfile) && member.uid !== party.leaderId;
         });
         
         if (membersToRemove.length > 0) {
@@ -138,7 +156,7 @@ const GuildDashboard: React.FC = () => {
   const isUserInAnyParty = allUsers.length > 0 && parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
   const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId || e.guildId === '');
-  const onlineMembers = allUsers.filter(u => u.guildId === guildId && u.status === 'online');
+  const onlineMembers = allUsers.filter(u => u.guildId === guildId && isUserOnline(u));
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
     setDeleteConf({ isOpen: true, title, message, action });
@@ -282,10 +300,31 @@ const GuildDashboard: React.FC = () => {
           <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl"><Sword size={28} /></div>
           <div><p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Active Parties</p><p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{parties.length}</p></div>
         </div>
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+           <div className="flex-1">
+              <h3 className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-2 mb-2"><Calendar size={16} /> Branch Events</h3>
+              {branchEvents.length === 0 ? (
+                <p className="text-xs text-zinc-400">No events.</p>
+              ) : (
+                <div className="space-y-2">
+                  {branchEvents.map(event => (
+                    <Link to="/events" key={event.id} className="block p-2 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 hover:border-rose-300 dark:hover:border-rose-700 transition-colors">
+                        <div className="flex justify-between items-start">
+                            <span className="text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-1.5 rounded">{new Date(event.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase">{event.type}</span>
+                        </div>
+                        <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200 mt-1 truncate">{event.title}</h4>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1 break-all whitespace-pre-wrap min-w-0">{event.description}</p>
+                    </Link>
+                  ))}
+                </div>
+              )}
+           </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-3 space-y-6">
           {/* Online Members */}
           <div>
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
@@ -324,9 +363,9 @@ const GuildDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {parties.length === 0 ? (
-              <div className="text-center py-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
+              <div className="col-span-full text-center py-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
                 <Sword size={48} className="mx-auto text-zinc-300 mb-4" />
                 <p className="text-zinc-500 dark:text-zinc-400">No active parties. Be the first to start one!</p>
               </div>
@@ -374,9 +413,9 @@ const GuildDashboard: React.FC = () => {
                   <div className="flex flex-wrap gap-2">
                     {party.currentMembers.map((member) => {
                         const memberProfile = allUsers.find(u => u.uid === member.uid);
-                        const isOnline = memberProfile?.status === 'online';
+                        const isOnline = memberProfile ? isUserOnline(memberProfile) : false;
                         return (
-                          <div key={member.uid} className="relative group/member">
+                          <div key={member.uid} className="relative group/member cursor-pointer" onClick={() => { if(memberProfile) setSelectedUser(memberProfile); }}>
                             <img 
                               src={memberProfile?.photoURL || member.photoURL || 'https://via.placeholder.com/150'} 
                               alt={member.name} 
@@ -384,11 +423,11 @@ const GuildDashboard: React.FC = () => {
                               title={`${member.name} (${member.role})`}
                             />
                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
-                            {/* Role Badge */}
-                            <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-white dark:border-zinc-800
+                            {/* Role Badge - Adjusted Styling */}
+                            <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap
                                 ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}
                             `}>
-                                {member.role[0]}
+                                {member.role}
                             </div>
                             {isLeader && member.uid !== currentUser?.uid && (
                                 <button 
@@ -408,35 +447,14 @@ const GuildDashboard: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  {/* Member Names List */}
+                  <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      {party.currentMembers.map(m => m.name).join(', ')}
+                  </div>
                 </div>
               )})
             )}
           </div>
-        </div>
-
-        <div className="space-y-6">
-           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 mb-4"><Calendar className="text-rose-900 dark:text-rose-500" />Branch Events</h2>
-              {branchEvents.length === 0 ? (
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center py-4">No upcoming events scheduled for this branch.</p>
-              ) : (
-                <div className="space-y-4">
-                  {branchEvents.map(event => (
-                    <Link to="/events" key={event.id} className="flex gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 p-2 rounded-lg transition-colors group">
-                      <div className="flex-col flex items-center bg-rose-50 dark:bg-rose-900/20 text-rose-900 dark:text-rose-400 rounded p-2 min-w-[50px] h-fit group-hover:bg-rose-100 dark:group-hover:bg-rose-900/40 transition-colors">
-                        <span className="text-xs font-bold">{new Date(event.date).toLocaleDateString(undefined, {month:'short'})}</span>
-                        <span className="text-lg font-bold">{new Date(event.date).getDate()}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors">{event.title}</h4>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2 break-words whitespace-pre-wrap">{event.description}</p>
-                        <span className="inline-block mt-2 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded uppercase tracking-wider">{event.type}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-           </div>
         </div>
       </div>
       
@@ -455,6 +473,14 @@ const GuildDashboard: React.FC = () => {
         title={deleteConf.title}
         message={deleteConf.message}
       />
+      
+      {guild && (
+        <UserProfileModal 
+            user={selectedUser} 
+            onClose={() => setSelectedUser(null)} 
+            guilds={[guild]}
+        />
+      )}
     </div>
   );
 };

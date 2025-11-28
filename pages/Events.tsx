@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { db } from '../services/firebase';
@@ -71,7 +72,7 @@ const Events: React.FC = () => {
                       </span>
                     </div>
                     <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
-                    <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-words min-w-0 leading-relaxed">
+                    <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-all min-w-0 leading-relaxed">
                       {event.description}
                     </p>
                   </div>

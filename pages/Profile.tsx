@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Save, Edit2 } from 'lucide-react';
@@ -108,11 +109,20 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleInGameIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+      setFormData({...formData, inGameId: val});
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedWeapons.length !== 2) {
       showAlert("Please select exactly 2 Martial Arts.", 'error');
       return;
+    }
+    if (formData.inGameId.length !== 10) {
+        showAlert("In-Game ID must be exactly 10 digits.", 'error');
+        return;
     }
 
     if (!currentUser) return;
@@ -189,19 +199,19 @@ const Profile: React.FC = () => {
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all bg-white text-zinc-900"
                   value={formData.displayName}
                   onChange={e => setFormData({...formData, displayName: e.target.value})}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">In-Game ID</label>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">In-Game ID (10 Digits)</label>
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all font-mono bg-white text-zinc-900"
                   value={formData.inGameId}
-                  onChange={e => setFormData({...formData, inGameId: e.target.value})}
+                  onChange={handleInGameIdChange}
                 />
               </div>
               <div>

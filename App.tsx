@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
@@ -12,6 +12,8 @@ import Profile from './pages/Profile';
 import Alliances from './pages/Alliances';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
+
+const { HashRouter, Routes, Route, Navigate } = ReactRouterDOM as any;
 
 function App() {
   return (

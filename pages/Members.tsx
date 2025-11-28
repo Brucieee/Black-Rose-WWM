@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, RoleType, Guild } from '../types';
 import { Search, ShieldCheck, ChevronDown } from 'lucide-react';
@@ -30,10 +31,21 @@ const Members: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const isUserOnline = (user: UserProfile) => {
+      if (user.status === 'online') {
+          if (!user.lastSeen) return true; 
+          const diff = Date.now() - new Date(user.lastSeen).getTime();
+          return diff < 3 * 60 * 1000; // 3 minutes
+      }
+      return false;
+  };
+
   const sortedAndFilteredUsers = users
     .sort((a, b) => {
-      if (a.status === 'online' && b.status !== 'online') return -1;
-      if (b.status === 'online' && a.status !== 'online') return 1;
+      const aOnline = isUserOnline(a);
+      const bOnline = isUserOnline(b);
+      if (aOnline && !bOnline) return -1;
+      if (bOnline && !aOnline) return 1;
       return a.displayName.localeCompare(b.displayName);
     })
     .filter(user => {
@@ -98,7 +110,9 @@ const Members: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {sortedAndFilteredUsers.map(user => (
+        {sortedAndFilteredUsers.map(user => {
+          const isOnline = isUserOnline(user);
+          return (
           <div 
             key={user.uid}
             onClick={() => setSelectedUser(user)}
@@ -111,7 +125,7 @@ const Members: React.FC = () => {
                   alt={user.displayName} 
                   className="w-12 h-12 rounded-full object-cover border-2 border-zinc-100 dark:border-zinc-700 group-hover:border-rose-100 dark:group-hover:border-rose-900/50"
                 />
-                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${user.status === 'online' ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
                 {user.systemRole && user.systemRole !== 'Member' && (
                   <div className="absolute -top-1 -right-1 bg-rose-900 text-white p-0.5 rounded-full border border-white dark:border-zinc-900" title={user.systemRole}>
                     <ShieldCheck size={12} />
@@ -134,7 +148,7 @@ const Members: React.FC = () => {
                </div>
             </div>
           </div>
-        ))}
+        )})}
       </div>
 
       <UserProfileModal 

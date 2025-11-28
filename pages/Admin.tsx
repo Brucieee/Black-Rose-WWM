@@ -35,6 +35,7 @@ const Admin: React.FC = () => {
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [userSearch, setUserSearch] = useState('');
 
   const [editingGuildId, setEditingGuildId] = useState<string | null>(null);
   const [guildEditForm, setGuildEditForm] = useState({ name: '', memberCap: 80 });
@@ -115,7 +116,8 @@ const Admin: React.FC = () => {
       }
     });
 
-    const unsubQueue = db.collection("queue").onSnapshot(snap => {
+    // FIFO Queue for Admin: Order by joinedAt ascending
+    const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => {
       setQueue(snap.docs.map(d => ({ ...d.data() } as QueueEntry)));
     });
 
@@ -126,7 +128,7 @@ const Admin: React.FC = () => {
     return () => {
       unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs();
     };
-  }, [isAdmin, selectedBranchId]); // Added dependencies to ensure selection updates
+  }, [isAdmin, selectedBranchId]);
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
     setDeleteConf({ isOpen: true, title, message, action });
@@ -538,6 +540,11 @@ const Admin: React.FC = () => {
   const currentBranchSchedule = schedulesMap[selectedBranchId] || [];
   const activeBossImage = bossPool.find(b => b.name === currentBranchBoss)?.imageUrl;
   
+  const filteredUsers = allUsers.filter(u => 
+    u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
+    (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
   // Access checks
   if (!currentUser) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Please Sign In.</div>;
   if (guilds.length > 0 && userProfile && !isAdmin && !isOfficer) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Admins/Officers only.</div>;
@@ -690,7 +697,7 @@ const Admin: React.FC = () => {
                       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                           <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuration</h3>
                           <select 
-                            className="bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 text-zinc-900 dark:text-zinc-100 max-w-[200px]"
+                            className="bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 text-zinc-900 dark:text-zinc-100 w-full sm:w-auto min-w-[150px] pr-8"
                             value={selectedBranchId}
                             onChange={e => setSelectedBranchId(e.target.value)}
                             disabled={isOfficer} // Officers locked
@@ -737,7 +744,13 @@ const Admin: React.FC = () => {
                                       {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d}>{d}</option>)}
                                   </select>
                                   <input type="text" className="w-24 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm" placeholder="20:00" value={newSchedule.time} onChange={e => setNewSchedule({...newSchedule, time: formatTimeInput(e.target.value)})} />
-                                  <button onClick={handleAddSchedule} className="bg-zinc-200 dark:bg-zinc-700 p-2 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600"><Plus size={16} /></button>
+                                  <button 
+                                    onClick={handleAddSchedule} 
+                                    disabled={currentBranchSchedule.length >= 2}
+                                    className="bg-zinc-200 dark:bg-zinc-700 p-2 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <Plus size={16} />
+                                  </button>
                               </div>
                           </div>
 
@@ -905,15 +918,22 @@ const Admin: React.FC = () => {
       {/* 6. USER MANAGEMENT TAB (Admin Only) */}
       {activeTab === 'users' && isAdmin && (
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <div className="mb-4">
-                <input type="text" placeholder="Search Users..." className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" />
+            <div className="mb-4 relative">
+                <input 
+                  type="text" 
+                  placeholder="Search Users by Name or ID..." 
+                  className="w-full pl-9 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" 
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
             </div>
             <table className="w-full text-left text-sm">
                 <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
                     <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">ID</th><th className="px-4 py-3">Branch</th><th className="px-4 py-3">System Role</th><th className="px-4 py-3 text-right">Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {allUsers.map(user => (
+                    {filteredUsers.map(user => (
                         <tr key={user.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                             <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                                 <img src={user.photoURL || 'https://via.placeholder.com/150'} className="w-6 h-6 rounded-full" />

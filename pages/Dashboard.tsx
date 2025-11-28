@@ -1,13 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import * as ReactRouterDOM from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
+import firebase from 'firebase/compat/app';
+
+const { Link, useNavigate } = ReactRouterDOM as any;
 
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
@@ -37,10 +40,14 @@ const Dashboard: React.FC = () => {
   const [leaderboardBoss, setLeaderboardBoss] = useState('All');
 
   useEffect(() => {
+    // FIX: Use Firebase v8 compat syntax
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild))));
-    const unsubEvents = db.collection("events").onSnapshot(snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent))));
-    const unsubLeaderboard = db.collection("leaderboard").orderBy("time").onSnapshot(snap => setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry))));
-    const unsubQueue = db.collection("queue").onSnapshot(snap => setQueue(snap.docs.map(d => ({...d.data()} as QueueEntry))));
+    const unsubEvents = db.collection("events").orderBy("date", "asc").onSnapshot(snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent))));
+    const unsubLeaderboard = db.collection("leaderboard").orderBy("time", "asc").onSnapshot(snap => setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry))));
+    
+    // FIFO Queue: Order by joinedAt ascending
+    const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => setQueue(snap.docs.map(d => ({...d.data()} as QueueEntry))));
+    
     const unsubUsers = db.collection("users").onSnapshot(snap => setUsers(snap.docs.map(d => d.data() as UserProfile)));
     const unsubParties = db.collection("parties").onSnapshot(snap => setActivePartiesCount(snap.size));
     
@@ -102,7 +109,7 @@ const Dashboard: React.FC = () => {
         uid: currentUser!.uid,
         name: currentUserProfile.displayName,
         role: currentUserProfile.role,
-        joinedAt: new Date(),
+        joinedAt: new Date().toISOString(), // Use ISO string for consistent sorting
         guildId: selectedQueueGuildId
     });
     showAlert("Joined Queue Successfully!", 'success');
@@ -228,11 +235,11 @@ const Dashboard: React.FC = () => {
                </div>
              </div>
              <div className="flex gap-2">
-                <select className="px-2 py-1 text-xs border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" value={leaderboardBranch} onChange={(e) => setLeaderboardBranch(e.target.value)}>
+                <select className="px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" value={leaderboardBranch} onChange={(e) => setLeaderboardBranch(e.target.value)}>
                   <option value="All">All Branches</option>
                   {guilds.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
                 </select>
-                <select className="px-2 py-1 text-xs border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" value={leaderboardBoss} onChange={(e) => setLeaderboardBoss(e.target.value)}>
+                <select className="px-2 py-1 text-xs border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" value={leaderboardBoss} onChange={(e) => setLeaderboardBoss(e.target.value)}>
                   <option value="All">All Bosses</option>
                   {bossNames.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
@@ -286,7 +293,7 @@ const Dashboard: React.FC = () => {
                     <span className="text-xs font-medium text-zinc-400">• {branchName}</span>
                   </div>
                   <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                  <p className="text-zinc-500 text-sm line-clamp-2 whitespace-pre-wrap break-words">{event.description}</p>
+                  <p className="text-zinc-500 text-sm line-clamp-2 whitespace-pre-wrap break-all">{event.description}</p>
                 </div>
               </div>
             );

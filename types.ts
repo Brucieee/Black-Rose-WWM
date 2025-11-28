@@ -42,6 +42,7 @@ export interface UserProfile {
   photoURL?: string;
   status: 'online' | 'offline' | 'away' | 'in-game';
   email?: string | null;
+  lastSeen?: string; // ISO Date String
 }
 
 export interface Guild {

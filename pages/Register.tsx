@@ -1,13 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
+import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
+
+const { useNavigate } = ReactRouterDOM as any;
 
 const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup } = useAuth();
@@ -110,11 +112,20 @@ const Register: React.FC = () => {
     }
   };
 
+  const handleInGameIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+      setFormData({...formData, inGameId: val});
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedWeapons.length !== 2) {
       showAlert("Please select exactly 2 Martial Arts.", 'error');
       return;
+    }
+    if (formData.inGameId.length !== 10) {
+        showAlert("In-Game ID must be exactly 10 digits.", 'error');
+        return;
     }
 
     if (!currentUser) {
@@ -134,6 +145,7 @@ const Register: React.FC = () => {
         guildId: formData.guildId,
         photoURL: selectedAvatar,
         status: 'online',
+        lastSeen: new Date().toISOString(),
         email: currentUser.email,
         systemRole: 'Member'
       });
@@ -192,7 +204,7 @@ const Register: React.FC = () => {
               <input 
                 type="email" 
                 required 
-                className="w-full px-4 py-2 border rounded-lg text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                className="w-full px-4 py-2 border rounded-lg bg-white text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                 value={authEmail}
                 onChange={e => setAuthEmail(e.target.value)}
               />
@@ -202,7 +214,7 @@ const Register: React.FC = () => {
               <input 
                 type="password" 
                 required 
-                className="w-full px-4 py-2 border rounded-lg text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                className="w-full px-4 py-2 border rounded-lg bg-white text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                 value={authPass}
                 onChange={e => setAuthPass(e.target.value)}
               />
@@ -235,21 +247,21 @@ const Register: React.FC = () => {
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all text-zinc-900"
                   placeholder="Your In-Game Name"
                   value={formData.displayName}
                   onChange={e => setFormData({...formData, displayName: e.target.value})}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">In-Game ID</label>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">In-Game ID (10 Digits)</label>
                 <input 
                   type="text" 
                   required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all"
-                  placeholder="e.g. 1234567"
+                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all font-mono text-zinc-900"
+                  placeholder="e.g. 4022284874"
                   value={formData.inGameId}
-                  onChange={e => setFormData({...formData, inGameId: e.target.value})}
+                  onChange={handleInGameIdChange}
                 />
               </div>
               <div>
@@ -299,7 +311,7 @@ const Register: React.FC = () => {
                   className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
                     formData.role === role 
                       ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-opacity-60' 
-                      : 'border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                      : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'
                   }`}
                 >
                   {roleIcons[role]}

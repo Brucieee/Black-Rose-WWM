@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, googleProvider, db } from '../services/firebase';
 import { useAlert } from './AlertContext';
@@ -35,7 +36,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check if doc exists before updating
       const docSnap = await userDocRef.get();
       if (docSnap.exists) {
-        await userDocRef.update({ status });
+        await userDocRef.update({ 
+            status,
+            lastSeen: new Date().toISOString()
+        });
       }
     } catch (error) {
       console.log("Status update skipped (profile might not exist yet)");
@@ -100,6 +104,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!currentUser) return;
 
+    // Heartbeat to keep user 'online' and update lastSeen
+    const heartbeatInterval = setInterval(() => {
+        updateUserStatus(currentUser.uid, 'online');
+    }, 60000); // Every 60 seconds
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         updateUserStatus(currentUser.uid, 'away');
@@ -117,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
+      clearInterval(heartbeatInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
