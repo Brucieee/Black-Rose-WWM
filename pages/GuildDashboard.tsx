@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { MOCK_EVENTS } from '../services/mockData';
-import { Party, RoleType, Guild } from '../types';
+import { Party, RoleType, Guild, GuildEvent } from '../types';
 import { Users, Clock, Plus, Sword, Crown, Trash2, Calendar, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
 import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
+import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
 const GuildDashboard: React.FC = () => {
   const params = ReactRouterDOM.useParams();
@@ -28,6 +29,8 @@ const GuildDashboard: React.FC = () => {
   // Real-time parties from Firestore
   const [parties, setParties] = useState<Party[]>([]);
   const [memberCount, setMemberCount] = useState(0);
+  // Real-time events
+  const [events, setEvents] = useState<GuildEvent[]>([]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
@@ -36,6 +39,13 @@ const GuildDashboard: React.FC = () => {
     activity: '',
     maxMembers: 5
   });
+
+  const [deleteConf, setDeleteConf] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => Promise<void>;
+  }>({ isOpen: false, title: '', message: '', action: async () => {} });
 
   // 1. Fetch Guild Details & Real-time Listeners
   useEffect(() => {
@@ -68,17 +78,28 @@ const GuildDashboard: React.FC = () => {
       setMemberCount(snapshot.size);
     });
 
+    // Fetch Events (All events, filtered later)
+    const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => {
+        const allEvents = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as GuildEvent[];
+        setEvents(allEvents);
+    });
+
     return () => {
         unsubGuild();
         unsubParties();
         unsubUsers();
+        unsubEvents();
     };
   }, [guildId]);
 
   if (loading) return <div className="p-8 text-center text-zinc-500">Loading Guild Data...</div>;
   if (!guild) return <div className="p-8 text-center text-red-500 font-bold">Guild Branch Not Found (ID: {guildId})</div>;
 
-  const branchEvents = MOCK_EVENTS.filter(e => e.guildId === guildId);
+  // Filter events for this branch OR global events (empty guildId)
+  const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId);
 
   // -- Handlers --
 
@@ -141,40 +162,47 @@ const GuildDashboard: React.FC = () => {
     }
   };
 
+  const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
+    setDeleteConf({ isOpen: true, title, message, action });
+  };
+
   const kickMember = async (e: React.MouseEvent, partyId: string, memberUid: string, memberData: any) => {
     e.stopPropagation();
     e.preventDefault();
     console.log(`Attempting to kick member ${memberUid} from party ${partyId}`);
-    if (!window.confirm("Are you sure you want to kick this member?")) return;
     
-    try {
-      const partyRef = doc(db, "parties", partyId);
-      await updateDoc(partyRef, {
-        currentMembers: arrayRemove(memberData)
-      });
-      console.log("Member kicked successfully.");
-    } catch (error: any) {
-      console.error("Error kicking member:", error);
-      showAlert(`Failed to kick member: ${error.message}`, 'error');
-    }
+    openDeleteModal("Kick Member?", "Are you sure you want to remove this member from the party?", async () => {
+        try {
+            const partyRef = doc(db, "parties", partyId);
+            await updateDoc(partyRef, {
+                currentMembers: arrayRemove(memberData)
+            });
+            console.log("Member kicked successfully.");
+        } catch (error: any) {
+            console.error("Error kicking member:", error);
+            showAlert(`Failed to kick member: ${error.message}`, 'error');
+        }
+    });
   };
 
   const deleteParty = async (e: React.MouseEvent, partyId: string) => {
     e.stopPropagation();
     e.preventDefault();
     console.log(`Attempting to delete party: ${partyId}`);
-    if (!window.confirm("Disband this party?")) return;
-    try {
-      await deleteDoc(doc(db, "parties", partyId));
-      console.log("Party deleted successfully.");
-    } catch (error: any) {
-      console.error("Error deleting party:", error);
-      if (error.code === 'permission-denied') {
-          showAlert("Permission Denied: Check Firebase Rules.", 'error');
-      } else {
-          showAlert(`Failed to delete party: ${error.message}`, 'error');
-      }
-    }
+    
+    openDeleteModal("Disband Party?", "This will remove the party and kick all members.", async () => {
+        try {
+            await deleteDoc(doc(db, "parties", partyId));
+            console.log("Party deleted successfully.");
+        } catch (error: any) {
+            console.error("Error deleting party:", error);
+            if (error.code === 'permission-denied') {
+                showAlert("Permission Denied: Check Firebase Rules.", 'error');
+            } else {
+                showAlert(`Failed to delete party: ${error.message}`, 'error');
+            }
+        }
+    });
   };
 
   return (
@@ -377,7 +405,7 @@ const GuildDashboard: React.FC = () => {
           
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-4">
             {branchEvents.length === 0 ? (
-               <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center py-4">No upcoming events scheduled for {guild.name}.</p>
+               <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center py-4">No upcoming events scheduled for this branch.</p>
             ) : (
               <div className="space-y-4">
                 {branchEvents.map(event => (
@@ -407,6 +435,14 @@ const GuildDashboard: React.FC = () => {
         onSubmit={handleCreateParty}
         data={newPartyData}
         onChange={setNewPartyData}
+      />
+
+      <ConfirmationModal
+        isOpen={deleteConf.isOpen}
+        onClose={() => setDeleteConf({ ...deleteConf, isOpen: false })}
+        onConfirm={deleteConf.action}
+        title={deleteConf.title}
+        message={deleteConf.message}
       />
 
     </div>

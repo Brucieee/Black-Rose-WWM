@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot } from '../types';
+import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, onSnapshot, orderBy, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -30,7 +31,7 @@ const Dashboard: React.FC = () => {
   // System Config
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
-  const [recentWinners, setRecentWinners] = useState<string[]>([]);
+  const [recentWinners, setRecentWinners] = useState<CooldownEntry[]>([]);
   const [bossPool, setBossPool] = useState<{name: string, imageUrl: string}[]>([]);
   const [bossNames, setBossNames] = useState<string[]>([]);
 
@@ -79,7 +80,7 @@ const Dashboard: React.FC = () => {
 
   // Derived State
   const currentBranchQueue = queue.filter(q => q.guildId === selectedQueueGuildId);
-  const isCooldown = currentUser && recentWinners.includes(currentUser.uid);
+  const isCooldown = currentUser && recentWinners.some(w => w.uid === currentUser.uid);
   
   const todayIndex = new Date().getDay();
   const daysMap = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -134,8 +135,19 @@ const Dashboard: React.FC = () => {
     let h = parseInt(hours, 10);
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
-    h = h ? h : 12; // the hour '0' should be '12'
+    h = h ? h : 12; 
     return `${h}:${minutes} ${ampm}`;
+  };
+
+  const formatDateMMDDYYYY = (dateStr: string) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+      }).replace(/\//g, '-');
   };
 
   const getScheduleDisplay = (guildId: string) => {
@@ -215,7 +227,7 @@ const Dashboard: React.FC = () => {
                             setSelectedQueueBossImage(bossImage);
                             setIsQueueModalOpen(true); 
                         }} 
-                        className="bg-zinc-100 dark:bg-zinc-700 hover:bg-rose-900 hover:text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors"
+                        className="bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-rose-900 hover:text-white dark:hover:bg-rose-900 dark:hover:text-white text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors"
                     >
                         <ListOrdered size={14} /> Queue
                     </button>
@@ -247,12 +259,12 @@ const Dashboard: React.FC = () => {
           <div className="flex-1 overflow-y-auto custom-scrollbar relative">
             <table className="w-full text-left text-sm table-fixed">
               <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 sticky top-0 z-10">
-                <tr><th className="px-4 py-3 w-16">#</th><th className="px-4 py-3 w-3/12">Player</th><th className="px-4 py-3 w-5/12">Boss</th><th className="px-4 py-3 w-2/12">Time</th><th className="px-4 py-3 w-2/12 text-right">Date</th></tr>
+                <tr><th className="px-4 py-3 w-16 text-zinc-900 dark:text-zinc-100">#</th><th className="px-4 py-3 w-3/12 text-zinc-900 dark:text-zinc-100">Player</th><th className="px-4 py-3 w-5/12 text-zinc-900 dark:text-zinc-100">Boss</th><th className="px-4 py-3 w-2/12 text-zinc-900 dark:text-zinc-100">Time</th><th className="px-4 py-3 w-2/12 text-right text-zinc-900 dark:text-zinc-100">Date</th></tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {filteredLeaderboard.map((entry, idx) => (
                   <tr key={idx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50">
-                    <td className="px-4 py-3">{idx + 1}</td>
+                    <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100 font-mono">{idx + 1}</td>
                     <td className="px-4 py-3 truncate">
                       <button onClick={() => { 
                          const u = users.find(u => u.uid === entry.playerUid); 
@@ -260,9 +272,9 @@ const Dashboard: React.FC = () => {
                       }} className="font-bold text-zinc-900 dark:text-zinc-100 hover:text-rose-900 hover:underline">{entry.playerName}</button>
                       <div className="text-xs text-zinc-500">{entry.branch}</div>
                     </td>
-                    <td className="px-4 py-3 truncate" title={entry.boss}>{entry.boss}</td>
+                    <td className="px-4 py-3 truncate text-zinc-900 dark:text-zinc-100" title={entry.boss}>{entry.boss}</td>
                     <td className="px-4 py-3 font-mono font-medium text-rose-900 dark:text-rose-400">{entry.time}</td>
-                    <td className="px-4 py-3 text-right text-xs whitespace-nowrap">{entry.date}</td>
+                    <td className="px-4 py-3 text-right text-xs whitespace-nowrap text-zinc-900 dark:text-zinc-100">{formatDateMMDDYYYY(entry.date)}</td>
                   </tr>
                 ))}
               </tbody>

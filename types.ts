@@ -105,9 +105,16 @@ export interface ScheduleSlot {
   time: string;
 }
 
+export interface CooldownEntry {
+  uid: string;
+  branchId: string;
+  timestamp: string;
+  prizeGiven: boolean;
+}
+
 export interface BreakingArmyConfig {
   currentBoss: Record<string, string>; // guildId -> bossName
   schedules: Record<string, ScheduleSlot[]>; // guildId -> [{day, time}]
-  recentWinners: string[];
+  recentWinners: CooldownEntry[];
   bossPool: Boss[];
 }

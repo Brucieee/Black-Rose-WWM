@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { QueueEntry, RoleType } from '../../types';
-import { Users, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Users, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import { BaseModal } from './BaseModal';
 
 interface QueueModalProps {
@@ -70,9 +70,17 @@ export const QueueModal: React.FC<QueueModalProps> = ({
        </div>
        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800">
           {isCooldown ? (
-            <div className="p-3 bg-yellow-50 text-yellow-800 rounded-lg border border-yellow-200 flex items-center gap-2"><AlertTriangle size={18} /> Cooldown Active</div>
+            <div className="flex flex-col items-center justify-center p-4 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 text-center">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-500 flex items-center justify-center mb-2">
+                    <Clock size={20} />
+                </div>
+                <h4 className="font-bold text-zinc-900 dark:text-zinc-100 mb-1">Cooldown Active</h4>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[250px]">
+                    You already won the last Breaking Army. Please wait for the next one.
+                </p>
+            </div>
           ) : isInQueue ? (
-             <button onClick={onLeave} className="w-full py-3 bg-zinc-200 dark:bg-zinc-800 font-bold rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors">Leave Queue</button>
+             <button onClick={onLeave} className="w-full py-3 bg-zinc-200 dark:bg-zinc-800 font-bold rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors text-zinc-700 dark:text-zinc-300">Leave Queue</button>
           ) : (
             <button onClick={onJoin} disabled={queue.length >= 30} className="w-full py-3 bg-rose-900 text-white font-bold rounded-lg disabled:opacity-50 hover:bg-rose-950 transition-colors"><CheckCircle className="inline mr-2" size={18} /> Join Queue</button>
           )}

@@ -45,7 +45,7 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
   };
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} className="overflow-visible"> 
+    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-md overflow-visible"> 
         <div className="p-6">
             <h3 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">Edit Record</h3>
             <form onSubmit={onUpdate} className="space-y-4">
@@ -111,7 +111,7 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
                 </div>
 
                 <button type="submit" className="w-full bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors mt-2">
-                    Update Entry
+                    {entry.id ? 'Update Entry' : 'Create Entry'}
                 </button>
             </form>
         </div>

@@ -96,8 +96,9 @@ const Members: React.FC = () => {
                   alt={user.displayName} 
                   className="w-12 h-12 rounded-full object-cover border-2 border-zinc-100 dark:border-zinc-700 group-hover:border-rose-100 dark:group-hover:border-rose-900/50"
                 />
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-zinc-900 ${user.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                 {user.systemRole && user.systemRole !== 'Member' && (
-                  <div className="absolute -bottom-1 -right-1 bg-rose-900 text-white p-0.5 rounded-full border border-white dark:border-zinc-900" title={user.systemRole}>
+                  <div className="absolute -top-1 -right-1 bg-rose-900 text-white p-0.5 rounded-full border border-white dark:border-zinc-900" title={user.systemRole}>
                     <ShieldCheck size={12} />
                   </div>
                 )}

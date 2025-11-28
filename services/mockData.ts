@@ -65,7 +65,10 @@ export const BREAKING_ARMY_CONFIG: BreakingArmyConfig = {
     'g1': [{ day: 'Wednesday', time: '20:00' }, { day: 'Friday', time: '20:00' }],
     'g2': [{ day: 'Wednesday', time: '21:00' }, { day: 'Friday', time: '21:00' }]
   },
-  recentWinners: ['u99', 'u98'],
+  recentWinners: [
+    { uid: 'u99', branchId: 'g1', timestamp: new Date().toISOString(), prizeGiven: false },
+    { uid: 'u98', branchId: 'g1', timestamp: new Date().toISOString(), prizeGiven: true }
+  ],
   bossPool: [
     { name: 'Grand General of the Eternal Abyss', imageUrl: '' },
     { name: 'Black God of Wealth', imageUrl: '' },

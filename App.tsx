@@ -1,3 +1,4 @@
+
 import React from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import Layout from './components/Layout';
@@ -8,6 +9,7 @@ import Admin from './pages/Admin';
 import Dashboard from './pages/Dashboard';
 import Events from './pages/Events';
 import Profile from './pages/Profile';
+import Alliances from './pages/Alliances';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
@@ -34,7 +36,7 @@ function App() {
               <Route path="/guild/:guildId" element={<GuildDashboard />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/events" element={<Events />} />
-              <Route path="/alliances" element={<div className="p-8">Alliances Page Placeholder</div>} />
+              <Route path="/alliances" element={<Alliances />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
