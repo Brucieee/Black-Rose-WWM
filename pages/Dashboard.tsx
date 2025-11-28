@@ -291,7 +291,7 @@ const Dashboard: React.FC = () => {
           <Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></Link>
         </div>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {events.map(event => {
+          {events.slice(0, 3).map(event => { // Show max 3 events
             const branchName = guilds.find(g => g.id === event.guildId)?.name || 'Global';
             const eventDate = new Date(event.date);
             return (
@@ -306,7 +306,8 @@ const Dashboard: React.FC = () => {
                     <span className="text-xs font-medium text-zinc-400">• {branchName}</span>
                   </div>
                   <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                  <p className="text-zinc-500 text-sm line-clamp-2">{event.description}</p>
+                  {/* Updated classes to respect newlines but limit to 2 lines */}
+                  <p className="text-zinc-500 text-sm line-clamp-2 whitespace-pre-wrap break-words">{event.description}</p>
                 </div>
               </div>
             );

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, ArrowRight } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore';
 import { GuildEvent, Guild } from '../types';
 
 const Events: React.FC = () => {
@@ -10,7 +10,7 @@ const Events: React.FC = () => {
   const [guilds, setGuilds] = useState<Guild[]>([]);
 
   useEffect(() => {
-    const unsubEvents = onSnapshot(collection(db, "events"), snap => {
+    const unsubEvents = onSnapshot(query(collection(db, "events"), orderBy("date", "desc")), snap => {
       setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuildEvent)));
     });
     
@@ -31,7 +31,7 @@ const Events: React.FC = () => {
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
           <h2 className="font-bold text-zinc-900 dark:text-zinc-100 text-xl flex items-center gap-2">
-             <Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Events
+             <Calendar className="text-rose-900 dark:text-rose-500" /> All Events
           </h2>
         </div>
         
@@ -46,9 +46,9 @@ const Events: React.FC = () => {
               const eventDate = new Date(event.date);
               
               return (
-                <div key={event.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-6 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors group">
+                <div key={event.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-start gap-6 group">
                   {/* Date Box */}
-                  <div className="flex-shrink-0 flex sm:flex-col items-center gap-2 sm:gap-0 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 min-w-[80px] text-center group-hover:bg-rose-50 dark:group-hover:bg-rose-900/20 transition-colors">
+                  <div className="flex-shrink-0 flex sm:flex-col items-center gap-2 sm:gap-0 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 min-w-[80px] text-center group-hover:bg-rose-50 dark:group-hover:bg-rose-900/20 transition-colors sticky top-4">
                     <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase">{eventDate.toLocaleDateString(undefined, { month: 'short' })}</span>
                     <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{eventDate.getDate()}</span>
                     <span className="text-xs text-zinc-400 hidden sm:block">{eventDate.toLocaleDateString(undefined, { weekday: 'short' })}</span>
@@ -56,7 +56,7 @@ const Events: React.FC = () => {
 
                   {/* Event Details */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         event.type === 'Raid' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300' :
                         event.type === 'PvP' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' : 
@@ -68,12 +68,15 @@ const Events: React.FC = () => {
                         • {branchName}
                       </span>
                     </div>
-                    <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{event.title}</h4>
-                    <p className="text-zinc-500 dark:text-zinc-400 text-sm line-clamp-2">{event.description}</p>
+                    <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
+                    {/* Updated classes: whitespace-pre-wrap handles newlines, break-words handles long words without breaking mid-word */}
+                    <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-words min-w-0 leading-relaxed">
+                      {event.description}
+                    </p>
                   </div>
 
                   {/* Time / Action */}
-                  <div className="flex items-center gap-4 sm:border-l sm:border-zinc-100 dark:sm:border-zinc-800 sm:pl-6 min-w-[150px]">
+                  <div className="flex items-center gap-4 sm:border-l sm:border-zinc-100 dark:sm:border-zinc-800 sm:pl-6 min-w-[150px] pt-1">
                      <div className="flex flex-col">
                         <span className="text-xs text-zinc-400 uppercase tracking-wider font-bold mb-1">Start Time</span>
                         <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-medium">

@@ -198,7 +198,7 @@ const Register: React.FC = () => {
               <input 
                 type="email" 
                 required 
-                className="w-full px-4 py-2 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                className="w-full px-4 py-2 border rounded-lg text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                 value={authEmail}
                 onChange={e => setAuthEmail(e.target.value)}
               />
@@ -208,7 +208,7 @@ const Register: React.FC = () => {
               <input 
                 type="password" 
                 required 
-                className="w-full px-4 py-2 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                className="w-full px-4 py-2 border rounded-lg text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                 value={authPass}
                 onChange={e => setAuthPass(e.target.value)}
               />

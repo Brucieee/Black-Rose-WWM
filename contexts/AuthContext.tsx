@@ -102,6 +102,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
+  // Handle user closing tab
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleBeforeUnload = () => {
+      updateUserStatus(currentUser.uid, 'offline');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentUser]);
+
   return (
     <AuthContext.Provider value={{ currentUser, loading, signInWithGoogle, signup, login, logout }}>
       {!loading && children}

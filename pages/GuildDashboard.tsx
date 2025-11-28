@@ -20,7 +20,6 @@ const GuildDashboard: React.FC = () => {
   };
   const Link = ReactRouterDOM.Link;
 
-
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
   
@@ -35,7 +34,7 @@ const GuildDashboard: React.FC = () => {
   
   const [newPartyData, setNewPartyData] = useState({
     name: '',
-    activity: '',
+    activity: 'Raid',
     maxMembers: 5
   });
 
@@ -96,7 +95,7 @@ const GuildDashboard: React.FC = () => {
     return () => clearInterval(cleanupInterval);
   }, [parties, allUsers]);
   
-  const isUserInAnyParty = parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
+  const isUserInAnyParty = allUsers.length > 0 && parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
   const canCreateParty = currentUserProfile?.guildId === guildId;
 
   const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId || e.guildId === '');
@@ -123,11 +122,11 @@ const GuildDashboard: React.FC = () => {
             uid: currentUserProfile.uid, 
             name: currentUserProfile.displayName, 
             role: currentUserProfile.role,
-            photoURL: currentUserProfile.photoURL // Use profile photoURL
+            photoURL: currentUserProfile.photoURL
         }]
       });
       setIsCreateModalOpen(false);
-      setNewPartyData({ name: '', activity: '', maxMembers: 5 });
+      setNewPartyData({ name: '', activity: 'Raid', maxMembers: 5 });
     } catch (error: any) {
       showAlert(`Failed to create party: ${error.message}`, 'error');
     }
@@ -154,7 +153,7 @@ const GuildDashboard: React.FC = () => {
           photoURL: currentUserProfile.photoURL
         })
       });
-    } catch (error) {
+    } catch (error: any) {
       showAlert(`Failed to join party: ${error.message}`, 'error');
     }
   };
@@ -163,13 +162,11 @@ const GuildDashboard: React.FC = () => {
     if (!currentUserProfile) return;
 
     if (party.leaderId === currentUserProfile.uid) {
-        // Leader leaves, disband party
         openDeleteModal("Disband Party?", "As the leader, leaving will disband this party for everyone.", async () => {
             await deleteDoc(doc(db, "parties", party.id));
             showAlert("Party disbanded", "info");
         });
     } else {
-        // Member leaves
         const memberToRemove = party.currentMembers.find(m => m.uid === currentUserProfile.uid);
         if (memberToRemove) {
             try {
@@ -283,7 +280,6 @@ const GuildDashboard: React.FC = () => {
                   </div>
                 </div>
               )})}
-            
           </div>
         </div>
         
@@ -303,7 +299,8 @@ const GuildDashboard: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">{event.title}</h4>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">{event.description}</p>
+                        {/* Updated classes to respect newlines but limit to 2 lines */}
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2 whitespace-pre-wrap break-words">{event.description}</p>
                         <span className="inline-block mt-2 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-2 py-0.5 rounded uppercase tracking-wider">{event.type}</span>
                       </div>
                     </div>
