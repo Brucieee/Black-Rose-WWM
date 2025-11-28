@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore';
+// FIX: Removed unused Firestore v9 imports.
 import { GuildEvent, Guild } from '../types';
 
 const Events: React.FC = () => {
@@ -10,11 +11,13 @@ const Events: React.FC = () => {
   const [guilds, setGuilds] = useState<Guild[]>([]);
 
   useEffect(() => {
-    const unsubEvents = onSnapshot(query(collection(db, "events"), orderBy("date", "desc")), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubEvents = db.collection("events").orderBy("date", "desc").onSnapshot(snap => {
       setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuildEvent)));
     });
     
-    getDocs(collection(db, "guilds")).then(snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    db.collection("guilds").get().then(snap => {
       setGuilds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
     });
 

@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Save, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+// FIX: Removed unused Firestore v9 imports.
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -36,16 +37,18 @@ const Profile: React.FC = () => {
       
       try {
         // Fetch Guilds
-        const q = query(collection(db, "guilds"), orderBy("name"));
-        const snapshot = await getDocs(q);
+        // FIX: Updated Firestore query to v8 compat syntax.
+        const q = db.collection("guilds").orderBy("name");
+        const snapshot = await q.get();
         const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
         setGuilds(guildsData);
 
         // Fetch Current Profile
-        const docRef = doc(db, "users", currentUser.uid);
-        const docSnap = await getDoc(docRef);
+        // FIX: Updated Firestore query to v8 compat syntax.
+        const docRef = db.collection("users").doc(currentUser.uid);
+        const docSnap = await docRef.get();
         
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
           setProfileExists(true);
           const data = docSnap.data() as UserProfile;
           setFormData({
@@ -138,7 +141,8 @@ const Profile: React.FC = () => {
       }
 
       // Use setDoc with merge: true to handle both create and update
-      await setDoc(doc(db, "users", currentUser.uid), dataToSave, { merge: true });
+      // FIX: Updated Firestore write to v8 compat syntax.
+      await db.collection("users").doc(currentUser.uid).set(dataToSave, { merge: true });
       
       setProfileExists(true); // Now it exists
       setSaveSuccess(true);

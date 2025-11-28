@@ -1,15 +1,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, googleProvider, db } from '../services/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
 import { useAlert } from './AlertContext';
+// FIX: Switched to Firebase v8 compat by removing v9 function imports. User type is now firebase.User.
 import firebase from 'firebase/compat/app';
-
-// Define User type based on Firebase v8 compatibility
-type User = firebase.User;
+import 'firebase/compat/auth';
 
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: firebase.User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signup: (email: string, pass: string) => Promise<any>;
@@ -26,28 +24,29 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<firebase.User | null>(null);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlert();
 
   const updateUserStatus = async (uid: string, status: 'online' | 'offline' | 'away') => {
     try {
-      await updateDoc(doc(db, "users", uid), { status });
+      // FIX: Changed to v8 compat firestore syntax
+      const userDocRef = db.collection("users").doc(uid);
+      await userDocRef.update({ status });
     } catch (error) {
-      // Silently fail if profile doesn't exist yet (e.g. during first registration)
       console.log("Status update skipped (profile might not exist yet)");
     }
   };
 
   const signInWithGoogle = async () => {
     try {
-      // Use v8 style auth instance method
+      // FIX: Changed to v8 compat auth syntax
       const res = await auth.signInWithPopup(googleProvider);
       if (res.user) {
         await updateUserStatus(res.user.uid, 'online');
       }
     } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') {
+      if (error.code === 'auth/popup-closed-by--user') {
         return;
       }
       console.error("Error signing in", error);
@@ -60,50 +59,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, pass: string) => {
-    try {
-      const res = await auth.createUserWithEmailAndPassword(email, pass);
-      return res.user;
-    } catch (error: any) {
-      console.error("Signup error", error);
-      throw error;
-    }
+  const signup = (email: string, pass: string) => {
+    // FIX: Changed to v8 compat auth syntax
+    return auth.createUserWithEmailAndPassword(email, pass);
   };
 
   const login = async (email: string, pass: string) => {
-    try {
-      const res = await auth.signInWithEmailAndPassword(email, pass);
-      if (res.user) {
-        await updateUserStatus(res.user.uid, 'online');
-      }
-      return res.user;
-    } catch (error: any) {
-      console.error("Login error", error);
-      throw error;
+    // FIX: Changed to v8 compat auth syntax
+    const res = await auth.signInWithEmailAndPassword(email, pass);
+    if (res.user) {
+      await updateUserStatus(res.user.uid, 'online');
     }
+    return res;
   };
 
   const logout = async () => {
     if (currentUser) {
       await updateUserStatus(currentUser.uid, 'offline');
     }
+    // FIX: Changed to v8 compat auth syntax
     await auth.signOut();
   };
 
   useEffect(() => {
-    // Use v8 style onAuthStateChanged on auth instance
+    // FIX: Changed to v8 compat auth syntax
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setCurrentUser(user);
       setLoading(false);
       if (user) {
-        // Mark as online when session is restored
         updateUserStatus(user.uid, 'online');
       }
     });
     return unsubscribe;
   }, []);
 
-  // Handle visibility change and tab closing
   useEffect(() => {
     if (!currentUser) return;
 
@@ -116,7 +105,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const handleBeforeUnload = () => {
-      // Best effort update
       updateUserStatus(currentUser.uid, 'offline');
     };
 

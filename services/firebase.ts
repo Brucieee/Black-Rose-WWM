@@ -1,7 +1,9 @@
-import firebase from "firebase/compat/app";
-import "firebase/compat/auth";
-import "firebase/compat/firestore";
-import "firebase/compat/storage";
+
+// FIX: Switched to Firebase v8 compat imports to resolve module export errors.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+import 'firebase/compat/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAoTLOuV4hZSw0VUehZ58cXhflzD4lvAIU",

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, RoleType, Guild } from '../types';
 import { Search, ShieldCheck, ChevronDown } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
+// FIX: Removed unused Firestore v9 imports.
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 
 const Members: React.FC = () => {
@@ -17,12 +17,14 @@ const Members: React.FC = () => {
 
   useEffect(() => {
     // Real-time Users
-    const unsubscribe = onSnapshot(query(collection(db, "users")), (snapshot) => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubscribe = db.collection("users").onSnapshot((snapshot) => {
       setUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
     });
     
     // Fetch Guilds for name resolution
-    getDocs(collection(db, "guilds")).then(snapshot => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    db.collection("guilds").get().then(snapshot => {
       setGuilds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
     });
 

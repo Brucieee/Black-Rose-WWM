@@ -4,9 +4,7 @@ import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types'
 import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { doc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
-// FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
@@ -15,16 +13,13 @@ const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup } = useAuth();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   
-  // FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
-  const history = useHistory();
+  const navigate = useNavigate();
   const { showAlert } = useAlert();
   
-  // Auth Form State
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authEmail, setAuthEmail] = useState('');
   const [authPass, setAuthPass] = useState('');
 
-  // Profile Form State
   const [formData, setFormData] = useState({
     displayName: '',
     inGameId: '',
@@ -38,8 +33,8 @@ const Register: React.FC = () => {
 
   useEffect(() => {
     const fetchGuilds = async () => {
-      const q = query(collection(db, "guilds"), orderBy("name"));
-      const snapshot = await getDocs(q);
+      const q = db.collection("guilds").orderBy("name");
+      const snapshot = await q.get();
       const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
       setGuilds(guildsData);
       if (guildsData.length > 0) {
@@ -53,7 +48,6 @@ const Register: React.FC = () => {
     if (currentUser) {
       setFormData(prev => ({ ...prev, displayName: currentUser.displayName || '' }));
       if (currentUser.photoURL) {
-          // If the user's photoURL is in our preset list, select it. Otherwise default to first preset.
           if (PRESET_AVATARS.includes(currentUser.photoURL)) {
              setSelectedAvatar(currentUser.photoURL);
           }
@@ -80,8 +74,7 @@ const Register: React.FC = () => {
       } else {
         await signup(authEmail, authPass);
       }
-      // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
-      history.push('/'); // Safe Redirect
+      navigate('/');
     } catch (error: any) {
       const msg = getFirebaseErrorMessage(error.code);
       showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
@@ -129,7 +122,8 @@ const Register: React.FC = () => {
     }
 
     try {
-      await setDoc(doc(db, "users", currentUser.uid), {
+      const userDocRef = db.collection("users").doc(currentUser.uid);
+      await userDocRef.set({
         uid: currentUser.uid,
         inGameId: formData.inGameId,
         displayName: formData.displayName,
@@ -139,12 +133,11 @@ const Register: React.FC = () => {
         photoURL: selectedAvatar,
         status: 'online',
         email: currentUser.email,
-        systemRole: 'Member' // Default system role
+        systemRole: 'Member'
       });
 
       showAlert("Profile Created Successfully!", 'success', "Welcome!");
-      // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
-      history.push('/');
+      navigate('/');
     } catch (error) {
       console.error("Error creating profile:", error);
       showAlert("Failed to save profile.", 'error');
@@ -233,7 +226,6 @@ const Register: React.FC = () => {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-8 bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-          {/* Section 1: Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-4">
               <div>
@@ -294,7 +286,6 @@ const Register: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Role Selection */}
           <div>
             <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">Select Your Role</label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -316,7 +307,6 @@ const Register: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 3: Martial Arts */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Martial Arts (Select 2)</label>
@@ -343,7 +333,7 @@ const Register: React.FC = () => {
                           ? 'opacity-40 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700 text-zinc-400'
                           : isDisabled 
                               ? 'opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
-                              : 'border-zinc-200 dark:border-zinc-700 dark:bg-zinc-800 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
+                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                     }`}
                   >
                     <span className="truncate">{weapon}</span>

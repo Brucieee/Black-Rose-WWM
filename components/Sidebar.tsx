@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// FIX: Corrected react-router-dom import for v5 compatibility.
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -16,11 +15,9 @@ import {
   X,
   Moon,
   Sun,
-  UserCircle
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -35,7 +32,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { logout, currentUser } = useAuth();
 
-  // Initialize Dark Mode
   useEffect(() => {
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.classList.add('dark');
@@ -46,10 +42,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     }
   }, []);
 
-  // Fetch Guilds
   useEffect(() => {
-    const q = query(collection(db, "guilds"), orderBy("name"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const q = db.collection("guilds").orderBy("name");
+    const unsubscribe = q.onSnapshot((snapshot) => {
       const guildsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -59,11 +54,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch User Profile to check System Role
   useEffect(() => {
     if (currentUser) {
-      const unsub = onSnapshot(doc(db, "users", currentUser.uid), (doc) => {
-        if (doc.exists()) {
+      const unsub = db.collection("users").doc(currentUser.uid).onSnapshot((doc) => {
+        if (doc.exists) {
           setUserProfile(doc.data() as UserProfile);
         }
       });
@@ -96,10 +90,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     guilds.length === 0
   );
   
-  // FIX: Replaced NavLink's className function with base className and activeClassName for react-router-dom v5 compatibility.
-  const navLinkBaseClass = "flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-r-full mr-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800";
-  const navLinkActiveClass = "bg-rose-900/10 text-rose-500 border-l-4 border-rose-900";
-
+  const navLinkClasses = "flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-r-full mr-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800";
+  const activeNavLinkClasses = "bg-rose-900/10 text-rose-500 border-l-4 border-rose-900";
 
   return (
     <>
@@ -138,10 +130,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           
           <NavLink 
             to="/" 
-            exact
+            end
             onClick={handleLinkClick}
-            className={navLinkBaseClass}
-            activeClassName={navLinkActiveClass}
+            className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
           >
             <LayoutDashboard size={18} />
             Dashboard
@@ -150,8 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <NavLink 
             to="/events" 
             onClick={handleLinkClick}
-            className={navLinkBaseClass}
-            activeClassName={navLinkActiveClass}
+            className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
           >
             <Calendar size={18} />
             Events
@@ -160,8 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <NavLink 
             to="/members" 
             onClick={handleLinkClick}
-            className={navLinkBaseClass}
-            activeClassName={navLinkActiveClass}
+            className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
           >
             <Users size={18} />
             Members
@@ -170,8 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <NavLink 
             to="/alliances" 
             onClick={handleLinkClick}
-            className={navLinkBaseClass}
-            activeClassName={navLinkActiveClass}
+            className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
           >
             <Shield size={18} />
             Alliances
@@ -191,8 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   key={guild.id} 
                   to={`/guild/${guild.id}`} 
                   onClick={handleLinkClick}
-                  className={navLinkBaseClass}
-                  activeClassName={navLinkActiveClass}
+                  className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-zinc-600 mr-2" />
                   {guild.name}
@@ -210,8 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <NavLink 
                 to="/admin" 
                 onClick={handleLinkClick}
-                className={navLinkBaseClass}
-                activeClassName={navLinkActiveClass}
+                className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
               >
                 <Settings size={18} />
                 Admin
@@ -223,8 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <NavLink 
               to="/register" 
               onClick={handleLinkClick}
-              className={navLinkBaseClass}
-              activeClassName={navLinkActiveClass}
+              className={({ isActive }) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
             >
               <PlusCircle size={18} />
               Join Guild
@@ -233,7 +218,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
         </nav>
 
-        {/* Discord Style Footer */}
         {currentUser ? (
           <div className="p-3 bg-zinc-900/80 border-t border-zinc-800 flex items-center justify-between">
             <NavLink to="/profile" className="flex items-center gap-2.5 hover:bg-zinc-800/50 p-1.5 rounded-md transition-colors flex-1 min-w-0">

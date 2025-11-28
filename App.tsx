@@ -1,7 +1,6 @@
 
 import React from 'react';
-// FIX: Updated react-router-dom imports for v5 compatibility.
-import { HashRouter as Router, Switch, Route, Redirect } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
@@ -20,20 +19,17 @@ function App() {
       <AuthProvider>
         <Router>
           <Layout>
-            {/* FIX: Replaced Routes with Switch and updated Route syntax for v5 compatibility. */}
-            <Switch>
-              <Route path="/" exact component={Dashboard} />
-              <Route path="/register" component={Register} />
-              <Route path="/profile" component={Profile} />
-              <Route path="/members" component={Members} />
-              <Route path="/guild/:guildId" component={GuildDashboard} />
-              <Route path="/admin" component={Admin} />
-              <Route path="/events" component={Events} />
-              <Route path="/alliances" component={Alliances} />
-              <Route path="*">
-                <Redirect to="/" />
-              </Route>
-            </Switch>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/members" element={<Members />} />
+              <Route path="/guild/:guildId" element={<GuildDashboard />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/alliances" element={<Alliances />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </Layout>
         </Router>
       </AuthProvider>

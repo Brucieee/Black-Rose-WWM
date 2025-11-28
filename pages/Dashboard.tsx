@@ -1,12 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, ListOrdered } from 'lucide-react';
-// FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
-import { useHistory, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, ScheduleSlot, CooldownEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { collection, query, onSnapshot, orderBy, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAlert } from '../contexts/AlertContext';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
@@ -14,10 +12,8 @@ import { QueueModal } from '../components/modals/QueueModal';
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
-  // FIX: Replaced useNavigate with useHistory for react-router-dom v5 compatibility.
-  const history = useHistory();
+  const navigate = useNavigate();
   
-  // Real Data State
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [events, setEvents] = useState<GuildEvent[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -26,41 +22,36 @@ const Dashboard: React.FC = () => {
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [activePartiesCount, setActivePartiesCount] = useState(0);
 
-  // System Config
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
   const [recentWinners, setRecentWinners] = useState<CooldownEntry[]>([]);
   const [bossPool, setBossPool] = useState<{name: string, imageUrl: string}[]>([]);
   const [bossNames, setBossNames] = useState<string[]>([]);
 
-  // Modals
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [selectedQueueGuildId, setSelectedQueueGuildId] = useState<string>('');
   const [selectedQueueBossImage, setSelectedQueueBossImage] = useState<string>('');
 
-  // Forms & Filters
   const [leaderboardBranch, setLeaderboardBranch] = useState('All');
   const [leaderboardBoss, setLeaderboardBoss] = useState('All');
 
-  // Fetch all data
   useEffect(() => {
-    const unsubGuilds = onSnapshot(query(collection(db, "guilds"), orderBy("name")), snap => setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild))));
-    const unsubEvents = onSnapshot(collection(db, "events"), snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent))));
-    const unsubLeaderboard = onSnapshot(query(collection(db, "leaderboard"), orderBy("time")), snap => setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry))));
-    const unsubQueue = onSnapshot(collection(db, "queue"), snap => setQueue(snap.docs.map(d => ({...d.data()} as QueueEntry))));
-    const unsubUsers = onSnapshot(collection(db, "users"), snap => setUsers(snap.docs.map(d => d.data() as UserProfile)));
-    const unsubParties = onSnapshot(collection(db, "parties"), snap => setActivePartiesCount(snap.size));
+    const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild))));
+    const unsubEvents = db.collection("events").onSnapshot(snap => setEvents(snap.docs.map(d => ({id: d.id, ...d.data()} as GuildEvent))));
+    const unsubLeaderboard = db.collection("leaderboard").orderBy("time").onSnapshot(snap => setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry))));
+    const unsubQueue = db.collection("queue").onSnapshot(snap => setQueue(snap.docs.map(d => ({...d.data()} as QueueEntry))));
+    const unsubUsers = db.collection("users").onSnapshot(snap => setUsers(snap.docs.map(d => d.data() as UserProfile)));
+    const unsubParties = db.collection("parties").onSnapshot(snap => setActivePartiesCount(snap.size));
     
-    const unsubConfig = onSnapshot(doc(db, "system", "breakingArmy"), snap => {
-      if (snap.exists()) {
+    const unsubConfig = db.collection("system").doc("breakingArmy").onSnapshot(snap => {
+      if (snap.exists) {
         const data = snap.data() as BreakingArmyConfig;
         setCurrentBossMap(data.currentBoss || {});
         setSchedulesMap(data.schedules || {});
         setRecentWinners(data.recentWinners || []);
         setBossPool(data.bossPool || []);
         
-        // Update Boss Names for Filters
         const names = data.bossPool?.map(b => b.name) || [];
         setBossNames(names);
       }
@@ -76,7 +67,6 @@ const Dashboard: React.FC = () => {
     }
   }, [currentUser, users]);
 
-  // Derived State
   const currentBranchQueue = queue.filter(q => q.guildId === selectedQueueGuildId);
   const isCooldown = currentUser && recentWinners.some(w => w.uid === currentUser.uid);
   
@@ -84,7 +74,6 @@ const Dashboard: React.FC = () => {
   const daysMap = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayName = daysMap[todayIndex];
 
-  // Helper to check if any branch has an event today
   const isEventDay = Object.values(schedulesMap).some((slots) => (slots as ScheduleSlot[]).some(s => s.day === todayName));
   const breakingArmyStatusText = isEventDay ? 'Scheduled Today' : 'Upcoming';
 
@@ -96,8 +85,7 @@ const Dashboard: React.FC = () => {
 
   const handleJoinQueue = async () => {
     if (!currentUserProfile) {
-        // FIX: Replaced navigate with history.push for react-router-dom v5 compatibility.
-        history.push('/register');
+        navigate('/register');
         return;
     }
     if (currentUserProfile.guildId !== selectedQueueGuildId) {
@@ -109,10 +97,8 @@ const Dashboard: React.FC = () => {
         return;
     }
 
-    // Add to Queue Collection
-    // Use uid as doc ID to prevent duplicates easily
-    const qRef = doc(db, "queue", currentUser!.uid); 
-    await setDoc(qRef, {
+    const qRef = db.collection("queue").doc(currentUser!.uid); 
+    await qRef.set({
         uid: currentUser!.uid,
         name: currentUserProfile.displayName,
         role: currentUserProfile.role,
@@ -124,7 +110,7 @@ const Dashboard: React.FC = () => {
 
   const handleLeaveQueue = async () => {
     if (!currentUser) return;
-    await deleteDoc(doc(db, "queue", currentUser.uid));
+    await db.collection("queue").doc(currentUser.uid).delete();
     showAlert("Left Queue", 'info');
   };
 
@@ -154,7 +140,6 @@ const Dashboard: React.FC = () => {
       if (slots.length === 0) return { days: 'Not Scheduled', time: '' };
       
       const days = slots.map(s => s.day.substring(0, 3)).join(' / ');
-      // Format the time of the first slot
       const time = formatTime12Hour(slots[0].time); 
       return { days, time };
   };
@@ -184,7 +169,6 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Breaking Army Card */}
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[400px]">
           
           <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 bg-rose-50/50 dark:bg-rose-950/20 flex-shrink-0 flex justify-between items-center relative">
@@ -206,7 +190,6 @@ const Dashboard: React.FC = () => {
                return (
                <div key={guild.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border border-zinc-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80">
                   <div className="flex items-center gap-4">
-                    {/* Hexagon Avatar */}
                     <div className="w-12 h-12 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
                         <img src={bossImage} alt={bossName} className="w-full h-full object-cover" />
                     </div>
@@ -282,14 +265,13 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Events */}
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
           <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-xl flex items-center gap-2"><Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Guild Events</h3>
           <Link to="/events" className="text-sm font-medium text-rose-900 hover:underline flex items-center gap-1">View Calendar <ArrowRight size={14} /></Link>
         </div>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {events.slice(0, 3).map(event => { // Show max 3 events
+          {events.slice(0, 3).map(event => {
             const branchName = guilds.find(g => g.id === event.guildId)?.name || 'Global';
             const eventDate = new Date(event.date);
             return (
@@ -304,7 +286,6 @@ const Dashboard: React.FC = () => {
                     <span className="text-xs font-medium text-zinc-400">• {branchName}</span>
                   </div>
                   <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                  {/* Updated classes to respect newlines but limit to 2 lines */}
                   <p className="text-zinc-500 text-sm line-clamp-2 whitespace-pre-wrap break-words">{event.description}</p>
                 </div>
               </div>

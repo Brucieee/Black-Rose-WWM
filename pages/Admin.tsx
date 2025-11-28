@@ -5,7 +5,9 @@ import { BREAKING_ARMY_CONFIG, MOCK_GUILDS, MOCK_EVENTS } from '../services/mock
 import { Plus, Trash2, Calendar, Database, ListOrdered, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog } from '../types';
 import { db } from '../services/firebase';
-import { collection, addDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, arrayUnion, writeBatch, arrayRemove, where } from 'firebase/firestore';
+// FIX: Removed unused Firestore v9 imports and added firebase compat for FieldValue.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { CreateGuildModal } from '../components/modals/CreateGuildModal';
@@ -80,8 +82,9 @@ const Admin: React.FC = () => {
   // Fetch Data
   useEffect(() => {
     if (currentUser) {
-        const unsubUser = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
-            if (docSnap.exists()) {
+        // FIX: Updated Firestore query to v8 compat syntax.
+        const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot((docSnap) => {
+            if (docSnap.exists) {
                 const profile = docSnap.data() as UserProfile;
                 setUserProfile(profile);
                 if (profile.systemRole === 'Admin' && activeTab !== 'guilds' && activeTab !== 'users') setActiveTab('guilds');
@@ -97,26 +100,31 @@ const Admin: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    const unsubGuilds = onSnapshot(query(collection(db, "guilds"), orderBy("name")), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
       const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
       setGuilds(g);
       if (g.length > 0 && !selectedBranchId && !isOfficer) setSelectedBranchId(g[0].id);
     });
 
-    const unsubEvents = onSnapshot(collection(db, "events"), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubEvents = db.collection("events").onSnapshot(snap => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as GuildEvent)));
     });
 
-    const unsubLeaderboard = onSnapshot(query(collection(db, "leaderboard"), orderBy("time")), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubLeaderboard = db.collection("leaderboard").orderBy("time").onSnapshot(snap => {
         setLeaderboard(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardEntry)));
     });
 
-    const unsubWinnerLogs = onSnapshot(query(collection(db, "winner_logs"), orderBy("date", "desc")), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubWinnerLogs = db.collection("winner_logs").orderBy("date", "desc").onSnapshot(snap => {
       setWinnerLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as WinnerLog)));
     });
 
-    const unsubConfig = onSnapshot(doc(db, "system", "breakingArmy"), snap => {
-      if (snap.exists()) {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubConfig = db.collection("system").doc("breakingArmy").onSnapshot(snap => {
+      if (snap.exists) {
         const data = snap.data() as BreakingArmyConfig;
         setCurrentBossMap(data.currentBoss || {});
         setSchedulesMap(data.schedules || {});
@@ -125,11 +133,13 @@ const Admin: React.FC = () => {
       }
     });
 
-    const unsubQueue = onSnapshot(collection(db, "queue"), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubQueue = db.collection("queue").onSnapshot(snap => {
       setQueue(snap.docs.map(d => ({ ...d.data() } as QueueEntry)));
     });
 
-    const unsubUsers = onSnapshot(collection(db, "users"), snap => {
+    // FIX: Updated Firestore query to v8 compat syntax.
+    const unsubUsers = db.collection("users").onSnapshot(snap => {
       setAllUsers(snap.docs.map(d => d.data() as UserProfile));
     });
 
@@ -170,12 +180,14 @@ const Admin: React.FC = () => {
         async () => {
             try {
                 for (const g of MOCK_GUILDS) {
-                    await setDoc(doc(db, "guilds", g.id), { name: g.name, memberCap: g.memberCap || 80 });
+                    // FIX: Updated Firestore write to v8 compat syntax.
+                    await db.collection("guilds").doc(g.id).set({ name: g.name, memberCap: g.memberCap || 80 });
                 }
-                // FIX: Removed unused 'config' variable that caused a TypeScript error.
-                await setDoc(doc(db, "system", "breakingArmy"), BREAKING_ARMY_CONFIG, { merge: true });
+                // FIX: Updated Firestore write to v8 compat syntax.
+                await db.collection("system").doc("breakingArmy").set(BREAKING_ARMY_CONFIG, { merge: true });
                 if (currentUser) {
-                    await updateDoc(doc(db, "users", currentUser.uid), { systemRole: 'Admin' });
+                    // FIX: Updated Firestore write to v8 compat syntax.
+                    await db.collection("users").doc(currentUser.uid).update({ systemRole: 'Admin' });
                 }
                 showAlert("System Initialized!", 'success');
             } catch (error: any) {
@@ -188,7 +200,8 @@ const Admin: React.FC = () => {
   const handleCreateGuild = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await setDoc(doc(db, "guilds", newGuildData.id), {name: newGuildData.name, memberCap: newGuildData.memberCap});
+      // FIX: Updated Firestore write to v8 compat syntax.
+      await db.collection("guilds").doc(newGuildData.id).set({name: newGuildData.name, memberCap: newGuildData.memberCap});
       setIsCreateModalOpen(false);
       showAlert("Branch created", 'success');
     } catch (error: any) {
@@ -203,7 +216,8 @@ const Admin: React.FC = () => {
 
   const handleSaveGuild = async (id: string) => {
     try {
-        await updateDoc(doc(db, "guilds", id), guildEditForm);
+        // FIX: Updated Firestore write to v8 compat syntax.
+        await db.collection("guilds").doc(id).update(guildEditForm);
         setEditingGuildId(null);
         showAlert("Branch updated", 'success');
     } catch (error: any) {
