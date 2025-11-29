@@ -35,16 +35,25 @@ export const CreatePartyModal: React.FC<CreatePartyModalProps> = ({ isOpen, onCl
           <select 
             className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-rose-900/20 outline-none bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
             value={data.activity}
-            onChange={e => onChange({...data, activity: e.target.value})}
+            onChange={e => {
+                const activity = e.target.value;
+                const updates: any = { activity };
+                // Auto-set max members for specific activities
+                if (activity === "Hero's Realm") {
+                    updates.maxMembers = 10;
+                } else {
+                    updates.maxMembers = 5; // Default for others
+                }
+                onChange({...data, ...updates});
+            }}
             required
           >
             <option value="" disabled>Select Activity</option>
-            <option value="Raid">Raid</option>
-            <option value="Dungeon">Dungeon</option>
-            <option value="PvP Arena">PvP Arena</option>
-            <option value="World Boss">World Boss</option>
-            <option value="Questing">Questing</option>
-            <option value="Social">Social / Chill</option>
+            <option value="Co-op">Co-op</option>
+            <option value="Campaign Challenge">Campaign Challenge</option>
+            <option value="Outpost Challenge">Outpost Challenge</option>
+            <option value="Hero's Realm">Hero's Realm</option>
+            <option value="Sword Trial">Sword Trial</option>
           </select>
         </div>
 

@@ -13,6 +13,7 @@ interface EditLeaderboardModalProps {
   bossPool: Boss[];
   guilds: Guild[];
   allUsers: UserProfile[];
+  mode?: 'leaderboard' | 'winnerLog';
 }
 
 export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({ 
@@ -23,7 +24,8 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
   onUpdate,
   bossPool,
   guilds,
-  allUsers
+  allUsers,
+  mode = 'leaderboard'
 }) => {
   if (!entry) return null;
 
@@ -44,10 +46,14 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
       });
   };
 
+  const isWinnerLog = mode === 'winnerLog';
+
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-md overflow-visible"> 
         <div className="p-6">
-            <h3 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">Edit Record</h3>
+            <h3 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">
+                {entry.id ? 'Edit Entry' : 'New Entry'}
+            </h3>
             <form onSubmit={onUpdate} className="space-y-4">
                 <div>
                     <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Player</label>
@@ -59,59 +65,79 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
                 </div>
                 
                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Boss</label>
-                    <select 
-                        value={entry.boss} 
-                        onChange={e => setEntry({...entry, boss: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                    >
-                        <option value="">Select Boss</option>
-                        {bossPool.map(b => (
-                            <option key={b.name} value={b.name}>{b.name}</option>
-                        ))}
-                    </select>
+                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">
+                        {isWinnerLog ? 'Event Name' : 'Boss'}
+                    </label>
+                    {isWinnerLog ? (
+                        <input 
+                            required
+                            type="text"
+                            value={entry.boss} // Reusing 'boss' field as 'Event Name' for winner logs
+                            onChange={e => setEntry({...entry, boss: e.target.value})}
+                            placeholder="e.g. Breaking Army, PvP Tournament"
+                            className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        />
+                    ) : (
+                        <select 
+                            required
+                            value={entry.boss} 
+                            onChange={e => setEntry({...entry, boss: e.target.value})} 
+                            className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        >
+                            <option value="">Select Boss</option>
+                            {bossPool.map(b => (
+                                <option key={b.name} value={b.name}>{b.name}</option>
+                            ))}
+                        </select>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Time (MM:SS)</label>
-                        <input 
-                            type="text" 
-                            value={entry.time} 
-                            onChange={e => handleTimeChange(e.target.value)} 
-                            placeholder="00:00"
-                            maxLength={5}
-                            className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white font-mono" 
-                        />
-                    </div>
-                    <div>
+                    {!isWinnerLog && (
+                        <div>
+                            <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Time (MM:SS)</label>
+                            <input 
+                                required
+                                type="text" 
+                                value={entry.time} 
+                                onChange={e => handleTimeChange(e.target.value)} 
+                                placeholder="00:00"
+                                maxLength={5}
+                                className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-rose-500" 
+                            />
+                        </div>
+                    )}
+                    <div className={isWinnerLog ? 'col-span-2' : ''}>
                         <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Date</label>
                         <input 
+                            required
                             type="date" 
-                            value={entry.date.includes('-') ? entry.date : ''} // basic check if it matches yyyy-mm-dd
+                            value={entry.date.includes('-') ? entry.date.split('T')[0] : ''} 
                             onChange={e => setEntry({...entry, date: e.target.value})} 
-                            className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" 
+                            className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500" 
                         />
-                        <p className="text-[10px] text-zinc-400 mt-1">Stored: {entry.date}</p>
                     </div>
                 </div>
 
-                <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Guild Branch</label>
-                    <select 
-                        value={entry.branch} 
-                        onChange={e => setEntry({...entry, branch: e.target.value})} 
-                        className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                    >
-                        <option value="">Select Branch</option>
-                        {guilds.map(g => (
-                            <option key={g.id} value={g.name}>{g.name}</option>
-                        ))}
-                    </select>
-                </div>
+                {!isWinnerLog && (
+                    <div>
+                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Guild Branch</label>
+                        <select 
+                            required
+                            value={entry.branch} 
+                            onChange={e => setEntry({...entry, branch: e.target.value})} 
+                            className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        >
+                            <option value="">Select Branch</option>
+                            {guilds.map(g => (
+                                <option key={g.id} value={g.name}>{g.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
-                <button type="submit" className="w-full bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors mt-2">
-                    {entry.id ? 'Update Entry' : 'Create Entry'}
+                <button type="submit" className="w-full bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors mt-2 font-medium">
+                    Save Record
                 </button>
             </form>
         </div>

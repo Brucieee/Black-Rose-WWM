@@ -21,6 +21,7 @@ const Register: React.FC = () => {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authEmail, setAuthEmail] = useState('');
   const [authPass, setAuthPass] = useState('');
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -74,10 +75,12 @@ const Register: React.FC = () => {
     try {
       if (isLoginMode) {
         await login(authEmail, authPass);
+        setIsRedirecting(true);
+        navigate('/', { replace: true });
       } else {
         await signup(authEmail, authPass);
+        // Signup typically keeps you here to create profile
       }
-      navigate('/');
     } catch (error: any) {
       const msg = getFirebaseErrorMessage(error.code);
       showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
@@ -174,6 +177,10 @@ const Register: React.FC = () => {
 
   const availableWeapons = getAvailableWeapons(formData.role);
 
+  if (isRedirecting) {
+    return <div className="p-8 text-center text-zinc-500">Redirecting...</div>;
+  }
+
   return (
     <div className="max-w-4xl mx-auto py-10 px-4">
       <div className="mb-8">
@@ -231,7 +238,10 @@ const Register: React.FC = () => {
           </div>
 
           <button 
-            onClick={signInWithGoogle} 
+            onClick={async () => {
+                await signInWithGoogle();
+                navigate('/');
+            }} 
             className="w-full flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>

@@ -49,6 +49,7 @@ export interface Guild {
   id: string;
   name: string;
   memberCap: number;
+  arenaMinPoints?: number; // Added for arena threshold
 }
 
 export interface GuildEvent {
@@ -134,4 +135,23 @@ export interface LeaveRequest {
   endDate: string;
   timestamp: string;
   reason?: string;
+}
+
+export interface ArenaParticipant {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  guildId: string;
+  activityPoints: number;
+  status: 'pending' | 'approved' | 'denied';
+}
+
+export interface ArenaMatch {
+  id: string;
+  round: number;
+  position: number; // 0 is top match, 1 is next down, etc.
+  player1: ArenaParticipant | null;
+  player2: ArenaParticipant | null;
+  winner: ArenaParticipant | null;
+  guildId: string;
 }

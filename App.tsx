@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Events from './pages/Events';
 import Profile from './pages/Profile';
 import Alliances from './pages/Alliances';
+import Arena from './pages/Arena';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
@@ -29,6 +30,7 @@ function App() {
               <Route path="/guild/:guildId" element={<GuildDashboard />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/events" element={<Events />} />
+              <Route path="/arena" element={<Arena />} />
               <Route path="/alliances" element={<Alliances />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -58,14 +58,14 @@ export const DeclareWinnerModal: React.FC<DeclareWinnerModalProps> = ({ isOpen, 
   };
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-sm">
-      <div className="p-6">
-        <h3 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">Declare Winner</h3>
-        <p className="mb-6 text-zinc-600 dark:text-zinc-400">Player: <strong className="text-zinc-900 dark:text-zinc-100">{winnerName}</strong></p>
+    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-md">
+      <div className="p-8">
+        <h3 className="text-2xl font-bold mb-6 text-zinc-900 dark:text-zinc-100">Declare Winner</h3>
+        <p className="mb-8 text-lg text-zinc-600 dark:text-zinc-400">Player: <strong className="text-zinc-900 dark:text-zinc-100">{winnerName}</strong></p>
         
-        <div className="mb-6">
-            <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Clear Time</label>
-            <div className="flex items-center justify-center gap-2">
+        <div className="mb-8">
+            <label className="text-sm font-bold text-zinc-500 uppercase mb-3 block tracking-wider">Clear Time</label>
+            <div className="flex items-center justify-center gap-4">
                 <div className="flex flex-col items-center">
                     <input 
                         type="number" 
@@ -75,11 +75,11 @@ export const DeclareWinnerModal: React.FC<DeclareWinnerModalProps> = ({ isOpen, 
                         placeholder="00"
                         min="0"
                         max="59"
-                        className="w-16 p-3 text-center text-2xl font-mono font-bold border rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-rose-500 focus:outline-none" 
+                        className="w-24 p-4 text-center text-4xl font-mono font-bold border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700 focus:ring-4 focus:ring-rose-500/20 focus:border-rose-500 focus:outline-none transition-all" 
                     />
-                    <span className="text-[10px] text-zinc-400 mt-1 uppercase font-bold">Min</span>
+                    <span className="text-xs text-zinc-400 mt-2 uppercase font-bold tracking-widest">Min</span>
                 </div>
-                <span className="text-2xl font-bold text-zinc-300 dark:text-zinc-600 -mt-4">:</span>
+                <span className="text-4xl font-bold text-zinc-300 dark:text-zinc-600 -mt-6">:</span>
                 <div className="flex flex-col items-center">
                     <input 
                         type="number" 
@@ -89,15 +89,15 @@ export const DeclareWinnerModal: React.FC<DeclareWinnerModalProps> = ({ isOpen, 
                         placeholder="00"
                         min="0"
                         max="59"
-                        className="w-16 p-3 text-center text-2xl font-mono font-bold border rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-rose-500 focus:outline-none" 
+                        className="w-24 p-4 text-center text-4xl font-mono font-bold border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700 focus:ring-4 focus:ring-rose-500/20 focus:border-rose-500 focus:outline-none transition-all" 
                     />
-                    <span className="text-[10px] text-zinc-400 mt-1 uppercase font-bold">Sec</span>
+                    <span className="text-xs text-zinc-400 mt-2 uppercase font-bold tracking-widest">Sec</span>
                 </div>
             </div>
         </div>
 
-        <button onClick={onConfirm} className="w-full bg-rose-900 text-white p-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20">
-            <Check size={18} /> Confirm Result
+        <button onClick={onConfirm} className="w-full bg-rose-900 text-white p-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 active:scale-[0.98]">
+            <Check size={24} /> Confirm Result
         </button>
       </div>
     </BaseModal>

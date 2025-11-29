@@ -15,7 +15,8 @@ import {
   X,
   Moon,
   Sun,
-  Plane
+  Plane,
+  Trophy
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
@@ -151,14 +152,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             Dashboard
           </NavLink>
           
-          <NavLink 
-            to="/events" 
-            onClick={handleLinkClick}
-            className={({ isActive }: any) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
-          >
-            <Calendar size={18} />
-            Events
-          </NavLink>
+          <div>
+            <NavLink 
+              to="/events" 
+              onClick={handleLinkClick}
+              className={({ isActive }: any) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
+            >
+              <Calendar size={18} />
+              Events
+            </NavLink>
+            <NavLink 
+              to="/arena" 
+              onClick={handleLinkClick}
+              className={({ isActive }: any) => `${isActive ? 'text-rose-500 bg-rose-900/5' : 'text-zinc-500 hover:text-zinc-300'} flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ml-4 border-l border-zinc-800 hover:border-zinc-700`}
+            >
+              <Swords size={16} />
+              Arena
+            </NavLink>
+          </div>
           
           <NavLink 
             to="/members" 
@@ -256,7 +267,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <span className="text-sm font-bold text-zinc-200 truncate leading-tight">
                   {userProfile?.displayName || 'Unknown'}
                 </span>
-                {/* ID Removed per request */}
               </div>
             </NavLink>
             

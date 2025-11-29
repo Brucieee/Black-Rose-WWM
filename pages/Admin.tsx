@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle, Search, User, ListOrdered, Plane } from 'lucide-react';
+import { Plus, Trash2, Calendar, Database, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle, Search, User, ListOrdered, Plane, Settings, Swords, Users, Shield } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
@@ -11,13 +11,14 @@ import { CreateGuildModal } from '../components/modals/CreateGuildModal';
 import { DeclareWinnerModal } from '../components/modals/DeclareWinnerModal';
 import { EditLeaderboardModal } from '../components/modals/EditLeaderboardModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
+import { SearchableUserSelect } from '../components/SearchableUserSelect';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'users' | 'leaderboard' | 'winnerLogs' | 'leaves'>('guilds');
+  const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'leaderboard' | 'winnerLogs' | 'users' | 'leaves'>('guilds');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGuildData, setNewGuildData] = useState({ name: '', id: '', memberCap: 80});
@@ -57,6 +58,7 @@ const Admin: React.FC = () => {
 
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState(false);
   const [editingLeaderboardEntry, setEditingLeaderboardEntry] = useState<LeaderboardEntry | null>(null);
+  const [leaderboardModalMode, setLeaderboardModalMode] = useState<'leaderboard' | 'winnerLog'>('leaderboard');
 
   const [deleteConf, setDeleteConf] = useState<{
     isOpen: boolean;
@@ -65,7 +67,6 @@ const Admin: React.FC = () => {
     action: () => Promise<void>;
   }>({ isOpen: false, title: '', message: '', action: async () => {} });
 
-  // Filter state for Leaves
   const [leaveBranchFilter, setLeaveBranchFilter] = useState('All');
 
   const isAdmin = userProfile?.systemRole === 'Admin';
@@ -78,8 +79,8 @@ const Admin: React.FC = () => {
                 const profile = docSnap.data() as UserProfile;
                 setUserProfile(profile);
                 
-                // If officer, lock to their guild
-                if (profile.systemRole === 'Officer' && !selectedBranchId) {
+                // If officer, automatically select their branch and don't allow changing
+                if (profile.systemRole === 'Officer') {
                     setSelectedBranchId(profile.guildId);
                 }
             }
@@ -92,7 +93,7 @@ const Admin: React.FC = () => {
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
       const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
       setGuilds(g);
-      // If admin and no selection, select first
+      // Only set default branch for Admins, Officers are handled in user effect
       if (g.length > 0 && !selectedBranchId && isAdmin) {
           setSelectedBranchId(g[0].id);
       }
@@ -102,10 +103,10 @@ const Admin: React.FC = () => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as GuildEvent)));
     });
 
-    const unsubLeaderboard = db.collection("leaderboard").orderBy("time").onSnapshot(snap => {
+    const unsubLeaderboard = db.collection("leaderboard").orderBy("time", "asc").onSnapshot(snap => {
         setLeaderboard(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardEntry)));
     });
-
+    
     const unsubWinnerLogs = db.collection("winner_logs").orderBy("date", "desc").onSnapshot(snap => {
       setWinnerLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as WinnerLog)));
     });
@@ -124,7 +125,6 @@ const Admin: React.FC = () => {
       }
     });
 
-    // FIFO Queue for Admin: Order by joinedAt ascending
     const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => {
       setQueue(snap.docs.map(d => ({ ...d.data() } as QueueEntry)));
     });
@@ -138,64 +138,66 @@ const Admin: React.FC = () => {
     };
   }, [isAdmin, selectedBranchId]);
 
-  const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
-    setDeleteConf({ isOpen: true, title, message, action });
-  };
-  
-  const handleInitialize = async () => {
-    openDeleteModal(
-      "Initialize System?",
-      "This will overwrite default data. Are you sure?",
-      async () => {
+  if (!currentUser || !userProfile) {
+    return <div className="p-8">Access Denied. You must be logged in.</div>;
+  }
+  if (!isAdmin && !isOfficer) {
+    return <div className="p-8">Access Denied. You do not have permission to view this page.</div>;
+  }
+
+  // GUILD LOGIC
+  const handleInitializeSystem = async () => {
+    try {
         const batch = db.batch();
-
-        // Create Guilds
-        const defaultGuilds = [
-          { id: 'g1', name: 'Black Rose I', memberCap: 80 },
-          { id: 'g2', name: 'Black Rose II', memberCap: 80 },
-          { id: 'g3', name: 'Black Rose III', memberCap: 50 },
-        ];
-        defaultGuilds.forEach(g => {
-            batch.set(db.collection("guilds").doc(g.id), g);
-        });
-        
-        // Create Config
-        const configRef = db.collection("system").doc("breakingArmy");
-        const defaultConfig: BreakingArmyConfig = {
-            currentBoss: { g1: "Black God of Wealth", g2: "Dao Lord" },
-            schedules: { 
-                g1: [{ day: 'Wednesday', time: '20:00' }],
-                g2: [{ day: 'Friday', time: '21:00' }],
-            },
+        batch.set(db.collection("guilds").doc("br1"), { name: "Black Rose I", memberCap: 80 });
+        batch.set(db.collection("guilds").doc("br2"), { name: "Black Rose II", memberCap: 80 });
+        batch.set(db.collection("guilds").doc("br3"), { name: "Black Rose III", memberCap: 50 });
+        batch.set(db.collection("system").doc("breakingArmy"), {
+            currentBoss: { 'br1': 'Dao Lord' },
+            schedules: {},
             recentWinners: [],
-            bossPool: [
-                { name: 'Black God of Wealth', imageUrl: '' },
-                { name: 'Dao Lord', imageUrl: '' },
-                { name: 'Heartseeker', imageUrl: '' },
-            ]
-        };
-        batch.set(configRef, defaultConfig);
-        
-        // Promote current user to Admin
+            bossPool: []
+        });
         if (currentUser) {
-            batch.set(db.collection("users").doc(currentUser.uid), { systemRole: 'Admin' }, { merge: true });
+            batch.update(db.collection("users").doc(currentUser.uid), { systemRole: 'Admin' });
         }
-
         await batch.commit();
-        showAlert("System Initialized!", 'success');
-      }
-    );
+        showAlert("System Initialized Successfully!", 'success');
+        window.location.reload(); 
+    } catch (err: any) {
+        showAlert(err.message, 'error');
+    }
   };
 
   const handleCreateGuild = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!isAdmin) return;
+      try {
+        await db.collection("guilds").doc(newGuildData.id).set({name: newGuildData.name, memberCap: newGuildData.memberCap});
+        showAlert("Guild Branch created!", 'success');
+        setIsCreateModalOpen(false);
+      } catch (err: any) {
+        showAlert(err.message, 'error');
+      }
+  };
+
+  const handleDeleteGuild = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     e.preventDefault();
+    if (!id) return;
     try {
-      await db.collection("guilds").doc(newGuildData.id).set({name: newGuildData.name, memberCap: newGuildData.memberCap});
-      setIsCreateModalOpen(false);
-      showAlert("Branch created", 'success');
+        await db.collection("guilds").doc(id).delete();
+        showAlert("Guild Branch deleted.", 'success');
     } catch (error: any) {
-      showAlert(`Failed to create guild: ${error.message}`, 'error');
+        showAlert(`Failed to delete: ${error.message}`, 'error');
     }
+  };
+
+  const handleSaveGuild = async (id: string) => {
+    if (!isAdmin) return;
+    await db.collection("guilds").doc(id).update(guildEditForm);
+    setEditingGuildId(null);
+    showAlert("Guild updated!", 'success');
   };
 
   const handleEditGuild = (guild: Guild) => {
@@ -203,849 +205,861 @@ const Admin: React.FC = () => {
     setGuildEditForm({ name: guild.name, memberCap: guild.memberCap });
   };
 
-  const handleSaveGuild = async (id: string) => {
-    try {
-        await db.collection("guilds").doc(id).update(guildEditForm);
-        setEditingGuildId(null);
-        showAlert("Branch updated", 'success');
-    } catch (error: any) {
-        showAlert(`Failed to update: ${error.message}`, 'error');
-    }
-  };
-
-  const handleDeleteGuild = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    openDeleteModal(
-        "Delete Guild Branch?",
-        "This will permanently delete the branch. This action cannot be undone.",
-        async () => {
-            try {
-                await db.collection("guilds").doc(id).delete();
-                showAlert("Branch deleted.", 'info');
-            } catch (error: any) {
-                showAlert(`Deletion failed: ${error.message}`, 'error');
-            }
-        }
-    );
-  };
-  
-  const handleSaveEvent = async () => {
-    try {
-        if (editingEventId) {
-            await db.collection("events").doc(editingEventId).update(eventForm);
-            showAlert("Event updated", 'success');
-        } else {
-            await db.collection("events").add(eventForm);
-            showAlert("Event scheduled", 'success');
-        }
-        setEditingEventId(null);
-        setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
-    } catch(error: any) {
-        showAlert(`Failed to save event: ${error.message}`, 'error');
-    }
-  };
-
-  const handleEditEvent = (e: React.MouseEvent, event: GuildEvent) => {
-      e.stopPropagation();
+  // EVENT LOGIC
+  const handleSaveEvent = async (e: React.FormEvent) => {
       e.preventDefault();
+      try {
+          if (editingEventId) {
+              await db.collection("events").doc(editingEventId).update(eventForm);
+              showAlert("Event updated!", 'success');
+          } else {
+              await db.collection("events").add(eventForm);
+              showAlert("Event scheduled!", 'success');
+          }
+          setEditingEventId(null);
+          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
+  const handleEditEvent = (event: GuildEvent) => {
       setEditingEventId(event.id);
       setEventForm(event);
   };
-
-  const handleCancelEditEvent = () => {
-      setEditingEventId(null);
-      setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
-  };
-
+  
   const handleDeleteEvent = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       e.preventDefault();
-      openDeleteModal(
-          "Delete Event?",
-          "Are you sure you want to delete this event?",
-          async () => {
-              try {
-                  await db.collection("events").doc(id).delete();
-                  showAlert("Event deleted.", 'info');
-              } catch (error: any) {
-                  showAlert(`Deletion failed: ${error.message}`, 'error');
-              }
-          }
-      );
-  };
-
-  const handleSaveBoss = async () => {
-    if (!bossForm.name) return;
-    try {
-        let updatedPool = [...bossPool];
-        if (editingBossOriginalName) {
-            const index = updatedPool.findIndex(b => b.name === editingBossOriginalName);
-            if (index > -1) updatedPool[index] = bossForm;
-        } else {
-            updatedPool.push(bossForm);
-        }
-        await db.collection("system").doc("breakingArmy").set({ bossPool: updatedPool }, { merge: true });
-        setBossForm({ name: '', imageUrl: '' });
-        setEditingBossOriginalName(null);
-        showAlert(editingBossOriginalName ? "Boss Updated" : "Boss Added", 'success');
-    } catch (error: any) {
-        showAlert(`Failed to save boss: ${error.message}`, 'error');
-    }
-  };
-
-  const handleEditBoss = (e: React.MouseEvent, boss: Boss) => {
-      e.stopPropagation();
-      e.preventDefault();
-      setEditingBossOriginalName(boss.name);
-      setBossForm(boss);
-  };
-
-  const handleDeleteBoss = (e: React.MouseEvent, bossName: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    openDeleteModal(
-        "Delete Boss?",
-        `Are you sure you want to remove '${bossName}' from the pool?`,
-        async () => {
-            try {
-                const updatedPool = bossPool.filter(b => b.name !== bossName);
-                await db.collection("system").doc("breakingArmy").set({ bossPool: updatedPool }, { merge: true });
-                showAlert("Boss deleted", 'info');
-            } catch (error: any) {
-                showAlert(`Deletion failed: ${error.message}`, 'error');
-            }
-        }
-    );
-  };
-
-  const handleUpdateCurrentBoss = async (name: string) => {
-      if (!selectedBranchId) return;
+      if (!id) return;
       try {
-          const updatedMap = { ...currentBossMap, [selectedBranchId]: name };
-          await db.collection("system").doc("breakingArmy").set({ currentBoss: updatedMap }, { merge: true });
+        await db.collection("events").doc(id).delete();
+        showAlert("Event deleted.", 'success');
       } catch (error: any) {
-          showAlert(`Failed to update boss: ${error.message}`, 'error');
+        showAlert(`Failed to delete event: ${error.message}`, 'error');
       }
+  };
+
+  // BREAKING ARMY LOGIC
+  const configRef = db.collection("system").doc("breakingArmy");
+  
+  const handleUpdateCurrentBoss = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!selectedBranchId) return;
+    const bossName = e.target.value;
+    try {
+        await configRef.set({ currentBoss: { ...currentBossMap, [selectedBranchId]: bossName } }, { merge: true });
+    } catch(err) { console.error(err); }
   };
 
   const handleAddSchedule = async () => {
       if (!selectedBranchId) return;
       const currentList = schedulesMap[selectedBranchId] || [];
       if (currentList.length >= 2) {
-          showAlert("Maximum of 2 schedules per branch allowed.", "error");
+          showAlert("Maximum of 2 schedules per branch reached.", 'error');
           return;
       }
+      const updatedList = [...currentList, newSchedule];
+      const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
+      await configRef.set({ schedules: updatedMap }, { merge: true });
+  };
+
+  const handleRemoveSchedule = async (index: number) => {
+      if (!selectedBranchId) return;
+      const currentList = schedulesMap[selectedBranchId] || [];
+      const updatedList = currentList.filter((_, i) => i !== index);
+      const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
+      await configRef.set({ schedules: updatedMap }, { merge: true });
+  };
+
+  const handleSaveBoss = async (e: React.FormEvent) => {
+      e.preventDefault();
       try {
-          const updatedList = [...currentList, newSchedule];
-          const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
-          await db.collection("system").doc("breakingArmy").set({ schedules: updatedMap }, { merge: true });
-          showAlert("Schedule added", 'success');
-      } catch (error: any) {
-          showAlert(`Failed to add schedule: ${error.message}`, 'error');
+          let updatedPool = [...bossPool];
+          if (editingBossOriginalName) {
+              const index = updatedPool.findIndex(b => b.name === editingBossOriginalName);
+              if (index > -1) updatedPool[index] = bossForm;
+          } else {
+              updatedPool.push(bossForm);
+          }
+          await configRef.set({ bossPool: updatedPool }, { merge: true });
+          setBossForm({ name: '', imageUrl: '' });
+          setEditingBossOriginalName(null);
+      } catch (err) {
+          console.error("Error saving boss:", err);
       }
   };
 
-  const handleRemoveSchedule = (index: number) => {
-      openDeleteModal(
-          "Remove Schedule?",
-          "Are you sure you want to remove this time slot?",
-          async () => {
-              if (!selectedBranchId) return;
-              try {
-                  const currentList = schedulesMap[selectedBranchId] || [];
-                  const updatedList = currentList.filter((_, i) => i !== index);
-                  const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
-                  await db.collection("system").doc("breakingArmy").set({ schedules: updatedMap }, { merge: true });
-                  showAlert("Schedule removed", 'info');
-              } catch (error: any) {
-                  showAlert(`Removal failed: ${error.message}`, 'error');
-              }
-          }
-      );
-  };
-
-  const handleResetQueue = (e: React.MouseEvent) => {
+  const handleDeleteBoss = async (e: React.MouseEvent, bossName: string) => {
+      e.stopPropagation();
       e.preventDefault();
-      openDeleteModal(
-          "Clear Queue?",
-          `This will remove all players from the queue for ${guilds.find(g => g.id === selectedBranchId)?.name}.`,
-          async () => {
-              const q = db.collection("queue").where('guildId', '==', selectedBranchId);
-              const snapshot = await q.get();
-              const batch = db.batch();
-              snapshot.docs.forEach(doc => batch.delete(doc.ref));
-              await batch.commit();
-              showAlert("Queue cleared.", 'info');
-          }
-      );
-  };
-
-  const handleResetCooldowns = () => {
-      openDeleteModal(
-        "Reset Winners?",
-        `This will remove all cooldowns for players in ${guilds.find(g => g.id === selectedBranchId)?.name}.`,
-        async () => {
-            // Keep winners NOT in the selected branch
-            const remainingWinners = recentWinners.filter(w => w.branchId !== selectedBranchId);
-            await db.collection("system").doc("breakingArmy").set({ recentWinners: remainingWinners }, { merge: true });
-            showAlert("Winners reset.", 'info');
-        }
-      );
-  };
-  
-  const handleRemoveWinner = async (e: React.MouseEvent, uid: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    openDeleteModal(
-        "Remove Winner?",
-        "This will remove the winner from cooldown.",
-        async () => {
-            const updatedWinners = recentWinners.filter(w => w.uid !== uid);
-            await db.collection("system").doc("breakingArmy").set({ recentWinners: updatedWinners }, { merge: true });
-            showAlert("Winner removed", 'info');
-        }
-    );
-  };
-  
-  const handleTogglePrize = async (uid: string, currentStatus: boolean) => {
-    const updatedWinners = recentWinners.map(w => w.uid === uid ? {...w, prizeGiven: !currentStatus} : w);
-    await db.collection("system").doc("breakingArmy").set({ recentWinners: updatedWinners }, { merge: true });
+      const updatedPool = bossPool.filter(b => b.name !== bossName);
+      try {
+        await configRef.set({ bossPool: updatedPool }, { merge: true });
+        showAlert("Boss removed.", 'success');
+      } catch (error: any) {
+        showAlert(`Failed to remove boss: ${error.message}`, 'error');
+      }
   };
 
   const handleConfirmWinner = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedWinner || !winnerTime) return;
-    try {
-        const guildName = guilds.find(g => g.id === selectedWinner.guildId)?.name || 'Unknown';
+      e.preventDefault();
+      if (!selectedWinner) return;
 
-        const newEntry: Omit<LeaderboardEntry, 'id' | 'rank'> = {
-            playerName: selectedWinner.name,
-            playerUid: selectedWinner.uid,
-            branch: guildName,
-            boss: currentBossMap[selectedWinner.guildId],
-            time: winnerTime,
-            date: new Date().toISOString().split('T')[0],
-            status: 'verified'
-        };
+      const batch = db.batch();
+      
+      const newEntry = {
+        playerName: selectedWinner.name,
+        playerUid: selectedWinner.uid,
+        branch: guilds.find(g => g.id === selectedWinner.guildId)?.name || 'Unknown',
+        boss: currentBossMap[selectedWinner.guildId] || 'Unknown Boss',
+        time: winnerTime,
+        date: new Date().toISOString(),
+        status: 'verified'
+      };
 
-        // Add to both logs and leaderboard
-        await db.collection("leaderboard").add(newEntry);
-        await db.collection("winner_logs").add(newEntry);
-        
-        // Add to cooldowns (recentWinners is array of CooldownEntry)
-        const newCooldown: CooldownEntry = { 
-            uid: selectedWinner.uid, 
-            branchId: selectedWinner.guildId, 
-            timestamp: new Date().toISOString(),
-            prizeGiven: false
-        };
-        await db.collection("system").doc("breakingArmy").update({
-            recentWinners: firebase.firestore.FieldValue.arrayUnion(newCooldown)
+      // Add to competitive leaderboard
+      batch.set(db.collection("leaderboard").doc(), newEntry);
+      
+      // Add to historical winner logs
+      batch.set(db.collection("winner_logs").doc(), newEntry);
+      
+      // Remove from queue
+      batch.delete(db.collection("queue").doc(selectedWinner.uid));
+
+      // Add to cooldown
+      const newWinnerEntry: CooldownEntry = {
+          uid: selectedWinner.uid,
+          branchId: selectedWinner.guildId,
+          timestamp: new Date().toISOString(),
+          prizeGiven: false
+      };
+      batch.set(configRef, { recentWinners: firebase.firestore.FieldValue.arrayUnion(newWinnerEntry) }, { merge: true });
+      
+      await batch.commit();
+      
+      setIsWinnerModalOpen(false);
+      setSelectedWinner(null);
+      setWinnerTime('');
+      showAlert(`${selectedWinner.name} is the winner!`, 'success');
+  };
+
+  const handleResetQueue = async () => {
+      if (!selectedBranchId) return;
+      const batch = db.batch();
+      const branchQueue = queue.filter(q => q.guildId === selectedBranchId);
+      branchQueue.forEach(q => {
+          batch.delete(db.collection("queue").doc(q.uid));
+      });
+      await batch.commit();
+      showAlert("Queue cleared for this branch.", 'info');
+  };
+
+  const handleResetCooldowns = async () => {
+    if (!selectedBranchId) return;
+    const branchWinners = recentWinners.filter(w => w.branchId === selectedBranchId);
+    if (branchWinners.length > 0) {
+        await configRef.update({
+            recentWinners: firebase.firestore.FieldValue.arrayRemove(...branchWinners)
         });
-
-        // Remove from queue (using UID as doc ID based on dashboard logic)
-        await db.collection("queue").doc(selectedWinner.uid).delete();
-        
-        setIsWinnerModalOpen(false);
-        setWinnerTime('');
-        setSelectedWinner(null);
-        showAlert(`${selectedWinner.name} declared as winner!`, 'success');
-    } catch(error: any) {
-        showAlert(`Failed to confirm winner: ${error.message}`, 'error');
+        showAlert("Winners reset for this branch.", 'info');
     }
   };
   
-  const handleUpdateLogEntry = async (e: React.FormEvent, collectionName: 'leaderboard' | 'winner_logs') => {
+  const handleTogglePrize = async (winner: CooldownEntry) => {
+      const updatedWinners = recentWinners.map(w => w.uid === winner.uid && w.branchId === winner.branchId ? { ...w, prizeGiven: !w.prizeGiven } : w);
+      await configRef.set({ recentWinners: updatedWinners }, { merge: true });
+  };
+
+  const handleRemoveWinner = async (winner: CooldownEntry) => {
+      await configRef.update({
+          recentWinners: firebase.firestore.FieldValue.arrayRemove(winner)
+      });
+  };
+
+  // LEADERBOARD & LOGS LOGIC
+  const handleUpdateLeaderboardEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLeaderboardEntry) return;
 
-    try {
-        const { id, ...data } = editingLeaderboardEntry;
-        if (id) {
-            await db.collection(collectionName).doc(id).update(data);
-            showAlert("Entry updated.", 'success');
-        } else {
-            await db.collection(collectionName).add(data);
-            showAlert("Entry created.", 'success');
-        }
-        setIsLeaderboardModalOpen(false);
-        setEditingLeaderboardEntry(null);
-    } catch (error: any) {
-        showAlert(`Failed to save entry: ${error.message}`, 'error');
+    const collectionName = leaderboardModalMode === 'winnerLog' ? 'winner_logs' : 'leaderboard';
+
+    if (editingLeaderboardEntry.id) {
+        await db.collection(collectionName).doc(editingLeaderboardEntry.id).set(editingLeaderboardEntry, { merge: true });
+    } else {
+        await db.collection(collectionName).add(editingLeaderboardEntry);
     }
-  };
-  
-  const handleDeleteLogEntry = async (e: React.MouseEvent, id: string, collectionName: 'leaderboard' | 'winner_logs') => {
-      e.stopPropagation();
-      e.preventDefault();
-      openDeleteModal(
-        "Delete Entry?",
-        "Are you sure you want to delete this record?",
-        async () => {
-            try {
-                await db.collection(collectionName).doc(id).delete();
-                showAlert("Entry deleted.", 'info');
-            } catch (error: any) {
-                showAlert(`Deletion failed: ${error.message}`, 'error');
-            }
-        }
-      );
-  };
-  
-  const handleDeleteLeave = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    openDeleteModal(
-      "Delete Leave Request?",
-      "Are you sure you want to remove this request?",
-      async () => {
-        try {
-          await db.collection("leaves").doc(id).delete();
-          showAlert("Request removed.", 'info');
-        } catch (error: any) {
-          showAlert(`Failed to delete: ${error.message}`, 'error');
-        }
-      }
-    );
-  };
-  
-  const handleUpdateRole = async (uid: string, newRole: 'Member' | 'Officer' | 'Admin') => {
-      await db.collection("users").doc(uid).update({ systemRole: newRole });
-      showAlert("User role updated", 'success');
+    setIsLeaderboardModalOpen(false);
+    showAlert("Record updated!", 'success');
   };
 
-  const handleKickUser = (e: React.MouseEvent, user: UserProfile) => {
+  const handleDeleteLeaderboardEntry = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       e.preventDefault();
-      openDeleteModal(
-        `Kick ${user.displayName}?`,
-        `This will permanently remove the user from the guild database. They can rejoin later.`,
-        async () => {
-            try {
-                await db.collection("users").doc(user.uid).delete();
-                showAlert("User kicked.", 'info');
-            } catch (error: any) {
-                showAlert(`Failed to kick user: ${error.message}`, 'error');
-            }
-        }
-      );
+      try {
+        await db.collection("leaderboard").doc(id).delete();
+        showAlert("Leaderboard entry deleted.", 'success');
+      } catch (error: any) {
+        showAlert(`Failed to delete: ${error.message}`, 'error');
+      }
   };
   
-  const formatTimeInput = (val: string) => {
-    let clean = val.replace(/\D/g, '').substring(0, 4);
-    if (clean.length > 2) return `${clean.substring(0, 2)}:${clean.substring(2)}`;
-    return clean;
+  const handleDeleteWinnerLog = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+        await db.collection("winner_logs").doc(id).delete();
+        showAlert("Winner log deleted.", 'success');
+    } catch (error: any) {
+        showAlert(`Failed to delete: ${error.message}`, 'error');
+    }
+  };
+
+  // USER MANAGEMENT
+  const handleRoleChange = async (uid: string, newRole: 'Member' | 'Officer' | 'Admin') => {
+      await db.collection("users").doc(uid).update({ systemRole: newRole });
   };
   
+  const handleKickUser = async (e: React.MouseEvent, uid: string) => {
+      e.stopPropagation();
+      e.preventDefault();
+      try {
+        await db.collection("users").doc(uid).delete();
+        showAlert("User has been kicked from the guild.", 'success');
+      } catch (error: any) {
+        showAlert(`Failed to kick user: ${error.message}`, 'error');
+      }
+  };
+
+  const filteredUsers = allUsers.filter(u => 
+      u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
+      (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
+  const filteredLeaves = leaves.filter(l => 
+      // If Admin, show what is selected in filter. If Officer, force show their own guild.
+      isOfficer ? l.guildId === userProfile.guildId : (leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter)
+  );
+
   const formatTime12Hour = (time24: string) => {
     if (!time24) return '';
     const [hours, minutes] = time24.split(':');
     let h = parseInt(hours, 10);
     const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    h = h ? h : 12;
+    h = h % 12; h = h ? h : 12; 
     return `${h}:${minutes} ${ampm}`;
   };
-  
-  const formatDateMMDDYYYY = (dateStr: string) => {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      return date.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-      }).replace(/\//g, '-');
+
+  const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
+    setDeleteConf({ isOpen: true, title, message, action });
   };
 
-  const filteredQueue = queue.filter(q => q.guildId === selectedBranchId);
-  const filteredWinners = recentWinners.filter(w => w.branchId === selectedBranchId);
-  const currentBranchBoss = currentBossMap[selectedBranchId] || '';
-  const currentBranchSchedule = schedulesMap[selectedBranchId] || [];
-  const activeBossImage = bossPool.find(b => b.name === currentBranchBoss)?.imageUrl;
-  
-  const filteredUsers = allUsers.filter(u => 
-    u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
-    (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase()))
-  );
-
-  const filteredLeaves = leaves.filter(l => leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter);
-
-  // Access checks
-  if (!currentUser) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Please Sign In.</div>;
-  if (guilds.length > 0 && userProfile && !isAdmin && !isOfficer) return <div className="p-8 text-center text-red-500 font-bold">Access Denied: Admins/Officers only.</div>;
+  // --- STYLES ---
+  const inputClass = "w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-zinc-900 dark:text-zinc-100 transition-all text-sm";
+  const labelClass = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
+  const cardClass = "bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden";
+  const tableHeaderClass = "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 uppercase text-xs font-bold px-4 py-3 text-left border-b border-zinc-200 dark:border-zinc-700";
+  const tableCellClass = "px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800";
+  const tableRowClass = "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors";
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Administration</h2>
-        <div className="flex gap-2">
-            {guilds.length === 0 && (
-                <button onClick={handleInitialize} type="button" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium">
-                    <Database size={16} /> Initialize System
+    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Administration</h1>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage system settings, events, and guild rosters.</p>
+        </div>
+        
+        {guilds.length === 0 && (
+            <button 
+                onClick={handleInitializeSystem} 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
+            >
+                <Database size={18} /> Initialize System
+            </button>
+        )}
+      </div>
+
+      {/* Navigation Pills */}
+      <div className="flex overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex space-x-1 bg-zinc-100 dark:bg-zinc-800/50 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
+            {isAdmin && (
+                <button onClick={() => setActiveTab('guilds')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'guilds' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                    Guild Branches
                 </button>
             )}
-            {activeTab === 'guilds' && isAdmin && (
-            <button 
-                type="button"
-                onClick={() => setIsCreateModalOpen(true)}
-                className="bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-zinc-800 flex items-center gap-2 text-sm font-medium"
-            >
-                <Plus size={16} /> Create Branch
+            <button onClick={() => setActiveTab('events')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'events' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                Events
             </button>
+            <button onClick={() => setActiveTab('breakingArmy')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'breakingArmy' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                Breaking Army
+            </button>
+            {isAdmin && (
+                <>
+                    <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'leaderboard' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                        Leaderboard
+                    </button>
+                    <button onClick={() => setActiveTab('winnerLogs')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'winnerLogs' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                        Winner Logs
+                    </button>
+                    <button onClick={() => setActiveTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'users' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                        Users
+                    </button>
+                </>
             )}
+            <button onClick={() => setActiveTab('leaves')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'leaves' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                Leaves
+            </button>
         </div>
       </div>
 
-      <div className="flex space-x-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg w-fit mb-8 overflow-x-auto">
-        {isAdmin && <button onClick={() => setActiveTab('guilds')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'guilds' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Guild Branches</button>}
-        {(isAdmin || isOfficer) && <button onClick={() => setActiveTab('events')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'events' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Events</button>}
-        {(isAdmin || isOfficer) && <button onClick={() => setActiveTab('breakingArmy')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'breakingArmy' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Breaking Army</button>}
-        {isAdmin && <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'leaderboard' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Leaderboard</button>}
-        {isAdmin && <button onClick={() => setActiveTab('winnerLogs')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'winnerLogs' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Winner Logs</button>}
-        {(isAdmin || isOfficer) && <button onClick={() => setActiveTab('leaves')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'leaves' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>Leaves</button>}
-        {isAdmin && <button onClick={() => setActiveTab('users')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'users' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>User Management</button>}
-      </div>
-      
-      {/* 1. GUILD BRANCHES TAB */}
+      {/* --- GUILDS TAB --- */}
       {activeTab === 'guilds' && isAdmin && (
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-              <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Branch Name</th>
-                <th className="px-4 py-3">Member Cap</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {guilds.map(guild => (
-                <tr key={guild.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400">{guild.id}</td>
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
-                    {editingGuildId === guild.id ? (
-                        <input className="border rounded p-1 dark:bg-zinc-800 dark:text-zinc-100" value={guildEditForm.name} onChange={e => setGuildEditForm({...guildEditForm, name: e.target.value})} />
-                    ) : guild.name}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">
-                    {editingGuildId === guild.id ? (
-                        <input type="number" className="border rounded p-1 w-20 dark:bg-zinc-800 dark:text-zinc-100" value={guildEditForm.memberCap} onChange={e => setGuildEditForm({...guildEditForm, memberCap: parseInt(e.target.value)})} />
-                    ) : guild.memberCap}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    {editingGuildId === guild.id ? (
-                        <>
-                            <button onClick={() => handleSaveGuild(guild.id)} className="text-green-600 hover:text-green-800"><Save size={16} /></button>
-                            <button onClick={() => setEditingGuildId(null)} className="text-zinc-400 hover:text-zinc-600"><X size={16} /></button>
-                        </>
-                    ) : (
-                        <>
-                            <button onClick={() => handleEditGuild(guild)} className="text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"><Edit size={16} /></button>
-                            <button onClick={(e) => handleDeleteGuild(e, guild.id)} className="text-zinc-400 hover:text-red-600"><Trash2 size={16} /></button>
-                        </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={cardClass}>
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Shield size={20} className="text-rose-600" /> Guild Management
+                </h2>
+                <button onClick={() => { setNewGuildData({ name: '', id: '', memberCap: 80 }); setIsCreateModalOpen(true); }} className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                    <Plus size={16}/> Create Branch
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className={tableHeaderClass}>Branch Name</th>
+                            <th className={tableHeaderClass}>Guild ID</th>
+                            <th className={tableHeaderClass}>Member Cap</th>
+                            <th className={tableHeaderClass}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {guilds.map(g => (
+                            <tr key={g.id} className={tableRowClass}>
+                                <td className={tableCellClass}>
+                                    {editingGuildId === g.id ? 
+                                        <input value={guildEditForm.name} onChange={e => setGuildEditForm({...guildEditForm, name: e.target.value})} className="p-1 border rounded bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 w-full" /> 
+                                        : <span className="font-medium text-zinc-900 dark:text-zinc-100">{g.name}</span>
+                                    }
+                                </td>
+                                <td className={tableCellClass}><code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-xs font-mono">{g.id}</code></td>
+                                <td className={tableCellClass}>
+                                    {editingGuildId === g.id ? 
+                                        <input type="number" value={guildEditForm.memberCap} onChange={e => setGuildEditForm({...guildEditForm, memberCap: parseInt(e.target.value) || 0})} className="p-1 border rounded bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 w-20" /> 
+                                        : g.memberCap
+                                    }
+                                </td>
+                                <td className={tableCellClass}>
+                                    <div className="flex gap-2">
+                                        {editingGuildId === g.id ? (
+                                            <>
+                                                <button type="button" onClick={() => handleSaveGuild(g.id)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"><Save size={16} /></button>
+                                                <button type="button" onClick={() => setEditingGuildId(null)} className="p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><X size={16} /></button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button type="button" onClick={() => handleEditGuild(g)} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><Edit size={16}/></button>
+                                                <button type="button" onClick={() => openDeleteModal("Delete Branch?", `Are you sure you want to delete ${g.name}?`, () => handleDeleteGuild(null as any, g.id))} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
+                                            </>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
       )}
-      
-      {/* 2. EVENTS TAB */}
-      {activeTab === 'events' && (isAdmin || isOfficer) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 h-fit">
-            <h3 className="font-bold text-lg mb-4 text-zinc-900 dark:text-zinc-100">{editingEventId ? 'Edit Event' : 'Create New Event'}</h3>
-            <div className="space-y-4">
-              <input type="text" placeholder="Event Title" className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} />
-              <textarea placeholder="Description" className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" rows={3} value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})}></textarea>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="datetime-local" className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} />
-                <select className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value as any})}>
-                  <option>Raid</option><option>PvP</option><option>Social</option><option>Meeting</option>
-                </select>
-              </div>
-              <select 
-                className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" 
-                value={eventForm.guildId} 
-                onChange={e => setEventForm({...eventForm, guildId: e.target.value})}
-                disabled={isOfficer} // Officers locked to their guild
-              >
-                <option value="">Global Event (All Branches)</option>
-                {guilds.map(g => (
-                    <option key={g.id} value={g.id} disabled={isOfficer && g.id !== userProfile?.guildId}>{g.name}</option>
-                ))}
-              </select>
-              <div className="flex gap-2">
-                  <button onClick={handleSaveEvent} className="flex-1 bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors">
-                    {editingEventId ? 'Update Event' : 'Schedule Event'}
-                  </button>
-                  {editingEventId && <button onClick={handleCancelEditEvent} className="px-3 bg-zinc-200 text-zinc-700 rounded hover:bg-zinc-300">Cancel</button>}
-              </div>
-            </div>
-          </div>
-          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <h3 className="font-bold text-lg mb-4 text-zinc-900 dark:text-zinc-100">Upcoming Events</h3>
-            <div className="space-y-3">
-              {events.filter(e => isAdmin || e.guildId === '' || e.guildId === userProfile?.guildId).map(event => (
-                <div key={event.id} className="flex items-center justify-between p-3 border border-zinc-100 dark:border-zinc-800 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-zinc-100 dark:bg-zinc-800 p-2 rounded text-center min-w-[50px]">
-                      <span className="block text-xs font-bold text-zinc-500 uppercase">{new Date(event.date).toLocaleDateString(undefined, {month:'short'})}</span>
-                      <span className="block text-lg font-bold text-zinc-900 dark:text-zinc-100">{new Date(event.date).getDate()}</span>
+
+      {/* --- EVENTS TAB --- */}
+      {activeTab === 'events' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className={`${cardClass} lg:col-span-1`}>
+                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">{editingEventId ? 'Edit Event' : 'Schedule Event'}</h3>
+                </div>
+                <form onSubmit={handleSaveEvent} className="p-6 space-y-4">
+                    <div>
+                        <label className={labelClass}>Title</label>
+                        <input required placeholder="e.g. Weekly Raid" value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} className={inputClass} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                      <div className="flex gap-2 text-xs text-zinc-500">
-                        <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">{event.type}</span>
-                        <span>{guilds.find(g => g.id === event.guildId)?.name || 'Global'}</span>
-                      </div>
+                        <label className={labelClass}>Description</label>
+                        <textarea required placeholder="Event details..." value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className={`${inputClass} min-h-[100px]`} />
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={(e) => handleEditEvent(e, event)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><Edit size={16} /></button>
-                    <button onClick={(e) => handleDeleteEvent(e, event.id)} className="text-zinc-400 hover:text-red-600"><Trash2 size={16} /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. BREAKING ARMY TAB */}
-      {activeTab === 'breakingArmy' && (isAdmin || isOfficer) && (
-          <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left: Configuration */}
-                  <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-                          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuration</h3>
-                          <select 
-                            className="bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 text-zinc-900 dark:text-zinc-100 w-full sm:w-auto min-w-[150px] pr-8"
-                            value={selectedBranchId}
-                            onChange={e => setSelectedBranchId(e.target.value)}
-                            disabled={isOfficer} // Officers locked
-                          >
-                              {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                          </select>
-                      </div>
-                      
-                      <div className="space-y-6">
-                          <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Active Boss for Branch</label>
-                              <div className="flex gap-2">
-                                  <div className="w-10 h-10 bg-zinc-200 dark:bg-zinc-700 rounded-lg flex-shrink-0 overflow-hidden">
-                                      {activeBossImage ? <img src={activeBossImage} className="w-full h-full object-cover" /> : <Skull className="w-full h-full p-2 text-zinc-400" />}
-                                  </div>
-                                  <select 
-                                    className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100"
-                                    value={currentBranchBoss}
-                                    onChange={(e) => handleUpdateCurrentBoss(e.target.value)}
-                                  >
-                                      <option value="">Select Boss</option>
-                                      {bossPool.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                                  </select>
-                              </div>
-                          </div>
-
-                          <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Weekly Schedule</label>
-                              <div className="space-y-2 mb-3">
-                                  {currentBranchSchedule.map((slot, idx) => (
-                                      <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded border border-zinc-100 dark:border-zinc-700">
-                                          <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                                              <Clock size={14} className="text-rose-500" />
-                                              <span>{slot.day} @ {formatTime12Hour(slot.time)}</span>
-                                          </div>
-                                          <button type="button" onClick={() => handleRemoveSchedule(idx)} className="text-zinc-400 hover:text-red-600">
-                                              <X size={14} />
-                                          </button>
-                                      </div>
-                                  ))}
-                              </div>
-                              <div className="flex gap-2">
-                                  <select className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm" value={newSchedule.day} onChange={e => setNewSchedule({...newSchedule, day: e.target.value})}>
-                                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => <option key={d}>{d}</option>)}
-                                  </select>
-                                  <input type="text" className="w-24 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm" placeholder="20:00" value={newSchedule.time} onChange={e => setNewSchedule({...newSchedule, time: formatTimeInput(e.target.value)})} />
-                                  <button 
-                                    onClick={handleAddSchedule} 
-                                    disabled={currentBranchSchedule.length >= 2}
-                                    className="bg-zinc-200 dark:bg-zinc-700 p-2 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    <Plus size={16} />
-                                  </button>
-                              </div>
-                          </div>
-
-                          <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Global Actions</label>
-                              <div className="flex gap-3">
-                                  <button onClick={handleResetQueue} className="flex-1 py-2 px-3 border border-red-200 bg-red-50 text-red-700 dark:bg-red-900/10 dark:border-red-900/30 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/20 flex items-center justify-center gap-2">
-                                      <Trash2 size={14} /> Clear {guilds.find(g => g.id === selectedBranchId)?.name} Queue
-                                  </button>
-                                  <button onClick={handleResetCooldowns} className="flex-1 py-2 px-3 border border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-900/10 dark:border-blue-900/30 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/20 flex items-center justify-center gap-2">
-                                      <RefreshCw size={14} /> Reset Winners
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Right: Queue Management */}
-                  <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col h-[500px]">
-                      <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><ListOrdered size={20} /> Queue</h3>
-                          <span className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">{guilds.find(g => g.id === selectedBranchId)?.name}</span>
-                      </div>
-                      <div className="bg-zinc-50 dark:bg-zinc-950 rounded-lg border border-zinc-200 dark:border-zinc-800 flex-1 overflow-hidden flex flex-col">
-                          <div className="grid grid-cols-12 text-xs font-bold text-zinc-500 p-3 border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider">
-                              <div className="col-span-8">Player</div>
-                              <div className="col-span-4 text-right">Action</div>
-                          </div>
-                          <div className="overflow-y-auto flex-1 p-2 space-y-1 custom-scrollbar">
-                              {filteredQueue.length === 0 ? <p className="text-zinc-400 text-center py-8 text-sm">Queue is empty</p> : filteredQueue.map((entry) => (
-                                  <div key={entry.uid} className="grid grid-cols-12 items-center p-2 rounded bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
-                                      <div className="col-span-8 font-medium text-zinc-900 dark:text-zinc-100">{entry.name}</div>
-                                      <div className="col-span-4 flex justify-end">
-                                          <button 
-                                              onClick={() => { setSelectedWinner(entry); setIsWinnerModalOpen(true); }}
-                                              className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 p-1.5 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
-                                              title="Declare Winner"
-                                          >
-                                              <Crown size={14} />
-                                          </button>
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  </div>
-              </div>
-
-              {/* Bottom: Recent Winners & Bosses */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 h-[400px] flex flex-col">
-                      <h3 className="font-bold text-lg mb-4 text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><ShieldAlert size={20} /> Recent Winners (Cooldown)</h3>
-                      <div className="flex-1 overflow-y-auto custom-scrollbar">
-                          <table className="w-full text-left text-sm">
-                              <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 sticky top-0">
-                                  <tr><th className="px-3 py-2">Player</th><th className="px-3 py-2 text-center">Prize</th><th className="px-3 py-2 text-right">Remove</th></tr>
-                              </thead>
-                              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                                  {filteredWinners.map(w => {
-                                      const profile = allUsers.find(u => u.uid === w.uid);
-                                      return (
-                                          <tr key={w.uid}>
-                                              <td className="px-3 py-2 text-zinc-900 dark:text-zinc-100">{profile?.displayName || 'Unknown'}</td>
-                                              <td className="px-3 py-2 text-center">
-                                                  <button onClick={() => handleTogglePrize(w.uid, w.prizeGiven)} className={`p-1 rounded ${w.prizeGiven ? 'text-green-500 bg-green-100 dark:bg-green-900/20' : 'text-zinc-300 hover:text-zinc-500'}`}>
-                                                      <Gift size={16} />
-                                                  </button>
-                                              </td>
-                                              <td className="px-3 py-2 text-right">
-                                                  <button onClick={(e) => handleRemoveWinner(e, w.uid)} className="text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
-                                              </td>
-                                          </tr>
-                                      )
-                                  })}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
-
-                  {isAdmin && (
-                    <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 h-[400px] flex flex-col">
-                        <h3 className="font-bold text-lg mb-4 text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><Skull size={20} /> Bosses</h3>
-                        <div className="flex gap-2 mb-4">
-                            <input type="text" placeholder="Boss Name" className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm" value={bossForm.name} onChange={e => setBossForm({...bossForm, name: e.target.value})} />
-                            <input type="text" placeholder="Image URL" className="flex-1 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm" value={bossForm.imageUrl} onChange={e => setBossForm({...bossForm, imageUrl: e.target.value})} />
-                            <button onClick={handleSaveBoss} className="bg-rose-900 text-white px-3 py-2 rounded hover:bg-rose-950"><Plus size={16} /></button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Date & Time</label>
+                            <input type="datetime-local" required value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className={inputClass} />
                         </div>
-                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
-                            {bossPool.map(boss => (
-                                <div key={boss.name} className="flex items-center justify-between p-2 border border-zinc-100 dark:border-zinc-800 rounded bg-zinc-50 dark:bg-zinc-800/50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-zinc-300 dark:bg-zinc-700 rounded overflow-hidden">
-                                            {boss.imageUrl && <img src={boss.imageUrl} className="w-full h-full object-cover" />}
-                                        </div>
-                                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{boss.name}</span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={(e) => handleEditBoss(e, boss)} className="text-zinc-400 hover:text-blue-500"><Edit size={14} /></button>
-                                        <button onClick={(e) => handleDeleteBoss(e, boss.name)} className="text-zinc-400 hover:text-red-500"><Trash2 size={14} /></button>
+                        <div>
+                            <label className={labelClass}>Type</label>
+                            <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value as any})} className={inputClass}>
+                                <option>Raid</option><option>PvP</option><option>Social</option><option>Meeting</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className={labelClass}>Branch</label>
+                        {isOfficer ? (
+                            <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className={inputClass}>
+                                <option value={userProfile.guildId}>{guilds.find(g => g.id === userProfile.guildId)?.name}</option>
+                                <option value="">Global (All Branches)</option>
+                            </select>
+                        ) : (
+                            <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className={inputClass}>
+                                <option value="">Global (All Branches)</option>
+                                {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                        )}
+                    </div>
+                    <div className="pt-2 flex gap-3">
+                        {editingEventId && <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '' }); }} className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium">Cancel</button>}
+                        <button type="submit" className="flex-1 bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg font-medium shadow-lg shadow-rose-900/20 transition-all">{editingEventId ? 'Update Event' : 'Create Event'}</button>
+                    </div>
+                </form>
+            </div>
+
+            <div className={`${cardClass} lg:col-span-2 flex flex-col`}>
+                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Calendar size={20} className="text-zinc-500" /> Upcoming Events
+                    </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[600px] p-6 space-y-3">
+                    {events.map(e => (
+                        <div key={e.id} className="group p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-700/50 hover:border-rose-200 dark:hover:border-rose-900/50 transition-colors flex justify-between items-center">
+                            <div className="flex items-start gap-4">
+                                <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-center min-w-[60px]">
+                                    <span className="block text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase">{new Date(e.date).toLocaleDateString(undefined, {month: 'short'})}</span>
+                                    <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100">{new Date(e.date).getDate()}</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">{e.title}</h4>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{guilds.find(g => g.id === e.guildId)?.name || 'Global Event'}</p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-500">{e.type}</span>
+                                        <span className="text-xs text-zinc-400 flex items-center gap-1"><Clock size={12}/> {new Date(e.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                     </div>
                                 </div>
-                            ))}
+                            </div>
+                            {(isAdmin || (isOfficer && e.guildId === userProfile.guildId) || (isOfficer && !e.guildId)) && (
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button type="button" onClick={() => handleEditEvent(e)} className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg hover:shadow-sm"><Edit size={16}/></button>
+                                    <button type="button" onClick={(ev) => openDeleteModal("Delete Event?", `Are you sure you want to delete "${e.title}"?`, () => handleDeleteEvent(ev, e.id))} className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg hover:shadow-sm"><Trash2 size={16}/></button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {events.length === 0 && <p className="text-center text-zinc-400 py-8">No events scheduled.</p>}
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* --- BREAKING ARMY TAB --- */}
+      {activeTab === 'breakingArmy' && (
+        <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* CONFIGURATION CARD */}
+                <div className={`${cardClass} md:col-span-1 lg:col-span-1 min-w-[300px]`}>
+                    <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <Settings size={20} className="text-zinc-500" /> Control Center
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-6">
+                        <div>
+                            <label className={labelClass}>Target Branch</label>
+                            <select 
+                                value={selectedBranchId} 
+                                onChange={e => setSelectedBranchId(e.target.value)} 
+                                disabled={isOfficer} 
+                                className={`${inputClass} ${isOfficer ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            >
+                                {guilds.filter(g => isOfficer ? g.id === userProfile.guildId : true).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className={labelClass}>Active Boss</label>
+                            <div className="relative">
+                                {bossPool.find(b => b.name === currentBossMap[selectedBranchId])?.imageUrl && (
+                                    <img src={bossPool.find(b => b.name === currentBossMap[selectedBranchId])!.imageUrl} className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md object-cover border border-zinc-300 dark:border-zinc-600" />
+                                )}
+                                <select value={currentBossMap[selectedBranchId] || ''} onChange={handleUpdateCurrentBoss} className={`${inputClass} ${bossPool.find(b => b.name === currentBossMap[selectedBranchId])?.imageUrl ? 'pl-12' : ''}`}>
+                                    <option value="">Select Boss</option>
+                                    {bossPool.map(b=><option key={b.name} value={b.name}>{b.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className={labelClass}>Weekly Schedule</label>
+                                <span className="text-xs text-zinc-400">{(schedulesMap[selectedBranchId] || []).length}/2 Slots</span>
+                            </div>
+                            <div className="space-y-2 mb-3">
+                                {schedulesMap[selectedBranchId]?.map((s,i) => (
+                                    <div key={i} className="flex justify-between items-center p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-700/50">
+                                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                                            <Clock size={14} className="text-zinc-400" /> {s.day} @ {formatTime12Hour(s.time)}
+                                        </span>
+                                        <button type="button" onClick={()=>openDeleteModal("Remove Schedule?","Are you sure?",()=>handleRemoveSchedule(i))} className="text-zinc-400 hover:text-red-500 transition-colors"><X size={16} /></button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <select value={newSchedule.day} onChange={e=>setNewSchedule({...newSchedule, day: e.target.value})} className={inputClass}>
+                                    <option>Sunday</option><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option>
+                                </select>
+                                <div className="flex gap-2">
+                                    <input type="time" value={newSchedule.time} onChange={e=>setNewSchedule({...newSchedule, time: e.target.value})} className={`${inputClass} flex-1`} />
+                                    <button type="button" onClick={handleAddSchedule} disabled={(schedulesMap[selectedBranchId] || []).length >= 2} className="px-4 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors disabled:opacity-50"><Plus size={18} /></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className={labelClass}>Actions</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button type="button" onClick={()=>openDeleteModal("Clear Queues?", `Clear all queues for ${guilds.find(g=>g.id===selectedBranchId)?.name}?`, handleResetQueue)} className="px-3 py-2 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2">
+                                    <Trash2 size={14} /> Clear Queue
+                                </button>
+                                <button type="button" onClick={()=>openDeleteModal("Reset Winners?", `Reset all winners/cooldowns for ${guilds.find(g=>g.id===selectedBranchId)?.name}?`, handleResetCooldowns)} className="px-3 py-2 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 rounded-lg text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2">
+                                    <RefreshCw size={14} /> Reset Winners
+                                </button>
+                            </div>
                         </div>
                     </div>
-                  )}
+                </div>
+
+                {/* QUEUE & WINNERS */}
+                <div className="md:col-span-2 flex flex-col gap-6">
+                    <div className={`${cardClass} flex-1`}>
+                        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                <ListOrdered size={20} className="text-zinc-500" /> Queue Manager
+                            </h3>
+                            <span className="text-xs font-bold px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-500">{guilds.find(g=>g.id===selectedBranchId)?.name}</span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                           <table className="w-full">
+                               <thead>
+                                   <tr>
+                                       <th className={tableHeaderClass}>#</th>
+                                       <th className={tableHeaderClass}>Player</th>
+                                       <th className={tableHeaderClass}>Role</th>
+                                       <th className={`${tableHeaderClass} text-right`}>Declare Winner</th>
+                                   </tr>
+                               </thead>
+                               <tbody>
+                                   {queue.filter(q=>q.guildId===selectedBranchId).map((q, i)=>(
+                                       <tr key={q.uid} className={tableRowClass}>
+                                           <td className={tableCellClass}><span className="font-mono text-zinc-400">{i+1}</span></td>
+                                           <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{q.name}</span></td>
+                                           <td className={tableCellClass}><span className="text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">{q.role}</span></td>
+                                           <td className={`${tableCellClass} text-right`}>
+                                               <button type="button" onClick={()=>{setSelectedWinner(q);setIsWinnerModalOpen(true)}} className="p-1.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 rounded transition-colors" title="Declare Winner">
+                                                   <Crown size={16}/>
+                                               </button>
+                                           </td>
+                                       </tr>
+                                   ))}
+                                   {queue.filter(q=>q.guildId===selectedBranchId).length === 0 && (
+                                       <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">Queue is empty.</td></tr>
+                                   )}
+                               </tbody>
+                           </table>
+                        </div>
+                    </div>
+
+                    <div className={`${cardClass} flex-1`}>
+                        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                            <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                <ShieldAlert size={20} className="text-zinc-500" /> Recent Winners (Cooldown)
+                            </h3>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                           <table className="w-full">
+                               <thead>
+                                   <tr>
+                                       <th className={tableHeaderClass}>Player</th>
+                                       <th className={tableHeaderClass}>Date</th>
+                                       <th className={`${tableHeaderClass} text-center`}>Prize Given</th>
+                                       <th className={`${tableHeaderClass} text-right`}>Remove</th>
+                                   </tr>
+                               </thead>
+                               <tbody>
+                                   {recentWinners.filter(w=>w.branchId===selectedBranchId).map((w,i)=>(
+                                       <tr key={i} className={tableRowClass}>
+                                           <td className={tableCellClass}>
+                                               <div className="flex items-center gap-2">
+                                                   <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                                                       <img src={allUsers.find(u=>u.uid===w.uid)?.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                                                   </div>
+                                                   <span className="font-medium text-zinc-900 dark:text-zinc-100">{allUsers.find(u=>u.uid===w.uid)?.displayName || w.uid}</span>
+                                               </div>
+                                           </td>
+                                           <td className={tableCellClass}>{new Date(w.timestamp).toLocaleDateString()}</td>
+                                           <td className={`${tableCellClass} text-center`}>
+                                               <input type="checkbox" checked={w.prizeGiven} onChange={()=>handleTogglePrize(w)} className="rounded border-zinc-300 text-rose-900 focus:ring-rose-500" />
+                                           </td>
+                                           <td className={`${tableCellClass} text-right`}>
+                                               <button type="button" onClick={()=>openDeleteModal("Remove Winner?","Remove cooldown for this player?",()=>handleRemoveWinner(w))} className="text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                           </td>
+                                       </tr>
+                                   ))}
+                                   {recentWinners.filter(w=>w.branchId===selectedBranchId).length === 0 && (
+                                       <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">No recent winners.</td></tr>
+                                   )}
+                               </tbody>
+                           </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* BOSS POOL GRID */}
+            {isAdmin && (
+                <div className={cardClass}>
+                    <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <Skull size={20} className="text-zinc-500" /> Boss Pool
+                        </h3>
+                        <form onSubmit={handleSaveBoss} className="flex gap-2 w-full md:w-auto">
+                            <input required placeholder="Name" value={bossForm.name} onChange={e=>setBossForm({...bossForm, name: e.target.value})} className={`${inputClass} w-full md:w-48`} />
+                            <input placeholder="Image URL" value={bossForm.imageUrl} onChange={e=>setBossForm({...bossForm, imageUrl: e.target.value})} className={`${inputClass} w-full md:w-48`} />
+                            <button type="submit" className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap">{editingBossOriginalName ? 'Update' : 'Add'}</button>
+                        </form>
+                    </div>
+                    <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {bossPool.map(b => (
+                            <div key={b.name} className="group relative aspect-square bg-zinc-100 dark:bg-zinc-800 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                                {b.imageUrl ? (
+                                    <img src={b.imageUrl} alt={b.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-zinc-300 dark:text-zinc-600"><Skull size={40} /></div>
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-3">
+                                    <span className="text-white font-bold text-sm truncate shadow-black drop-shadow-md">{b.name}</span>
+                                </div>
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button type="button" onClick={()=>{setEditingBossOriginalName(b.name);setBossForm(b)}} className="p-1.5 bg-white/90 text-zinc-700 rounded-full shadow-sm hover:bg-white"><Edit size={14}/></button>
+                                    <button type="button" onClick={(ev)=>openDeleteModal("Delete Boss?", `Delete ${b.name}?`, ()=>handleDeleteBoss(ev, b.name))} className="p-1.5 bg-white/90 text-red-600 rounded-full shadow-sm hover:bg-white"><Trash2 size={14}/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+      )}
+
+      {/* --- LEADERBOARD TAB --- */}
+      {activeTab === 'leaderboard' && isAdmin && (
+          <div className={cardClass}>
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Trophy size={20} className="text-yellow-500" /> Leaderboard Records
+                </h3>
+                <button onClick={()=>{setEditingLeaderboardEntry({id:'', rank:0,playerName:'',playerUid:'',branch:'',boss:'',time:'',date:'',status:'verified'}); setLeaderboardModalMode('leaderboard'); setIsLeaderboardModalOpen(true)}} className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                    <Plus size={16}/> Manual Record
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className={tableHeaderClass}>Player</th>
+                            <th className={tableHeaderClass}>Boss</th>
+                            <th className={tableHeaderClass}>Time</th>
+                            <th className={tableHeaderClass}>Branch</th>
+                            <th className={tableHeaderClass}>Date</th>
+                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {leaderboard.map(l=>(
+                            <tr key={l.id} className={tableRowClass}>
+                                <td className={tableCellClass}><span className="font-bold text-zinc-900 dark:text-zinc-100">{l.playerName}</span></td>
+                                <td className={tableCellClass}>{l.boss}</td>
+                                <td className={tableCellClass}><span className="font-mono text-rose-700 dark:text-rose-400 font-bold">{l.time}</span></td>
+                                <td className={tableCellClass}><span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full text-zinc-500">{l.branch}</span></td>
+                                <td className={tableCellClass}>{new Date(l.date).toLocaleDateString()}</td>
+                                <td className={`${tableCellClass} text-right`}>
+                                    <div className="flex justify-end gap-2">
+                                        <button type="button" onClick={()=>{setEditingLeaderboardEntry(l);setLeaderboardModalMode('leaderboard');setIsLeaderboardModalOpen(true)}} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><Edit size={16}/></button>
+                                        <button type="button" onClick={(e)=>openDeleteModal("Delete Record?",`Delete ${l.playerName}'s record?`,()=>handleDeleteLeaderboardEntry(e, l.id))} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+      )}
+      
+      {/* --- WINNER LOGS TAB --- */}
+      {activeTab === 'winnerLogs' && isAdmin && (
+          <div className={cardClass}>
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <FileText size={20} className="text-zinc-500" /> Historical Win Logs
+                </h3>
+                <button 
+                    onClick={()=>{
+                        setEditingLeaderboardEntry({id:'', rank:0,playerName:'',playerUid:'',branch:'',boss:'',time:'',date:'',status:'verified'}); 
+                        setLeaderboardModalMode('winnerLog'); 
+                        setIsLeaderboardModalOpen(true);
+                    }} 
+                    className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-zinc-200 dark:border-zinc-700"
+                >
+                    <Plus size={16}/> Manual Record
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className={tableHeaderClass}>Player</th>
+                            <th className={tableHeaderClass}>Event Name</th>
+                            <th className={tableHeaderClass}>Date</th>
+                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {winnerLogs.map(l=>(
+                            <tr key={l.id} className={tableRowClass}>
+                                <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{l.playerName}</span></td>
+                                <td className={tableCellClass}>{l.boss}</td>
+                                <td className={tableCellClass}>{new Date(l.date).toLocaleDateString()}</td>
+                                <td className={`${tableCellClass} text-right`}>
+                                    <div className="flex justify-end gap-2">
+                                        <button type="button" onClick={()=>{setEditingLeaderboardEntry(l);setLeaderboardModalMode('winnerLog');setIsLeaderboardModalOpen(true)}} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><Edit size={16}/></button>
+                                        <button type="button" onClick={(e)=>openDeleteModal("Delete Log?",`Delete ${l.playerName}'s log?`,()=>handleDeleteWinnerLog(e, l.id))} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                  </table>
               </div>
           </div>
       )}
-
-      {/* 4. LEADERBOARD TAB (Admin Only) */}
-      {activeTab === 'leaderboard' && isAdmin && (
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <div className="flex justify-between mb-4">
-              <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">Manage Leaderboard</h3>
-              <button onClick={() => { setEditingLeaderboardEntry({ id: '', rank: 0, playerName: '', playerUid: '', branch: '', boss: '', time: '', date: '', status: 'verified' }); setIsLeaderboardModalOpen(true); }} className="text-sm bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100">Manual Entry</button>
-          </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-              <tr><th className="px-4 py-3">Player</th><th className="px-4 py-3">Boss</th><th className="px-4 py-3">Time</th><th className="px-4 py-3">Date</th><th className="px-4 py-3 text-right">Actions</th></tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {leaderboard.map(entry => (
-                <tr key={entry.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{entry.playerName}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{entry.boss}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-900 dark:text-zinc-100">{entry.time}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatDateMMDDYYYY(entry.date)}</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button onClick={() => { setEditingLeaderboardEntry(entry); setIsLeaderboardModalOpen(true); }} className="text-zinc-400 hover:text-blue-500"><Edit size={16} /></button>
-                    <button onClick={(e) => handleDeleteLogEntry(e, entry.id, 'leaderboard')} className="text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
       
-      {/* 5. WINNER LOGS TAB (Admin Only) */}
-      {activeTab === 'winnerLogs' && isAdmin && (
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <h3 className="font-bold text-lg mb-4 text-zinc-900 dark:text-zinc-100">Historical Winner Logs</h3>
-            <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-              <tr><th className="px-4 py-3">Player</th><th className="px-4 py-3">Boss</th><th className="px-4 py-3">Time</th><th className="px-4 py-3">Date</th><th className="px-4 py-3 text-right">Actions</th></tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {winnerLogs.map(entry => (
-                <tr key={entry.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{entry.playerName}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{entry.boss}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-900 dark:text-zinc-100">{entry.time}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{formatDateMMDDYYYY(entry.date)}</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button onClick={() => { setEditingLeaderboardEntry(entry); setIsLeaderboardModalOpen(true); }} className="text-zinc-400 hover:text-blue-500"><Edit size={16} /></button>
-                    <button onClick={(e) => handleDeleteLogEntry(e, entry.id, 'winner_logs')} className="text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 6. LEAVES TAB (Admin/Officer) */}
-      {activeTab === 'leaves' && (isAdmin || isOfficer) && (
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-            <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">Leave Requests</h3>
-            <select 
-                className="w-full sm:w-auto p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-sm"
-                value={leaveBranchFilter}
-                onChange={(e) => setLeaveBranchFilter(e.target.value)}
-            >
-                <option value="All">All Branches</option>
-                {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-              <tr>
-                <th className="px-4 py-3">Member</th>
-                <th className="px-4 py-3">Branch</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">From</th>
-                <th className="px-4 py-3">Until</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filteredLeaves.map(leave => (
-                <tr key={leave.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
-                    <div>{leave.displayName}</div>
-                    <div className="text-xs text-zinc-500 font-mono">{leave.inGameId}</div>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{leave.guildName}</td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 italic">{leave.reason || '-'}</td>
-                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">{formatDateMMDDYYYY(leave.startDate)}</td>
-                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">{formatDateMMDDYYYY(leave.endDate)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={(e) => handleDeleteLeave(e, leave.id)} className="text-zinc-400 hover:text-red-500"><Trash2 size={16} /></button>
-                  </td>
-                </tr>
-              ))}
-              {filteredLeaves.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400">No pending leave requests.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 7. USER MANAGEMENT TAB (Admin Only) */}
+      {/* --- USER MANAGEMENT --- */}
       {activeTab === 'users' && isAdmin && (
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <div className="mb-4 relative">
-                <input 
-                  type="text" 
-                  placeholder="Search Users by Name or ID..." 
-                  className="w-full pl-9 p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100" 
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+          <div className={cardClass}>
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between gap-4">
+                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <User size={20} className="text-zinc-500" /> User Database
+                </h3>
+                <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                    <input type="text" placeholder="Search by name or ID..." value={userSearch} onChange={e=>setUserSearch(e.target.value)} className={`${inputClass} pl-10`} />
+                </div>
             </div>
-            <table className="w-full text-left text-sm table-fixed">
-                <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-                    <tr><th className="px-4 py-3 w-1/4">Name</th><th className="px-4 py-3 w-1/6">ID</th><th className="px-4 py-3 w-1/4">Branch</th><th className="px-4 py-3 w-1/4">System Role</th><th className="px-4 py-3 text-right">Actions</th></tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {filteredUsers.map(user => (
-                        <tr key={user.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                            <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-2 truncate">
-                                <img src={user.photoURL || 'https://via.placeholder.com/150'} className="w-6 h-6 rounded-full" />
-                                {user.displayName}
-                            </td>
-                            <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{user.inGameId}</td>
-                            <td className="px-4 py-3 text-zinc-500 truncate">{guilds.find(g => g.id === user.guildId)?.name}</td>
-                            <td className="px-4 py-3">
-                                <select 
-                                    className="border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs pr-8 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                    value={user.systemRole}
-                                    onChange={(e) => handleUpdateRole(user.uid, e.target.value as any)}
-                                >
-                                    <option value="Member">Member</option>
-                                    <option value="Officer">Officer</option>
-                                    <option value="Admin">Admin</option>
-                                </select>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                                <button onClick={(e) => handleKickUser(e, user)} className="text-zinc-400 hover:text-red-500" title="Kick User"><Trash2 size={16} /></button>
-                            </td>
+            <div className="overflow-x-auto">
+                <table className="w-full table-fixed">
+                    <thead>
+                        <tr>
+                            <th className={`${tableHeaderClass} w-1/4`}>User</th>
+                            <th className={`${tableHeaderClass} w-1/6`}>ID</th>
+                            <th className={`${tableHeaderClass} w-1/4`}>Branch</th>
+                            <th className={`${tableHeaderClass} w-1/4`}>System Role</th>
+                            <th className={`${tableHeaderClass} w-1/6 text-right`}>Action</th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        {filteredUsers.map(u=>(
+                            <tr key={u.uid} className={tableRowClass}>
+                                <td className={tableCellClass}>
+                                    <div className="flex items-center gap-3">
+                                        <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 object-cover" />
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{u.displayName}</span>
+                                            <span className="text-[10px] text-zinc-500 uppercase">{u.role}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className={tableCellClass}><code className="text-xs bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500 font-mono">{u.inGameId}</code></td>
+                                <td className={tableCellClass}>{guilds.find(g=>g.id===u.guildId)?.name || <span className="text-zinc-400 italic">None</span>}</td>
+                                <td className={tableCellClass}>
+                                    <select 
+                                        value={u.systemRole} 
+                                        onChange={e=>handleRoleChange(u.uid, e.target.value as any)} 
+                                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs p-1.5 pr-8 rounded focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                                    >
+                                        <option>Member</option><option>Officer</option><option>Admin</option>
+                                    </select>
+                                </td>
+                                <td className={`${tableCellClass} text-right`}>
+                                    <button type="button" onClick={(e)=>openDeleteModal("Kick User?",`Kick ${u.displayName}?`,()=>handleKickUser(e, u.uid))} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+          </div>
       )}
       
+      {/* --- LEAVES TAB --- */}
+      {activeTab === 'leaves' && (
+          <div className={cardClass}>
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Plane size={20} className="text-zinc-500" /> Leave Requests
+                </h3>
+                {!isOfficer && (
+                    <select value={leaveBranchFilter} onChange={e=>setLeaveBranchFilter(e.target.value)} className={`${inputClass} w-48`}>
+                        <option value="All">All Branches</option>
+                        {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                )}
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className={tableHeaderClass}>Name</th>
+                            <th className={tableHeaderClass}>Branch</th>
+                            <th className={tableHeaderClass}>Start Date</th>
+                            <th className={tableHeaderClass}>End Date</th>
+                            <th className={tableHeaderClass}>Reason</th>
+                            <th className={`${tableHeaderClass} text-right`}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredLeaves.map(l=>(
+                            <tr key={l.id} className={tableRowClass}>
+                                <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{l.displayName}</span></td>
+                                <td className={tableCellClass}><span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full text-zinc-500">{l.guildName}</span></td>
+                                <td className={tableCellClass}>{new Date(l.startDate).toLocaleDateString()}</td>
+                                <td className={tableCellClass}>{new Date(l.endDate).toLocaleDateString()}</td>
+                                <td className={tableCellClass}><span className="text-zinc-500 italic max-w-[200px] truncate block" title={l.reason}>{l.reason || '-'}</span></td>
+                                <td className={`${tableCellClass} text-right`}>
+                                    <button type="button" onClick={()=>openDeleteModal("Delete Leave?","Clear this request?",()=>db.collection("leaves").doc(l.id).delete())} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
+                                </td>
+                            </tr>
+                        ))}
+                        {filteredLeaves.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-zinc-400 text-sm">No leave requests found.</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+      )}
 
+      {/* Modals */}
       <CreateGuildModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateGuild} data={newGuildData} onChange={setNewGuildData} />
-      <DeclareWinnerModal isOpen={isWinnerModalOpen} onClose={() => setIsWinnerModalOpen(false)} winnerName={selectedWinner?.name || ''} time={winnerTime} onTimeChange={setWinnerTime} onConfirm={handleConfirmWinner} />
-      <EditLeaderboardModal isOpen={isLeaderboardModalOpen} onClose={() => setIsLeaderboardModalOpen(false)} entry={editingLeaderboardEntry} setEntry={setEditingLeaderboardEntry} onUpdate={(e) => handleUpdateLogEntry(e, activeTab === 'leaderboard' ? 'leaderboard' : 'winner_logs')} bossPool={bossPool} guilds={guilds} allUsers={allUsers} />
-      <ConfirmationModal isOpen={deleteConf.isOpen} onClose={() => setDeleteConf({ ...deleteConf, isOpen: false })} onConfirm={deleteConf.action} title={deleteConf.title} message={deleteConf.message} />
+      <DeclareWinnerModal isOpen={isWinnerModalOpen} onClose={()=>setIsWinnerModalOpen(false)} winnerName={selectedWinner?.name || ''} time={winnerTime} onTimeChange={setWinnerTime} onConfirm={handleConfirmWinner} />
+      {editingLeaderboardEntry && <EditLeaderboardModal isOpen={isLeaderboardModalOpen} onClose={()=>setIsLeaderboardModalOpen(false)} entry={editingLeaderboardEntry} setEntry={setEditingLeaderboardEntry} onUpdate={handleUpdateLeaderboardEntry} bossPool={bossPool} guilds={guilds} allUsers={allUsers} mode={leaderboardModalMode} />}
+      <ConfirmationModal isOpen={deleteConf.isOpen} onClose={()=>setDeleteConf({...deleteConf, isOpen: false})} onConfirm={deleteConf.action} title={deleteConf.title} message={deleteConf.message} />
     </div>
   );
 };
