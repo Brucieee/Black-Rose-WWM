@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock } from 'lucide-react';
+import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig } from '../types';
+import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
+import { RichText } from '../components/RichText';
+import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
 
 const { Link, useNavigate } = ReactRouterDOM as any;
 
@@ -20,10 +22,12 @@ const Dashboard: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [globalAnnouncements, setGlobalAnnouncements] = useState<Announcement[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   const [breakingArmyConfig, setBreakingArmyConfig] = useState<BreakingArmyConfig | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [selectedLeaderboardUser, setSelectedLeaderboardUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -37,7 +41,7 @@ const Dashboard: React.FC = () => {
     const unsubEvents = db.collection("events")
       .orderBy("date", "asc")
       .onSnapshot(snap => {
-        // Filter client side for future events to avoid complex compound queries
+        // Filter client side for future events
         const now = new Date();
         const futureEvents = snap.docs
             .map(d => ({id: d.id, ...d.data()} as GuildEvent))
@@ -76,8 +80,17 @@ const Dashboard: React.FC = () => {
         setUsers(snap.docs.map(d => d.data() as UserProfile));
     });
 
+    // Fetch Global Announcements
+    const unsubAnnouncements = db.collection("announcements")
+      .where("isGlobal", "==", true)
+      .orderBy("timestamp", "desc")
+      .limit(5)
+      .onSnapshot(snap => {
+         setGlobalAnnouncements(snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement)));
+      });
+
     return () => {
-        unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers();
+        unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers(); unsubAnnouncements();
     };
   }, []);
 
@@ -94,6 +107,8 @@ const Dashboard: React.FC = () => {
   const currentBoss = currentBossName ? breakingArmyConfig?.bossPool.find(b => b.name === currentBossName) : null;
   const guildQueue = queue.filter(q => q.guildId === userGuildId);
   const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId && !w.prizeGiven) || false) : false;
+
+  const isAdmin = currentUserProfile?.systemRole === 'Admin';
 
   const handleJoinQueue = async () => {
     if (!currentUserProfile) {
@@ -122,7 +137,7 @@ const Dashboard: React.FC = () => {
             name: currentUserProfile.displayName,
             role: currentUserProfile.role,
             guildId: userGuildId,
-            joinedAt: new Date() // Store as Date object or Timestamp
+            joinedAt: new Date()
         });
         showAlert("Joined queue successfully!", 'success');
     } catch (err: any) {
@@ -139,6 +154,33 @@ const Dashboard: React.FC = () => {
   const handleProfileClick = (uid: string) => {
       const user = users.find(u => u.uid === uid);
       if (user) setSelectedLeaderboardUser(user);
+  };
+
+  const handleMentionClick = (name: string) => {
+      // Find user by display name
+      const targetUser = users.find(u => u.displayName.toLowerCase() === name.toLowerCase());
+      if (targetUser) {
+          setSelectedLeaderboardUser(targetUser);
+      }
+  };
+
+  const handlePostGlobalAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
+      if (!currentUserProfile) return;
+      try {
+        const newAnnouncement = {
+          title,
+          content,
+          authorId: currentUserProfile.uid,
+          authorName: currentUserProfile.displayName,
+          guildId: 'global',
+          timestamp: new Date().toISOString(),
+          isGlobal: true
+        };
+        await db.collection("announcements").add(newAnnouncement);
+        showAlert("Global announcement posted!", 'success');
+      } catch (err: any) {
+        showAlert(`Error posting: ${err.message}`, 'error');
+      }
   };
 
   return (
@@ -200,6 +242,42 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* Global Announcements */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Globe className="text-blue-500" /> Global Announcements
+                    </h3>
+                    {isAdmin && (
+                        <button 
+                            onClick={() => setIsAnnouncementModalOpen(true)}
+                            className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 font-medium transition-colors"
+                        >
+                            + Post News
+                        </button>
+                    )}
+                </div>
+                
+                {globalAnnouncements.length === 0 ? (
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4">No global announcements.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {globalAnnouncements.map(ann => (
+                            <div key={ann.id} className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                <div className="flex justify-between items-start mb-1">
+                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
+                                    <span className="text-xs text-zinc-400">{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                </div>
+                                <RichText text={ann.content} className="text-sm text-zinc-600 dark:text-zinc-400 mt-2" onMentionClick={handleMentionClick} />
+                                <div className="mt-2 text-xs text-zinc-400 italic flex justify-end">
+                                    <span className="cursor-pointer hover:text-rose-500" onClick={() => handleMentionClick(ann.authorName)}>- {ann.authorName}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Recent Events */}
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
                 <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
@@ -221,6 +299,7 @@ const Dashboard: React.FC = () => {
                                     <div className="flex gap-2 mt-2">
                                         <span className="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded font-medium">{event.type}</span>
                                         <span className="text-xs text-zinc-400 flex items-center gap-1"><Clock size={12} /> {new Date(event.date).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}</span>
+                                        <span className="text-xs text-zinc-400">• {guilds.find(g => g.id === event.guildId)?.name || 'Global'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -254,7 +333,7 @@ const Dashboard: React.FC = () => {
                                 }`}>{idx + 1}</span>
                                 <div>
                                     <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{entry.playerName}</p>
-                                    <p className="text-xs text-zinc-500">{entry.boss}</p>
+                                    <p className="text-xs text-zinc-500">{entry.boss} <span className="text-zinc-300 mx-1">•</span> {entry.branch}</p>
                                 </div>
                             </div>
                             <span className="font-mono text-sm font-bold text-rose-900 dark:text-rose-500">{entry.time}</span>
@@ -295,6 +374,14 @@ const Dashboard: React.FC = () => {
         isCooldown={isCooldown}
         onJoin={handleJoinQueue}
         onLeave={handleLeaveQueue}
+      />
+
+      <CreateAnnouncementModal 
+        isOpen={isAnnouncementModalOpen}
+        onClose={() => setIsAnnouncementModalOpen(false)}
+        onSubmit={handlePostGlobalAnnouncement}
+        userProfile={currentUserProfile}
+        forceGlobal={true}
       />
 
       <UserProfileModal 

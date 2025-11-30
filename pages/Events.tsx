@@ -1,8 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { db } from '../services/firebase';
 import { GuildEvent, Guild } from '../types';
+import { RichText } from '../components/RichText';
 
 const Events: React.FC = () => {
   const [events, setEvents] = useState<GuildEvent[]>([]);
@@ -72,9 +74,7 @@ const Events: React.FC = () => {
                       </span>
                     </div>
                     <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
-                    <p className="text-zinc-600 dark:text-zinc-400 text-sm whitespace-pre-wrap break-all min-w-0 leading-relaxed">
-                      {event.description}
-                    </p>
+                    <RichText text={event.description} className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed" />
                   </div>
 
                   {/* Time / Action */}

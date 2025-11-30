@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Party, RoleType, Guild, GuildEvent, UserProfile } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut } from 'lucide-react';
+import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement } from '../types';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
+import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
+import { RichText } from '../components/RichText';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -35,7 +37,9 @@ const GuildDashboard: React.FC = () => {
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [events, setEvents] = useState<GuildEvent[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   const [newPartyData, setNewPartyData] = useState({
@@ -113,8 +117,16 @@ const GuildDashboard: React.FC = () => {
     const unsubUsersCount = qUsersInGuild.onSnapshot(snapshot => setMemberCount(snapshot.size));
 
     const unsubEvents = db.collection("events").onSnapshot(snapshot => setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as GuildEvent)));
+    
+    // Fetch Announcements for this guild
+    const unsubAnnouncements = db.collection("announcements")
+      .where("guildId", "==", guildId)
+      .orderBy("timestamp", "desc")
+      .onSnapshot(snap => {
+        setAnnouncements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement)));
+      });
 
-    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); };
+    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); };
   }, [guildId, currentUser]);
 
   useEffect(() => {
@@ -156,7 +168,19 @@ const GuildDashboard: React.FC = () => {
   
   const isUserInAnyParty = allUsers.length > 0 && parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
-  const branchEvents = events.filter(e => e.guildId === guildId || !e.guildId || e.guildId === '');
+  const canPostAnnouncement = currentUserProfile && (currentUserProfile.systemRole === 'Admin' || (currentUserProfile.systemRole === 'Officer' && currentUserProfile.guildId === guildId));
+  
+  // Filter events: Must match guildId OR be global (empty), AND must be in the future (or today)
+  const now = new Date();
+  // Reset time to start of day for comparison to show events happening today
+  now.setHours(0,0,0,0); 
+
+  const branchEvents = events.filter(e => {
+      const isCorrectBranch = e.guildId === guildId || !e.guildId || e.guildId === '';
+      const eventDate = new Date(e.date);
+      return isCorrectBranch && eventDate >= now;
+  });
+  
   const onlineMembers = allUsers.filter(u => u.guildId === guildId && isUserOnline(u));
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
@@ -198,6 +222,37 @@ const GuildDashboard: React.FC = () => {
         showAlert("Party created!", 'success');
     } catch (error: any) {
         showAlert(`Failed to create party: ${error.message}`, 'error');
+    }
+  };
+
+  const handlePostAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
+    if (!currentUserProfile) return;
+    try {
+      // Force local guild ID if not global, to ensure it doesn't leak
+      const targetGuildId = isGlobal ? 'global' : guildId;
+      
+      const newAnnouncement = {
+        title,
+        content,
+        authorId: currentUserProfile.uid,
+        authorName: currentUserProfile.displayName,
+        guildId: targetGuildId,
+        timestamp: new Date().toISOString(),
+        isGlobal
+      };
+      await db.collection("announcements").add(newAnnouncement);
+      showAlert("Announcement posted!", 'success');
+    } catch (err: any) {
+      showAlert(`Error posting announcement: ${err.message}`, 'error');
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    try {
+      await db.collection("announcements").doc(id).delete();
+      showAlert("Announcement deleted.", 'info');
+    } catch(err: any) {
+      showAlert(`Error deleting: ${err.message}`, 'error');
     }
   };
 
@@ -283,6 +338,16 @@ const GuildDashboard: React.FC = () => {
     );
   };
 
+  const handleMentionClick = (name: string) => {
+      // Find user by display name
+      const targetUser = allUsers.find(u => u.displayName.toLowerCase() === name.toLowerCase());
+      if (targetUser) {
+          setSelectedUser(targetUser);
+      } else {
+          showAlert(`User '${name}' not found.`, 'info');
+      }
+  };
+
   if (loading) return <div className="p-8 text-center text-zinc-500">Loading Guild Data...</div>;
   if (!guild) return <div className="p-8 text-center text-red-500 font-bold">Guild Branch Not Found (ID: {guildId})</div>;
 
@@ -305,7 +370,7 @@ const GuildDashboard: React.FC = () => {
            <div className="flex-1">
               <h3 className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-2 mb-2"><Calendar size={16} /> Branch Events</h3>
               {branchEvents.length === 0 ? (
-                <p className="text-xs text-zinc-400">No events.</p>
+                <p className="text-xs text-zinc-400">No upcoming events.</p>
               ) : (
                 <div className="space-y-2">
                   {branchEvents.map(event => (
@@ -315,7 +380,7 @@ const GuildDashboard: React.FC = () => {
                             <span className="text-[10px] font-bold text-zinc-500 uppercase">{event.type}</span>
                         </div>
                         <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200 mt-1 truncate">{event.title}</h4>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1 break-all whitespace-pre-wrap min-w-0">{event.description}</p>
+                        <RichText text={event.description} className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1 break-all whitespace-pre-wrap min-w-0" />
                     </Link>
                   ))}
                 </div>
@@ -325,7 +390,7 @@ const GuildDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Online Members */}
           <div>
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
@@ -337,7 +402,7 @@ const GuildDashboard: React.FC = () => {
                     <span className="text-zinc-500 text-sm">No members online.</span>
                 ) : (
                     onlineMembers.map(u => (
-                        <div key={u.uid} className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 pr-3 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700" title={u.role}>
+                        <div key={u.uid} className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 pr-3 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors" title={u.role} onClick={() => setSelectedUser(u)}>
                             <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 object-cover" alt={u.displayName} />
                             <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{u.displayName}</span>
                         </div>
@@ -457,6 +522,65 @@ const GuildDashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Right Column: Announcements */}
+        <div className="space-y-6">
+           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <Megaphone className="text-rose-900 dark:text-rose-500" size={20} /> Announcements
+                  </h3>
+                  {canPostAnnouncement && (
+                      <button 
+                        onClick={() => setIsAnnouncementModalOpen(true)}
+                        className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 font-medium transition-colors"
+                      >
+                          + Post
+                      </button>
+                  )}
+              </div>
+              <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                  {announcements.length === 0 ? (
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4">No announcements.</p>
+                  ) : (
+                      announcements.map(ann => {
+                          // Allow delete if: Admin, or Officer of this guild, or original author
+                          const canDelete = currentUserProfile?.systemRole === 'Admin' || 
+                                          (currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId) ||
+                                          currentUser?.uid === ann.authorId;
+                          
+                          return (
+                              <div key={ann.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 relative group">
+                                  <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
+                                  <div className="text-xs text-zinc-400 mb-2 flex justify-between">
+                                      <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                      <button 
+                                        className="hover:text-rose-600 hover:underline cursor-pointer"
+                                        onClick={() => handleMentionClick(ann.authorName)}
+                                      >
+                                        {ann.authorName}
+                                      </button>
+                                  </div>
+                                  <RichText 
+                                    text={ann.content} 
+                                    className="text-sm text-zinc-600 dark:text-zinc-400" 
+                                    onMentionClick={handleMentionClick}
+                                  />
+                                  {canDelete && (
+                                      <button 
+                                        onClick={() => openDeleteModal("Delete Announcement?", "Are you sure you want to delete this?", () => handleDeleteAnnouncement(ann.id))}
+                                        className="absolute top-2 right-2 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      >
+                                          <Trash2 size={14} />
+                                      </button>
+                                  )}
+                              </div>
+                          );
+                      })
+                  )}
+              </div>
+           </div>
+        </div>
       </div>
       
       <CreatePartyModal 
@@ -465,6 +589,13 @@ const GuildDashboard: React.FC = () => {
         onSubmit={handleCreateParty}
         data={newPartyData}
         onChange={setNewPartyData}
+      />
+
+      <CreateAnnouncementModal 
+        isOpen={isAnnouncementModalOpen}
+        onClose={() => setIsAnnouncementModalOpen(false)}
+        onSubmit={handlePostAnnouncement}
+        userProfile={currentUserProfile}
       />
 
       <ConfirmationModal

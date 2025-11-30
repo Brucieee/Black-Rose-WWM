@@ -61,6 +61,17 @@ export interface GuildEvent {
   type: 'Raid' | 'PvP' | 'Social' | 'Meeting';
 }
 
+export interface Announcement {
+  id: string;
+  guildId: string; // 'global' for main dashboard, or specific guild ID
+  authorId: string;
+  authorName: string;
+  title: string;
+  content: string;
+  timestamp: string;
+  isGlobal: boolean;
+}
+
 export interface Party {
   id: string;
   guildId: string;

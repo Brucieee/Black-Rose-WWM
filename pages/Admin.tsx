@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, Check, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, Gift, CheckCircle, Search, User, ListOrdered, Plane, Settings, Swords, Users, Shield } from 'lucide-react';
-import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest } from '../types';
+import { Plus, Trash2, Calendar, Database, Crown, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, User, ListOrdered, Plane, Settings, Shield, Megaphone, ArrowLeft, ArrowRight, GripHorizontal } from 'lucide-react';
+import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -11,20 +10,26 @@ import { CreateGuildModal } from '../components/modals/CreateGuildModal';
 import { DeclareWinnerModal } from '../components/modals/DeclareWinnerModal';
 import { EditLeaderboardModal } from '../components/modals/EditLeaderboardModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
-import { SearchableUserSelect } from '../components/SearchableUserSelect';
+import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
+import { RichText } from '../components/RichText';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'guilds' | 'events' | 'breakingArmy' | 'leaderboard' | 'winnerLogs' | 'users' | 'leaves'>('guilds');
-  
+  // Tab Management
+  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'leaderboard', 'winnerLogs', 'users', 'leaves'];
+  const [tabOrder, setTabOrder] = useState<string[]>(defaultTabs);
+  const [activeTab, setActiveTab] = useState<string>('guilds');
+  const [isReorderMode, setIsReorderMode] = useState(false);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGuildData, setNewGuildData] = useState({ name: '', id: '', memberCap: 80});
   
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [events, setEvents] = useState<GuildEvent[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [winnerLogs, setWinnerLogs] = useState<WinnerLog[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -46,6 +51,9 @@ const Admin: React.FC = () => {
   const [eventForm, setEventForm] = useState<Partial<GuildEvent>>({
     title: '', description: '', type: 'Raid', date: '', guildId: ''
   });
+
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
 
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
   const [selectedWinner, setSelectedWinner] = useState<QueueEntry | null>(null);
@@ -73,6 +81,23 @@ const Admin: React.FC = () => {
   const isOfficer = userProfile?.systemRole === 'Officer';
 
   useEffect(() => {
+    // Load tab order preference
+    const savedOrder = localStorage.getItem('adminTabOrder');
+    if (savedOrder) {
+      try {
+        const parsed = JSON.parse(savedOrder);
+        // Basic validation to ensure we have valid tabs
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            setTabOrder(parsed);
+            if (!parsed.includes(activeTab)) setActiveTab(parsed[0]);
+        }
+      } catch (e) {
+        console.error("Failed to parse tab order", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (currentUser) {
         const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot((docSnap) => {
             if (docSnap.exists) {
@@ -82,6 +107,8 @@ const Admin: React.FC = () => {
                 // If officer, automatically select their branch and don't allow changing
                 if (profile.systemRole === 'Officer') {
                     setSelectedBranchId(profile.guildId);
+                    // Also preset event form guild ID
+                    setEventForm(prev => ({...prev, guildId: profile.guildId}));
                 }
             }
         });
@@ -101,6 +128,10 @@ const Admin: React.FC = () => {
 
     const unsubEvents = db.collection("events").onSnapshot(snap => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as GuildEvent)));
+    });
+
+    const unsubAnnouncements = db.collection("announcements").orderBy("timestamp", "desc").onSnapshot(snap => {
+        setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement)));
     });
 
     const unsubLeaderboard = db.collection("leaderboard").orderBy("time", "asc").onSnapshot(snap => {
@@ -134,7 +165,7 @@ const Admin: React.FC = () => {
     });
 
     return () => {
-      unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves();
+      unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves(); unsubAnnouncements();
     };
   }, [isAdmin, selectedBranchId]);
 
@@ -144,6 +175,32 @@ const Admin: React.FC = () => {
   if (!isAdmin && !isOfficer) {
     return <div className="p-8">Access Denied. You do not have permission to view this page.</div>;
   }
+
+  // --- TAB SORTING ---
+  const handleMoveTab = (index: number, direction: 'left' | 'right') => {
+    const newOrder = [...tabOrder];
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    
+    if (targetIndex >= 0 && targetIndex < newOrder.length) {
+      [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
+      setTabOrder(newOrder);
+      localStorage.setItem('adminTabOrder', JSON.stringify(newOrder));
+    }
+  };
+
+  const getTabLabel = (key: string) => {
+    switch (key) {
+      case 'guilds': return 'Guild Branches';
+      case 'events': return 'Events';
+      case 'announcements': return 'Global Announcements';
+      case 'breakingArmy': return 'Breaking Army';
+      case 'leaderboard': return 'Leaderboard';
+      case 'winnerLogs': return 'Winner Logs';
+      case 'users': return 'Users';
+      case 'leaves': return 'Leaves';
+      default: return key;
+    }
+  };
 
   // GUILD LOGIC
   const handleInitializeSystem = async () => {
@@ -208,6 +265,10 @@ const Admin: React.FC = () => {
   // EVENT LOGIC
   const handleSaveEvent = async (e: React.FormEvent) => {
       e.preventDefault();
+      if (isOfficer && eventForm.guildId !== userProfile.guildId) {
+          showAlert("You can only create events for your own branch.", 'error');
+          return;
+      }
       try {
           if (editingEventId) {
               await db.collection("events").doc(editingEventId).update(eventForm);
@@ -217,17 +278,12 @@ const Admin: React.FC = () => {
               showAlert("Event scheduled!", 'success');
           }
           setEditingEventId(null);
-          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: '' });
+          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '' });
       } catch (err: any) {
           showAlert(err.message, 'error');
       }
   };
 
-  const handleEditEvent = (event: GuildEvent) => {
-      setEditingEventId(event.id);
-      setEventForm(event);
-  };
-  
   const handleDeleteEvent = async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       e.preventDefault();
@@ -237,6 +293,50 @@ const Admin: React.FC = () => {
         showAlert("Event deleted.", 'success');
       } catch (error: any) {
         showAlert(`Failed to delete event: ${error.message}`, 'error');
+      }
+  };
+  
+  const handleEditEvent = (event: GuildEvent) => {
+    setEditingEventId(event.id);
+    setEventForm({
+        title: event.title,
+        description: event.description,
+        type: event.type,
+        date: event.date,
+        guildId: event.guildId || ''
+    });
+  };
+
+  // ANNOUNCEMENT LOGIC
+  const handleSaveAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
+      try {
+          if (editingAnnouncement) {
+              await db.collection("announcements").doc(editingAnnouncement.id).update({
+                  title, content, isGlobal
+              });
+              showAlert("Announcement updated!", 'success');
+          } else {
+              await db.collection("announcements").add({
+                  title, content, isGlobal,
+                  authorId: userProfile.uid,
+                  authorName: userProfile.displayName,
+                  timestamp: new Date().toISOString(),
+                  guildId: isGlobal ? 'global' : 'global' // Admin tab is for Global mainly
+              });
+              showAlert("Announcement posted!", 'success');
+          }
+          setEditingAnnouncement(null);
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+      try {
+          await db.collection("announcements").doc(id).delete();
+          showAlert("Announcement deleted.", 'success');
+      } catch (err: any) {
+          showAlert(err.message, 'error');
       }
   };
 
@@ -306,7 +406,6 @@ const Admin: React.FC = () => {
       if (!selectedWinner) return;
 
       const batch = db.batch();
-      
       const newEntry = {
         playerName: selectedWinner.name,
         playerUid: selectedWinner.uid,
@@ -316,17 +415,9 @@ const Admin: React.FC = () => {
         date: new Date().toISOString(),
         status: 'verified'
       };
-
-      // Add to competitive leaderboard
       batch.set(db.collection("leaderboard").doc(), newEntry);
-      
-      // Add to historical winner logs
       batch.set(db.collection("winner_logs").doc(), newEntry);
-      
-      // Remove from queue
       batch.delete(db.collection("queue").doc(selectedWinner.uid));
-
-      // Add to cooldown
       const newWinnerEntry: CooldownEntry = {
           uid: selectedWinner.uid,
           branchId: selectedWinner.guildId,
@@ -334,7 +425,6 @@ const Admin: React.FC = () => {
           prizeGiven: false
       };
       batch.set(configRef, { recentWinners: firebase.firestore.FieldValue.arrayUnion(newWinnerEntry) }, { merge: true });
-      
       await batch.commit();
       
       setIsWinnerModalOpen(false);
@@ -436,7 +526,6 @@ const Admin: React.FC = () => {
   );
 
   const filteredLeaves = leaves.filter(l => 
-      // If Admin, show what is selected in filter. If Officer, force show their own guild.
       isOfficer ? l.guildId === userProfile.guildId : (leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter)
   );
 
@@ -453,13 +542,19 @@ const Admin: React.FC = () => {
     setDeleteConf({ isOpen: true, title, message, action });
   };
 
-  // --- STYLES ---
   const inputClass = "w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-zinc-900 dark:text-zinc-100 transition-all text-sm";
   const labelClass = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
   const cardClass = "bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden";
   const tableHeaderClass = "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 uppercase text-xs font-bold px-4 py-3 text-left border-b border-zinc-200 dark:border-zinc-700";
   const tableCellClass = "px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800";
   const tableRowClass = "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors";
+
+  // Filter tabs based on role
+  const availableTabs = tabOrder.filter(tab => {
+      if (isAdmin) return true;
+      if (isOfficer) return ['events', 'breakingArmy', 'leaves'].includes(tab);
+      return false;
+  });
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -481,35 +576,51 @@ const Admin: React.FC = () => {
       </div>
 
       {/* Navigation Pills */}
-      <div className="flex overflow-x-auto pb-2 scrollbar-hide">
-        <div className="flex space-x-1 bg-zinc-100 dark:bg-zinc-800/50 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
-            {isAdmin && (
-                <button onClick={() => setActiveTab('guilds')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'guilds' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                    Guild Branches
-                </button>
-            )}
-            <button onClick={() => setActiveTab('events')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'events' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                Events
+      <div className="flex items-center gap-2">
+        {isAdmin && (
+            <button 
+                onClick={() => setIsReorderMode(!isReorderMode)}
+                className={`p-2 rounded-lg transition-colors ${isReorderMode ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
+                title="Configure Tabs"
+            >
+                <Settings size={18} />
             </button>
-            <button onClick={() => setActiveTab('breakingArmy')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'breakingArmy' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                Breaking Army
-            </button>
-            {isAdmin && (
-                <>
-                    <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'leaderboard' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                        Leaderboard
-                    </button>
-                    <button onClick={() => setActiveTab('winnerLogs')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'winnerLogs' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                        Winner Logs
-                    </button>
-                    <button onClick={() => setActiveTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'users' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                        Users
-                    </button>
-                </>
-            )}
-            <button onClick={() => setActiveTab('leaves')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'leaves' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-                Leaves
-            </button>
+        )}
+        <div className="flex overflow-x-auto pb-2 scrollbar-hide flex-1">
+            <div className="flex space-x-1 bg-zinc-100 dark:bg-zinc-800/50 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
+                {availableTabs.map((tabKey, index) => (
+                    <div key={tabKey} className="flex items-center">
+                        {isReorderMode && isAdmin && (
+                             <button 
+                                onClick={() => handleMoveTab(index, 'left')} 
+                                disabled={index === 0}
+                                className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30"
+                             >
+                                <ArrowLeft size={10} />
+                             </button>
+                        )}
+                        <button 
+                            onClick={() => setActiveTab(tabKey)} 
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                                activeTab === tabKey 
+                                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' 
+                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                            }`}
+                        >
+                            {getTabLabel(tabKey)}
+                        </button>
+                        {isReorderMode && isAdmin && (
+                             <button 
+                                onClick={() => handleMoveTab(index, 'right')} 
+                                disabled={index === availableTabs.length - 1}
+                                className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30"
+                             >
+                                <ArrowRight size={10} />
+                             </button>
+                        )}
+                    </div>
+                ))}
+            </div>
         </div>
       </div>
 
@@ -573,6 +684,71 @@ const Admin: React.FC = () => {
         </div>
       )}
 
+      {/* --- ANNOUNCEMENTS TAB --- */}
+      {activeTab === 'announcements' && isAdmin && (
+          <div className={cardClass}>
+              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <Megaphone size={20} className="text-blue-500" /> Global Announcements
+                  </h2>
+                  <button 
+                      onClick={() => { setEditingAnnouncement(null); setIsAnnouncementModalOpen(true); }}
+                      className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                  >
+                      <Plus size={16}/> Create New
+                  </button>
+              </div>
+              <div className="overflow-x-auto">
+                  <table className="w-full">
+                      <thead>
+                          <tr>
+                              <th className={tableHeaderClass}>Title</th>
+                              <th className={tableHeaderClass}>Author</th>
+                              <th className={tableHeaderClass}>Date</th>
+                              <th className={tableHeaderClass}>Content Preview</th>
+                              <th className={`${tableHeaderClass} text-right`}>Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {announcements.filter(a => a.isGlobal).map(a => (
+                              <tr key={a.id} className={tableRowClass}>
+                                  <td className={tableCellClass}>
+                                      <span className="font-bold text-zinc-900 dark:text-zinc-100">{a.title}</span>
+                                  </td>
+                                  <td className={tableCellClass}>{a.authorName}</td>
+                                  <td className={tableCellClass}>{new Date(a.timestamp).toLocaleDateString()}</td>
+                                  <td className={tableCellClass}>
+                                      <span className="text-zinc-500 dark:text-zinc-400 truncate max-w-[200px] block">{a.content}</span>
+                                  </td>
+                                  <td className={`${tableCellClass} text-right`}>
+                                      <div className="flex justify-end gap-2">
+                                          <button 
+                                              type="button" 
+                                              onClick={() => { setEditingAnnouncement(a); setIsAnnouncementModalOpen(true); }} 
+                                              className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                                          >
+                                              <Edit size={16}/>
+                                          </button>
+                                          <button 
+                                              type="button" 
+                                              onClick={() => openDeleteModal("Delete Announcement?", `Delete "${a.title}"?`, () => handleDeleteAnnouncement(a.id))} 
+                                              className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                          >
+                                              <Trash2 size={16}/>
+                                          </button>
+                                      </div>
+                                  </td>
+                              </tr>
+                          ))}
+                          {announcements.filter(a => a.isGlobal).length === 0 && (
+                              <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">No global announcements.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
+
       {/* --- EVENTS TAB --- */}
       {activeTab === 'events' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -604,19 +780,25 @@ const Admin: React.FC = () => {
                     <div>
                         <label className={labelClass}>Branch</label>
                         {isOfficer ? (
-                            <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className={inputClass}>
+                            // Officer: Locked to their own branch
+                            <select 
+                                value={eventForm.guildId} 
+                                disabled
+                                className={`${inputClass} opacity-70 cursor-not-allowed`}
+                            >
                                 <option value={userProfile.guildId}>{guilds.find(g => g.id === userProfile.guildId)?.name}</option>
-                                <option value="">Global (All Branches)</option>
                             </select>
                         ) : (
+                            // Admin: Can choose any branch or Global
                             <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className={inputClass}>
                                 <option value="">Global (All Branches)</option>
                                 {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                             </select>
                         )}
+                        {isOfficer && <p className="text-xs text-zinc-400 mt-1">Officers can only schedule events for their branch.</p>}
                     </div>
                     <div className="pt-2 flex gap-3">
-                        {editingEventId && <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '' }); }} className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium">Cancel</button>}
+                        {editingEventId && <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '' }); }} className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium">Cancel</button>}
                         <button type="submit" className="flex-1 bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg font-medium shadow-lg shadow-rose-900/20 transition-all">{editingEventId ? 'Update Event' : 'Create Event'}</button>
                     </div>
                 </form>
@@ -960,8 +1142,8 @@ const Admin: React.FC = () => {
                     <User size={20} className="text-zinc-500" /> User Database
                 </h3>
                 <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
-                    <input type="text" placeholder="Search by name or ID..." value={userSearch} onChange={e=>setUserSearch(e.target.value)} className={`${inputClass} pl-10`} />
+                    {/* Search logic here */}
+                    <input type="text" placeholder="Search by name or ID..." value={userSearch} onChange={e=>setUserSearch(e.target.value)} className={`${inputClass} pl-4`} />
                 </div>
             </div>
             <div className="overflow-x-auto">
@@ -1057,6 +1239,7 @@ const Admin: React.FC = () => {
 
       {/* Modals */}
       <CreateGuildModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateGuild} data={newGuildData} onChange={setNewGuildData} />
+      <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} onSubmit={handleSaveAnnouncement} userProfile={userProfile} forceGlobal={true} initialData={editingAnnouncement} />
       <DeclareWinnerModal isOpen={isWinnerModalOpen} onClose={()=>setIsWinnerModalOpen(false)} winnerName={selectedWinner?.name || ''} time={winnerTime} onTimeChange={setWinnerTime} onConfirm={handleConfirmWinner} />
       {editingLeaderboardEntry && <EditLeaderboardModal isOpen={isLeaderboardModalOpen} onClose={()=>setIsLeaderboardModalOpen(false)} entry={editingLeaderboardEntry} setEntry={setEditingLeaderboardEntry} onUpdate={handleUpdateLeaderboardEntry} bossPool={bossPool} guilds={guilds} allUsers={allUsers} mode={leaderboardModalMode} />}
       <ConfirmationModal isOpen={deleteConf.isOpen} onClose={()=>setDeleteConf({...deleteConf, isOpen: false})} onConfirm={deleteConf.action} title={deleteConf.title} message={deleteConf.message} />

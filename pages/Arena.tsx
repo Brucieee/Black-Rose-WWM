@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move } from 'lucide-react';
+import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2 } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,6 +66,16 @@ const Arena: React.FC = () => {
     return uids;
   }, [matches]);
 
+  // Current User Match Info
+  const myActiveMatch = matches.find(m => 
+    !m.winner && 
+    ((m.player1?.uid === currentUser?.uid) || (m.player2?.uid === currentUser?.uid))
+  );
+
+  const opponent = myActiveMatch 
+    ? (myActiveMatch.player1?.uid === currentUser?.uid ? myActiveMatch.player2 : myActiveMatch.player1)
+    : null;
+
   useEffect(() => {
     // Fetch Guilds
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
@@ -124,7 +133,6 @@ const Arena: React.FC = () => {
     }
     setIsDragging(true);
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-    // e.preventDefault(); // Optional: helps prevent text selection but might interfere with other interactions
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -304,6 +312,47 @@ const Arena: React.FC = () => {
     } catch (err: any) {
       showAlert(`Error leaving arena: ${err.message}`, 'error');
     }
+  };
+
+  const handleRemoveParticipant = async (uid: string, name: string) => {
+      setConfModal({
+          isOpen: true,
+          title: "Remove Participant?",
+          message: `Are you sure you want to remove ${name} from the arena? This will also remove them from any active brackets.`,
+          action: async () => {
+              const batch = db.batch();
+              
+              // 1. Delete participant record
+              batch.delete(db.collection("arena_participants").doc(uid));
+
+              // 2. Remove from matches if assigned
+              matches.forEach(m => {
+                  let updateNeeded = false;
+                  const updateData: any = {};
+                  if (m.player1?.uid === uid) {
+                      updateData.player1 = null;
+                      updateData.winner = null; // Reset winner if a player is removed
+                      updateNeeded = true;
+                  }
+                  if (m.player2?.uid === uid) {
+                      updateData.player2 = null;
+                      updateData.winner = null;
+                      updateNeeded = true;
+                  }
+                  if (m.winner?.uid === uid) {
+                      updateData.winner = null;
+                      updateNeeded = true;
+                  }
+
+                  if (updateNeeded) {
+                      batch.update(db.collection("arena_matches").doc(m.id), updateData);
+                  }
+              });
+
+              await batch.commit();
+              showAlert(`${name} has been removed.`, 'success');
+          }
+      });
   };
 
   const handleApprove = async (uid: string) => {
@@ -602,6 +651,60 @@ const Arena: React.FC = () => {
         </div>
       </div>
 
+      {/* --- Current Matchup Banner --- */}
+      {myActiveMatch && (
+        <div className="mb-6 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 p-6 rounded-xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-4 opacity-10">
+                 <Swords size={120} className="text-rose-900" />
+             </div>
+             <div className="relative z-10">
+                 <h3 className="text-sm font-bold text-rose-700 dark:text-rose-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                     Current Matchup - Round {myActiveMatch.round}
+                 </h3>
+                 <div className="flex items-center gap-8 md:gap-16">
+                     {/* YOU */}
+                     <div className="flex items-center gap-4">
+                         <div className="relative">
+                            <img src={currentUserParticipant?.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-800 shadow-lg object-cover" />
+                            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">YOU</span>
+                         </div>
+                         <div>
+                             <h4 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{currentUserParticipant?.displayName}</h4>
+                             <p className="text-xs text-zinc-500">{currentUserParticipant?.activityPoints} pts</p>
+                         </div>
+                     </div>
+
+                     <div className="text-2xl font-black text-zinc-300 dark:text-zinc-700 italic">VS</div>
+
+                     {/* OPPONENT */}
+                     {opponent ? (
+                         <div className="flex items-center gap-4">
+                            <div className="text-right">
+                                <h4 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{opponent.displayName}</h4>
+                                <p className="text-xs text-zinc-500">{opponent.activityPoints} pts</p>
+                            </div>
+                            <div className="relative">
+                                <img src={opponent.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-rose-100 dark:border-rose-900/30 shadow-lg object-cover" />
+                                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-rose-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ENEMY</span>
+                            </div>
+                         </div>
+                     ) : (
+                         <div className="flex items-center gap-4 opacity-50">
+                             <div className="text-right">
+                                 <h4 className="text-xl font-bold text-zinc-500 dark:text-zinc-400 italic">Waiting...</h4>
+                                 <p className="text-xs text-zinc-500">TBD</p>
+                             </div>
+                             <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center border-4 border-dashed border-zinc-300 dark:border-zinc-700">
+                                 <Users size={24} className="text-zinc-400" />
+                             </div>
+                         </div>
+                     )}
+                 </div>
+             </div>
+        </div>
+      )}
+
       <div className="flex flex-1 gap-6 overflow-hidden">
         {/* Left Sidebar: Participants */}
         <div className="w-80 flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex-shrink-0 z-10">
@@ -654,7 +757,7 @@ const Arena: React.FC = () => {
                             key={p.uid}
                             draggable={canDrag}
                             onDragStart={(e) => handleDragStart(e, p)}
-                            className={`flex items-center gap-3 p-2 rounded-lg border transition-all ${
+                            className={`flex items-center gap-3 p-2 rounded-lg border transition-all group ${
                                 isAssigned 
                                   ? 'bg-zinc-50 dark:bg-zinc-800 opacity-50 border-transparent' 
                                   : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-rose-900 shadow-sm'
@@ -675,6 +778,15 @@ const Arena: React.FC = () => {
                                     )}
                                 </div>
                             </div>
+                            {canManage && (
+                                <button 
+                                    onClick={() => handleRemoveParticipant(p.uid, p.displayName)}
+                                    className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Remove Participant"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
                         </div>
                     );
                 })}
