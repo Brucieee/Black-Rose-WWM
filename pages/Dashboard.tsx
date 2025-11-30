@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter } from 'lucide-react';
+import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -114,6 +114,18 @@ const Dashboard: React.FC = () => {
   const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId && !w.prizeGiven) || false) : false;
 
   const isAdmin = currentUserProfile?.systemRole === 'Admin';
+  
+  // Calculate Queue Position
+  const myQueueIndex = currentUserProfile ? guildQueue.findIndex(q => q.uid === currentUserProfile.uid) : -1;
+  const myQueuePosition = myQueueIndex !== -1 ? myQueueIndex + 1 : null;
+
+  // Recent Winner for this branch
+  const recentWinnerEntry = breakingArmyConfig?.recentWinners
+    ?.filter(w => w.branchId === userGuildId)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+  
+  const recentWinnerProfile = recentWinnerEntry ? users.find(u => u.uid === recentWinnerEntry.uid) : null;
+
 
   const handleJoinQueue = async () => {
     if (!currentUserProfile) {
@@ -224,6 +236,45 @@ const Dashboard: React.FC = () => {
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
             
+            {/* Winner Banner */}
+            {recentWinnerProfile && (
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
+                    <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
+                        {/* Background particles/glow */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
+                            <div className="relative group cursor-pointer" onClick={() => handleProfileClick(recentWinnerProfile.uid)}>
+                                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
+                                <img 
+                                    src={recentWinnerProfile.photoURL || 'https://via.placeholder.com/150'} 
+                                    className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
+                                    alt="Winner"
+                                />
+                                <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
+                                    #1
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
+                                    <Trophy size={14} /> Reigning Champion
+                                </h3>
+                                <h2 className="text-3xl font-black text-white uppercase tracking-tight">
+                                    {recentWinnerProfile.displayName}
+                                </h2>
+                                <p className="text-zinc-400 text-sm mt-1">
+                                    Defeated {currentBoss?.name || 'The Boss'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="hidden md:block">
+                            <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Breaking Army Card - Redesigned */}
             <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-zinc-950 flex flex-col md:flex-row">
                 {/* Left Side: Boss Image */}
@@ -261,16 +312,21 @@ const Dashboard: React.FC = () => {
                         )}
                      </div>
 
-                     <div className="flex items-center gap-4">
+                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                          <button 
                             onClick={() => setIsQueueModalOpen(true)}
                             className="bg-white text-rose-950 hover:bg-zinc-100 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!currentBossName}
                          >
-                            {queue.find(q => q.uid === currentUser?.uid) ? 'View Queue Status' : 'Join Queue'}
+                            {myQueuePosition ? 'View Queue Status' : 'Join Queue'}
                          </button>
-                         {queue.find(q => q.uid === currentUser?.uid) && (
-                             <span className="text-sm text-zinc-400">You are in queue</span>
+                         {myQueuePosition && (
+                             <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10">
+                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-black text-xs font-bold">
+                                    {myQueuePosition}
+                                 </div>
+                                 <span className="text-sm font-medium text-white">Position in Queue</span>
+                             </div>
                          )}
                      </div>
                 </div>

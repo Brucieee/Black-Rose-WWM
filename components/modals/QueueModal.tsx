@@ -30,6 +30,7 @@ export const QueueModal: React.FC<QueueModalProps> = ({
   onLeave
 }) => {
   const isInQueue = currentUserUid && queue.find(q => q.uid === currentUserUid);
+  const myIndex = currentUserUid ? queue.findIndex(q => q.uid === currentUserUid) : -1;
 
   const getRoleBadge = (role: RoleType) => {
     switch (role) {
@@ -42,29 +43,41 @@ export const QueueModal: React.FC<QueueModalProps> = ({
 
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-lg flex flex-col max-h-[85vh]">
-       <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex gap-4 items-center">
+       <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex gap-4 items-center relative overflow-hidden">
          {bossImageUrl && (
-             <div className="w-16 h-16 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
+             <div className="w-16 h-16 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative z-10" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
                 <img src={bossImageUrl} alt={bossName} className="w-full h-full object-cover" />
              </div>
          )}
-         <div>
+         <div className="z-10">
             <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Queue: {guildName}</h3>
             <p className="text-rose-700 dark:text-rose-400 font-medium text-sm mt-1">{bossName}</p>
             <p className="text-xs text-zinc-500 mt-2"><Users size={12} className="inline mr-1" /> {queue.length} / 30</p>
          </div>
+         {isInQueue && (
+             <div className="absolute top-4 right-4 bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-lg p-2 text-center z-10">
+                 <p className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400">Your Position</p>
+                 <p className="text-2xl font-black text-rose-900 dark:text-rose-500">#{myIndex + 1}</p>
+             </div>
+         )}
        </div>
        <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 sticky top-0"><tr><th className="px-6 py-2 w-16">#</th><th className="px-6 py-2">Name</th><th className="px-6 py-2 text-right">Role</th></tr></thead>
+            <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 sticky top-0 z-10"><tr><th className="px-6 py-2 w-16">#</th><th className="px-6 py-2">Name</th><th className="px-6 py-2 text-right">Role</th></tr></thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {queue.map((entry, i) => (
                 <tr key={entry.uid} className={currentUserUid && entry.uid === currentUserUid ? 'bg-rose-50 dark:bg-rose-900/10' : ''}>
                   <td className="px-6 py-3 font-mono text-zinc-400">{i + 1}</td>
-                  <td className="px-6 py-3 font-medium text-zinc-900 dark:text-zinc-100">{entry.name}</td>
+                  <td className="px-6 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                      {entry.name}
+                      {currentUserUid && entry.uid === currentUserUid && <span className="ml-2 text-[10px] bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-bold">YOU</span>}
+                  </td>
                   <td className="px-6 py-3 text-right">{getRoleBadge(entry.role)}</td>
                 </tr>
               ))}
+              {queue.length === 0 && (
+                  <tr><td colSpan={3} className="p-8 text-center text-zinc-400">Queue is empty.</td></tr>
+              )}
             </tbody>
           </table>
        </div>
