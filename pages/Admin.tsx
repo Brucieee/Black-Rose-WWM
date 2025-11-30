@@ -21,8 +21,26 @@ const Admin: React.FC = () => {
   
   // Tab Management
   const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'leaderboard', 'winnerLogs', 'users', 'leaves'];
-  const [tabOrder, setTabOrder] = useState<string[]>(defaultTabs);
-  const [activeTab, setActiveTab] = useState<string>('guilds');
+  
+  // Lazy init to prevent reset
+  const [tabOrder, setTabOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('adminTabOrder');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error("Failed to parse tab order", e);
+      }
+    }
+    return defaultTabs;
+  });
+
+  // Lazy init active tab
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return sessionStorage.getItem('adminActiveTab') || 'guilds';
+  });
+
   const [isReorderMode, setIsReorderMode] = useState(false);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -81,22 +99,18 @@ const Admin: React.FC = () => {
   const isAdmin = userProfile?.systemRole === 'Admin';
   const isOfficer = userProfile?.systemRole === 'Officer';
 
+  // Standard Event Types
+  const standardEventTypes = ['Raid', 'PvP', 'Social', 'Meeting'];
+
   useEffect(() => {
-    // Load tab order preference
-    const savedOrder = localStorage.getItem('adminTabOrder');
-    if (savedOrder) {
-      try {
-        const parsed = JSON.parse(savedOrder);
-        // Basic validation to ensure we have valid tabs
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            setTabOrder(parsed);
-            if (!parsed.includes(activeTab)) setActiveTab(parsed[0]);
-        }
-      } catch (e) {
-        console.error("Failed to parse tab order", e);
-      }
-    }
-  }, []);
+    // Save tab order to localStorage whenever it changes
+    localStorage.setItem('adminTabOrder', JSON.stringify(tabOrder));
+  }, [tabOrder]);
+
+  useEffect(() => {
+    // Save active tab to sessionStorage whenever it changes
+    sessionStorage.setItem('adminActiveTab', activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     if (currentUser) {
@@ -108,18 +122,23 @@ const Admin: React.FC = () => {
                 // If officer, automatically select their branch and don't allow changing for certain tabs
                 if (profile.systemRole === 'Officer') {
                     setSelectedBranchId(profile.guildId);
-                    // Also preset event form guild ID
                     setEventForm(prev => ({...prev, guildId: profile.guildId}));
-                    // Default to allowed tab if current is restricted
-                    if (!['events', 'breakingArmy', 'leaves', 'announcements'].includes(activeTab)) {
-                         setActiveTab('events');
-                    }
                 }
             }
         });
         return () => unsubUser();
     }
   }, [currentUser]);
+
+  // Enforce restricted tabs for Officers (Safety check)
+  useEffect(() => {
+      if (userProfile?.systemRole === 'Officer') {
+          const allowedTabs = ['events', 'breakingArmy', 'leaves', 'announcements'];
+          if (!allowedTabs.includes(activeTab)) {
+               setActiveTab('events');
+          }
+      }
+  }, [userProfile?.systemRole, activeTab]);
 
   useEffect(() => {
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
@@ -189,7 +208,7 @@ const Admin: React.FC = () => {
     if (targetIndex >= 0 && targetIndex < newOrder.length) {
       [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
       setTabOrder(newOrder);
-      localStorage.setItem('adminTabOrder', JSON.stringify(newOrder));
+      // localStorage is updated via useEffect
     }
   };
 
@@ -315,36 +334,26 @@ const Admin: React.FC = () => {
   // ANNOUNCEMENT LOGIC
   const handleSaveAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
       try {
-          // Determine target guild. If Admin and isGlobal checked -> 'global'.
-          // If Officer -> userProfile.guildId.
-          // If Admin and !isGlobal -> this modal in Admin doesn't really have a Guild Selector, 
-          // so we default to 'global' OR if we want admins to post for specific guilds, we'd need a selector.
-          // For now, in Admin Tab, new posts are 'global' for Admins, and 'branch' for Officers.
+          // If officer, force to their guild
+          const targetGuildId = isOfficer ? userProfile.guildId : (isGlobal ? 'global' : 'global');
+          // If admin checked global, it's global. If admin didn't check global, let's assume global or prompt?
+          // The modal handles passing isGlobal. If Officer, modal forces isGlobal=false.
           
-          let targetGuildId = 'global';
-          
-          if (isOfficer) {
-              targetGuildId = userProfile.guildId;
-              isGlobal = false; // Force false for officers
-          } else if (isAdmin) {
-             // Admin keeps the isGlobal flag. If false, it's effectively "global" in our current model unless we add a selector.
-             // But the prompt implies Officers editing their branch announcements.
-             targetGuildId = isGlobal ? 'global' : 'global'; 
-          }
+          const finalIsGlobal = isOfficer ? false : isGlobal;
+          const finalGuildId = isOfficer ? userProfile.guildId : (isGlobal ? 'global' : 'global'); // Admin local? Currently Admin global announcements go to 'global' guildId
 
           if (editingAnnouncement) {
-              // Preserve existing guildId unless we want to change it, but usually we just edit content
               await db.collection("announcements").doc(editingAnnouncement.id).update({
-                  title, content, isGlobal
+                  title, content, isGlobal: finalIsGlobal, guildId: editingAnnouncement.guildId // Keep original ID/Target unless we want to change it
               });
               showAlert("Announcement updated!", 'success');
           } else {
               await db.collection("announcements").add({
-                  title, content, isGlobal,
+                  title, content, isGlobal: finalIsGlobal,
                   authorId: userProfile.uid,
                   authorName: userProfile.displayName,
                   timestamp: new Date().toISOString(),
-                  guildId: targetGuildId
+                  guildId: finalGuildId
               });
               showAlert("Announcement posted!", 'success');
           }
@@ -429,7 +438,13 @@ const Admin: React.FC = () => {
       if (!selectedWinner) return;
 
       const batch = db.batch();
-      const newEntry = {
+      
+      const leaderboardDocRef = db.collection("leaderboard").doc();
+      const winnerLogDocRef = db.collection("winner_logs").doc();
+
+      const newEntry: LeaderboardEntry = {
+        id: leaderboardDocRef.id,
+        rank: 1,
         playerName: selectedWinner.name,
         playerUid: selectedWinner.uid,
         branch: guilds.find(g => g.id === selectedWinner.guildId)?.name || 'Unknown',
@@ -438,16 +453,25 @@ const Admin: React.FC = () => {
         date: new Date().toISOString(),
         status: 'verified'
       };
-      batch.set(db.collection("leaderboard").doc(), newEntry);
-      batch.set(db.collection("winner_logs").doc(), newEntry);
+      
+      const winnerLogEntry: WinnerLog = {
+          ...newEntry,
+          id: winnerLogDocRef.id, // Winner log gets its own ID
+          prizeGiven: false,
+          status: 'verified'
+      };
+
+      batch.set(leaderboardDocRef, newEntry);
+      batch.set(winnerLogDocRef, winnerLogEntry);
       batch.delete(db.collection("queue").doc(selectedWinner.uid));
-      const newWinnerEntry: CooldownEntry = {
+      
+      const newCooldownEntry: CooldownEntry = {
           uid: selectedWinner.uid,
           branchId: selectedWinner.guildId,
           timestamp: new Date().toISOString(),
           prizeGiven: false
       };
-      batch.set(configRef, { recentWinners: firebase.firestore.FieldValue.arrayUnion(newWinnerEntry) }, { merge: true });
+      batch.set(configRef, { recentWinners: firebase.firestore.FieldValue.arrayUnion(newCooldownEntry) }, { merge: true });
       await batch.commit();
       
       setIsWinnerModalOpen(false);
@@ -478,9 +502,12 @@ const Admin: React.FC = () => {
     }
   };
   
-  const handleTogglePrize = async (winner: CooldownEntry) => {
-      const updatedWinners = recentWinners.map(w => w.uid === winner.uid && w.branchId === winner.branchId ? { ...w, prizeGiven: !w.prizeGiven } : w);
-      await configRef.set({ recentWinners: updatedWinners }, { merge: true });
+  const handleToggleWinnerLogPrize = async (logId: string, currentVal: boolean) => {
+      try {
+          await db.collection("winner_logs").doc(logId).update({ prizeGiven: !currentVal });
+      } catch (err: any) {
+          showAlert(`Failed to update prize status: ${err.message}`, 'error');
+      }
   };
 
   const handleRemoveWinner = async (winner: CooldownEntry) => {
@@ -552,13 +579,11 @@ const Admin: React.FC = () => {
       isOfficer ? l.guildId === userProfile.guildId : (leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter)
   );
   
-  // Announcement Filter:
-  // Admin sees ALL.
-  // Officer sees only their guild.
+  // Announcement filtering for table
   const filteredAnnouncements = announcements.filter(a => {
-      if (isAdmin) return true;
-      if (isOfficer) return a.guildId === userProfile.guildId;
-      return false;
+      if (isAdmin) return true; // Admins see all
+      if (isOfficer) return a.guildId === userProfile.guildId; // Officers see only their branch
+      return false; 
   });
 
   const formatTime12Hour = (time24: string) => {
@@ -581,7 +606,6 @@ const Admin: React.FC = () => {
   const tableCellClass = "px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800";
   const tableRowClass = "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors";
 
-  // Filter tabs based on role
   const availableTabs = tabOrder.filter(tab => {
       if (isAdmin) return true;
       if (isOfficer) return ['events', 'breakingArmy', 'leaves', 'announcements'].includes(tab);
@@ -816,9 +840,31 @@ const Admin: React.FC = () => {
                         </div>
                         <div>
                             <label className={labelClass}>Type</label>
-                            <select value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value as any})} className={inputClass}>
-                                <option>Raid</option><option>PvP</option><option>Social</option><option>Meeting</option>
+                            <select 
+                                value={standardEventTypes.includes(eventForm.type || '') ? eventForm.type : 'Custom'}
+                                onChange={e => {
+                                    if (e.target.value === 'Custom') {
+                                        setEventForm({...eventForm, type: ''}); // Clear type so input shows
+                                    } else {
+                                        setEventForm({...eventForm, type: e.target.value as any});
+                                    }
+                                }} 
+                                className={inputClass}
+                            >
+                                {standardEventTypes.map(t => <option key={t}>{t}</option>)}
+                                <option value="Custom">Custom...</option>
                             </select>
+                            {/* Custom Type Input */}
+                            {(!eventForm.type || !standardEventTypes.includes(eventForm.type)) && (
+                                <input 
+                                    type="text" 
+                                    placeholder="Enter Custom Type"
+                                    value={eventForm.type}
+                                    onChange={e => setEventForm({...eventForm, type: e.target.value})}
+                                    className={`${inputClass} mt-2`}
+                                    autoFocus
+                                />
+                            )}
                         </div>
                     </div>
                     <div>
@@ -1015,7 +1061,6 @@ const Admin: React.FC = () => {
                                    <tr>
                                        <th className={tableHeaderClass}>Player</th>
                                        <th className={tableHeaderClass}>Date</th>
-                                       <th className={`${tableHeaderClass} text-center`}>Prize Given</th>
                                        <th className={`${tableHeaderClass} text-right`}>Remove</th>
                                    </tr>
                                </thead>
@@ -1031,16 +1076,13 @@ const Admin: React.FC = () => {
                                                </div>
                                            </td>
                                            <td className={tableCellClass}>{new Date(w.timestamp).toLocaleDateString()}</td>
-                                           <td className={`${tableCellClass} text-center`}>
-                                               <input type="checkbox" checked={w.prizeGiven} onChange={()=>handleTogglePrize(w)} className="rounded border-zinc-300 text-rose-900 focus:ring-rose-500" />
-                                           </td>
                                            <td className={`${tableCellClass} text-right`}>
                                                <button type="button" onClick={()=>openDeleteModal("Remove Winner?","Remove cooldown for this player?",()=>handleRemoveWinner(w))} className="text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                                            </td>
                                        </tr>
                                    ))}
                                    {recentWinners.filter(w=>w.branchId===selectedBranchId).length === 0 && (
-                                       <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">No recent winners.</td></tr>
+                                       <tr><td colSpan={3} className="p-8 text-center text-zinc-400 text-sm">No recent winners.</td></tr>
                                    )}
                                </tbody>
                            </table>
@@ -1155,6 +1197,7 @@ const Admin: React.FC = () => {
                             <th className={tableHeaderClass}>Player</th>
                             <th className={tableHeaderClass}>Event Name</th>
                             <th className={tableHeaderClass}>Date</th>
+                            <th className={`${tableHeaderClass} text-center`}>Prize Given</th>
                             <th className={`${tableHeaderClass} text-right`}>Actions</th>
                         </tr>
                     </thead>
@@ -1164,6 +1207,14 @@ const Admin: React.FC = () => {
                                 <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{l.playerName}</span></td>
                                 <td className={tableCellClass}>{l.boss}</td>
                                 <td className={tableCellClass}>{new Date(l.date).toLocaleDateString()}</td>
+                                <td className={`${tableCellClass} text-center`}>
+                                   <input 
+                                        type="checkbox" 
+                                        checked={l.prizeGiven || false} 
+                                        onChange={()=>handleToggleWinnerLogPrize(l.id, l.prizeGiven || false)} 
+                                        className="rounded border-zinc-300 text-rose-900 focus:ring-rose-500 cursor-pointer" 
+                                   />
+                                </td>
                                 <td className={`${tableCellClass} text-right`}>
                                     <div className="flex justify-end gap-2">
                                         <button type="button" onClick={()=>{setEditingLeaderboardEntry(l);setLeaderboardModalMode('winnerLog');setIsLeaderboardModalOpen(true)}} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><Edit size={16}/></button>

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { QueueEntry, RoleType } from '../../types';
-import { Users, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { Users, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 import { BaseModal } from './BaseModal';
 
 interface QueueModalProps {
@@ -42,24 +42,35 @@ export const QueueModal: React.FC<QueueModalProps> = ({
   };
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-lg flex flex-col max-h-[85vh]">
+    <BaseModal isOpen={isOpen} onClose={onClose} hideCloseButton={true} className="max-w-lg flex flex-col max-h-[85vh]">
        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 flex gap-4 items-center relative overflow-hidden">
+         {/* Custom Close Button */}
+         <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 z-50 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 bg-white/50 dark:bg-black/20 rounded-full hover:bg-white/80 dark:hover:bg-black/40 transition-colors"
+         >
+            <X size={20} />
+         </button>
+
          {bossImageUrl && (
              <div className="w-16 h-16 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 relative z-10" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
                 <img src={bossImageUrl} alt={bossName} className="w-full h-full object-cover" />
              </div>
          )}
-         <div className="z-10">
+         <div className="z-10 flex-1 pr-8">
             <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Queue: {guildName}</h3>
             <p className="text-rose-700 dark:text-rose-400 font-medium text-sm mt-1">{bossName}</p>
-            <p className="text-xs text-zinc-500 mt-2"><Users size={12} className="inline mr-1" /> {queue.length} / 30</p>
+            <div className="flex items-center justify-between mt-2">
+                 <p className="text-xs text-zinc-500"><Users size={12} className="inline mr-1" /> {queue.length} / 30</p>
+                 
+                 {isInQueue && (
+                     <div className="bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded px-2 py-1 text-center">
+                         <p className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400 leading-none mb-0.5">Position</p>
+                         <p className="text-lg font-black text-rose-900 dark:text-rose-500 leading-none">#{myIndex + 1}</p>
+                     </div>
+                 )}
+            </div>
          </div>
-         {isInQueue && (
-             <div className="absolute top-4 right-4 bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-lg p-2 text-center z-10">
-                 <p className="text-[10px] uppercase font-bold text-rose-800 dark:text-rose-400">Your Position</p>
-                 <p className="text-2xl font-black text-rose-900 dark:text-rose-500">#{myIndex + 1}</p>
-             </div>
-         )}
        </div>
        <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
           <table className="w-full text-left text-sm">

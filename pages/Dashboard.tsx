@@ -119,14 +119,6 @@ const Dashboard: React.FC = () => {
   const myQueueIndex = currentUserProfile ? guildQueue.findIndex(q => q.uid === currentUserProfile.uid) : -1;
   const myQueuePosition = myQueueIndex !== -1 ? myQueueIndex + 1 : null;
 
-  // Recent Winner for this branch
-  const recentWinnerEntry = breakingArmyConfig?.recentWinners
-    ?.filter(w => w.branchId === userGuildId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-  
-  const recentWinnerProfile = recentWinnerEntry ? users.find(u => u.uid === recentWinnerEntry.uid) : null;
-
-
   const handleJoinQueue = async () => {
     if (!currentUserProfile) {
         showAlert("Please create a profile first.", 'error');
@@ -236,103 +228,60 @@ const Dashboard: React.FC = () => {
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
             
-            {/* Winner Banner */}
-            {recentWinnerProfile && (
-                <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
-                    <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
-                        {/* Background particles/glow */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                        
-                        <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
-                            <div className="relative group cursor-pointer" onClick={() => handleProfileClick(recentWinnerProfile.uid)}>
-                                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
-                                <img 
-                                    src={recentWinnerProfile.photoURL || 'https://via.placeholder.com/150'} 
-                                    className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
-                                    alt="Winner"
-                                />
-                                <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
-                                    #1
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
-                                    <Trophy size={14} /> Reigning Champion
-                                </h3>
-                                <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-                                    {recentWinnerProfile.displayName}
-                                </h2>
-                                <p className="text-zinc-400 text-sm mt-1">
-                                    Defeated {currentBoss?.name || 'The Boss'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="hidden md:block">
-                            <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Breaking Army Card - Redesigned */}
-            <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-zinc-950 flex flex-col md:flex-row">
+            {/* Breaking Army Card - Compact Design */}
+            <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-black flex">
                 {/* Left Side: Boss Image */}
-                <div className="w-full md:w-2/5 relative h-48 md:h-auto overflow-hidden">
+                <div className="w-48 relative overflow-hidden flex-shrink-0">
                     {currentBoss?.imageUrl ? (
                         <img 
                             src={currentBoss.imageUrl} 
                             alt={currentBoss.name} 
                             className="w-full h-full object-cover"
-                            style={{ clipPath: 'polygon(0 0, 100% 0, 90% 100%, 0 100%)' }}
+                            style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}
                         />
                     ) : (
-                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600">
-                            <Sword size={48} />
+                        <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700">
+                            <Sword size={32} />
                         </div>
                     )}
-                    {/* Mobile gradient overlay since clip-path might look weird stacked */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-rose-950 to-transparent md:hidden"></div>
                 </div>
 
                 {/* Right Side: Info */}
-                <div className="flex-1 p-6 flex flex-col justify-center text-white relative z-10">
-                     <div className="mb-4">
-                        <div className="text-rose-400 font-bold text-sm uppercase tracking-wider mb-2 flex items-center gap-2">
-                            <Activity size={16} className="animate-pulse" /> Breaking Army
+                <div className="flex-1 p-4 flex flex-col justify-center text-white relative z-10">
+                     <div className="mb-3">
+                        <div className="text-rose-500 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
+                            <Activity size={14} className="animate-pulse" /> Breaking Army
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-extrabold leading-tight mb-2">
+                        <h2 className="text-xl font-extrabold leading-tight mb-1 truncate">
                             {currentBoss?.name || "No Active Boss"}
                         </h2>
                         {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
-                            <div className="inline-flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full text-sm text-zinc-300 border border-white/10">
-                                <Clock size={14} />
+                            <div className="inline-flex items-center gap-2 text-xs text-zinc-400">
+                                <Clock size={12} />
                                 <span>Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
                             </div>
                         )}
                      </div>
 
-                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                     <div className="flex items-center gap-4">
                          <button 
                             onClick={() => setIsQueueModalOpen(true)}
-                            className="bg-white text-rose-950 hover:bg-zinc-100 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="bg-white text-rose-950 hover:bg-zinc-200 px-4 py-2 rounded font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
                             disabled={!currentBossName}
                          >
-                            {myQueuePosition ? 'View Queue Status' : 'Join Queue'}
+                            {myQueuePosition ? 'View Queue' : 'Join Queue'}
                          </button>
                          {myQueuePosition && (
-                             <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10">
-                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-black text-xs font-bold">
-                                    {myQueuePosition}
-                                 </div>
-                                 <span className="text-sm font-medium text-white">Position in Queue</span>
+                             <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-900/50 border border-zinc-800">
+                                 <span className="text-xs font-medium text-zinc-300">Position:</span>
+                                 <span className="text-sm font-bold text-green-400">#{myQueuePosition}</span>
                              </div>
                          )}
                      </div>
                 </div>
                 
                 {/* Decorative background element */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-600/10 rounded-full blur-2xl pointer-events-none"></div>
             </div>
 
             {/* Global Announcements */}

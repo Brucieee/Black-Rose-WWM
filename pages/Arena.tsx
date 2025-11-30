@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2 } from 'lucide-react';
+import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -61,6 +61,7 @@ const Arena: React.FC = () => {
 
   const selectedGuild = guilds.find(g => g.id === selectedGuildId);
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
+  const arenaChampion = selectedGuild?.lastArenaChampion;
 
   const assignedParticipantUids = React.useMemo(() => {
     const uids = new Set<string>();
@@ -225,6 +226,30 @@ const Arena: React.FC = () => {
               showAlert("Bracket has been cleared.", 'success');
           }
       });
+  };
+  
+  const handleClearAllParticipants = async () => {
+    setConfModal({
+      isOpen: true,
+      title: "Clear All Participants?",
+      message: "This will remove ALL participants and clear them from the bracket. This cannot be undone.",
+      action: async () => {
+        const batch = db.batch();
+        
+        // 1. Delete all participants
+        const parts = await db.collection("arena_participants").where("guildId", "==", selectedGuildId).get();
+        parts.forEach(doc => batch.delete(doc.ref));
+
+        // 2. Clear all match slots
+        matches.forEach(m => {
+             const ref = db.collection("arena_matches").doc(m.id);
+             batch.update(ref, { player1: null, player2: null, winner: null });
+        });
+
+        await batch.commit();
+        showAlert("All participants cleared.", 'success');
+      }
+    });
   };
 
   const handleShuffleClick = () => {
@@ -395,6 +420,20 @@ const Arena: React.FC = () => {
           }
       });
   };
+  
+  const handleRemoveChampion = async () => {
+    setConfModal({
+        isOpen: true,
+        title: "Remove Champion?",
+        message: "This will remove the current reigning champion banner.",
+        action: async () => {
+             await db.collection("guilds").doc(selectedGuildId).update({
+                 lastArenaChampion: firebase.firestore.FieldValue.delete()
+             });
+             showAlert("Champion removed.", 'success');
+        }
+    });
+  };
 
   const handleApprove = async (uid: string) => {
     try {
@@ -545,9 +584,10 @@ const Arena: React.FC = () => {
     if (!canManage) return;
     
     try {
-        await db.collection("arena_matches").doc(match.id).update({
-            winner: winner
-        });
+        const batch = db.batch();
+        const matchRef = db.collection("arena_matches").doc(match.id);
+        
+        batch.update(matchRef, { winner });
 
         // Find the next round match
         const nextRound = match.round + 1;
@@ -560,14 +600,34 @@ const Arena: React.FC = () => {
             .where("position", "==", nextPosition)
             .get();
         
+        let isChampion = false;
         if (!nextMatchQuery.empty) {
             const nextMatchDoc = nextMatchQuery.docs[0];
-            await nextMatchDoc.ref.update({
+            batch.update(nextMatchDoc.ref, {
                 [nextSlot]: winner,
                 winner: null
             });
         } else if (matches.every(m => m.round < nextRound)) {
-             showAlert(`${winner.displayName} is the champion!`, 'success', 'Tournament Winner!');
+             isChampion = true;
+        }
+
+        if (isChampion) {
+            // Save champion to Guild
+            const guildRef = db.collection("guilds").doc(selectedGuildId);
+            batch.update(guildRef, {
+                lastArenaChampion: {
+                    uid: winner.uid,
+                    displayName: winner.displayName,
+                    photoURL: winner.photoURL,
+                    wonAt: new Date().toISOString()
+                }
+            });
+        }
+
+        await batch.commit();
+
+        if (isChampion) {
+            showAlert(`${winner.displayName} is the champion!`, 'success', 'Tournament Winner!');
         }
 
     } catch (err: any) {
@@ -723,6 +783,55 @@ const Arena: React.FC = () => {
         </div>
       </div>
 
+      {/* --- Reigning Champion Banner --- */}
+      {arenaChampion && (
+        <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
+            <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
+                {/* Background particles/glow */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
+                    <div className="relative group cursor-pointer" onClick={() => handleViewProfile(arenaChampion.uid)}>
+                        <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
+                        <img 
+                            src={arenaChampion.photoURL || 'https://via.placeholder.com/150'} 
+                            className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
+                            alt="Champion"
+                        />
+                        <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
+                            #1
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
+                            <Trophy size={14} /> Reigning Champion
+                        </h3>
+                        <h2 className="text-3xl font-black text-white uppercase tracking-tight">
+                            {arenaChampion.displayName}
+                        </h2>
+                        <p className="text-zinc-400 text-sm mt-1">
+                            Current Title Holder for {selectedGuild?.name}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="hidden md:block">
+                    <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
+                </div>
+                
+                {canManage && (
+                    <button 
+                        onClick={handleRemoveChampion}
+                        className="absolute top-4 right-4 bg-black/30 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm transition-colors z-20"
+                        title="Remove Champion"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                )}
+            </div>
+        </div>
+      )}
+
       {/* --- Current Matchup Banner --- */}
       {myActiveMatch && (
         <div className="mb-6 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 p-6 rounded-xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative overflow-hidden">
@@ -877,19 +986,26 @@ const Arena: React.FC = () => {
                 {renderJoinButton()}
 
                 {canManage && (
-                   <div className="flex gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                   <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                       <button 
                           onClick={handleShuffleClick}
-                          className="flex-1 text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
+                          className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
                       >
                           <Shuffle size={12} /> Shuffle
                       </button>
                       <button 
                           onClick={handleManualReset}
-                          className="flex-1 text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
-                          title="Resets bracket"
+                          className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
+                          title="Resets matches, keeps participants"
                       >
-                          <RefreshCw size={12} /> Clear
+                          <RefreshCw size={12} /> Reset Bracket
+                      </button>
+                      <button 
+                          onClick={handleClearAllParticipants}
+                          className="col-span-2 text-xs flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2 rounded border border-red-100 dark:border-red-900/30 transition-colors"
+                          title="Removes all participants and clears bracket"
+                      >
+                          <UserMinus size={12} /> Remove All Participants
                       </button>
                    </div>
                 )}
@@ -925,6 +1041,15 @@ const Arena: React.FC = () => {
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
             >
+                {/* Centered Empty State - Outside Transform */}
+                {matches.length === 0 && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-zinc-400 z-10 pointer-events-none">
+                        <Trophy size={48} className="mx-auto mb-4 opacity-20" />
+                        <p>Bracket not initialized.</p>
+                        {canManage && <p className="text-sm mt-2">Click the <RefreshCw size={14} className="inline" /> icon to setup.</p>}
+                    </div>
+                )}
+
                 <div 
                     style={{ 
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
@@ -937,13 +1062,7 @@ const Arena: React.FC = () => {
                         className="flex gap-16 p-16"
                         style={{ minHeight: `${minContainerHeight}px` }} 
                     >
-                        {matches.length === 0 ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-zinc-400">
-                                <Trophy size={48} className="mx-auto mb-4 opacity-20" />
-                                <p>Bracket not initialized.</p>
-                                {canManage && <p className="text-sm mt-2">Click the <RefreshCw size={14} className="inline" /> icon to setup.</p>}
-                            </div>
-                        ) : (
+                        {matches.length > 0 && (
                             rounds.map(round => (
                                 <div key={round.id} className="flex flex-col min-w-[260px] relative z-0">
                                     <div className="mb-4 text-center">

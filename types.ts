@@ -50,6 +50,12 @@ export interface Guild {
   name: string;
   memberCap: number;
   arenaMinPoints?: number; // Added for arena threshold
+  lastArenaChampion?: {
+      uid: string;
+      displayName: string;
+      photoURL?: string;
+      wonAt: string;
+  };
 }
 
 export interface GuildEvent {
@@ -58,7 +64,7 @@ export interface GuildEvent {
   title: string;
   date: string;
   description: string;
-  type: 'Raid' | 'PvP' | 'Social' | 'Meeting';
+  type: 'Raid' | 'PvP' | 'Social' | 'Meeting' | string;
 }
 
 export interface Announcement {
@@ -101,7 +107,9 @@ export interface LeaderboardEntry {
   status: 'verified' | 'pending';
 }
 
-export interface WinnerLog extends LeaderboardEntry {}
+export interface WinnerLog extends LeaderboardEntry {
+  prizeGiven?: boolean;
+}
 
 export interface QueueEntry {
   uid: string;
