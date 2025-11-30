@@ -111,7 +111,10 @@ const Dashboard: React.FC = () => {
   const currentBossName = userGuildId && breakingArmyConfig?.currentBoss ? breakingArmyConfig.currentBoss[userGuildId] : null;
   const currentBoss = currentBossName ? breakingArmyConfig?.bossPool.find(b => b.name === currentBossName) : null;
   const guildQueue = queue.filter(q => q.guildId === userGuildId);
-  const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId && !w.prizeGiven) || false) : false;
+  
+  // STRICT COOLDOWN: If user is in recentWinners, they are blocked. Prize status doesn't matter for re-queueing.
+  // They must be manually removed or reset by admin to join again.
+  const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId) || false) : false;
 
   const isAdmin = currentUserProfile?.systemRole === 'Admin';
   

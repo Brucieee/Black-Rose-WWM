@@ -480,6 +480,15 @@ const Admin: React.FC = () => {
       showAlert(`${selectedWinner.name} is the winner!`, 'success');
   };
 
+  const handleRemoveFromQueue = async (uid: string) => {
+      try {
+          await db.collection("queue").doc(uid).delete();
+          showAlert("Player removed from queue.", 'success');
+      } catch (err: any) {
+          showAlert(`Failed to remove player: ${err.message}`, 'error');
+      }
+  };
+
   const handleResetQueue = async () => {
       if (!selectedBranchId) return;
       const batch = db.batch();
@@ -1025,7 +1034,7 @@ const Admin: React.FC = () => {
                                        <th className={tableHeaderClass}>#</th>
                                        <th className={tableHeaderClass}>Player</th>
                                        <th className={tableHeaderClass}>Role</th>
-                                       <th className={`${tableHeaderClass} text-right`}>Declare Winner</th>
+                                       <th className={`${tableHeaderClass} text-right`}>Actions</th>
                                    </tr>
                                </thead>
                                <tbody>
@@ -1035,9 +1044,14 @@ const Admin: React.FC = () => {
                                            <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{q.name}</span></td>
                                            <td className={tableCellClass}><span className="text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">{q.role}</span></td>
                                            <td className={`${tableCellClass} text-right`}>
-                                               <button type="button" onClick={()=>{setSelectedWinner(q);setIsWinnerModalOpen(true)}} className="p-1.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 rounded transition-colors" title="Declare Winner">
-                                                   <Crown size={16}/>
-                                               </button>
+                                               <div className="flex justify-end gap-2">
+                                                   <button type="button" onClick={()=>{setSelectedWinner(q);setIsWinnerModalOpen(true)}} className="p-1.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 rounded transition-colors" title="Declare Winner">
+                                                       <Crown size={16}/>
+                                                   </button>
+                                                   <button type="button" onClick={()=>openDeleteModal("Remove Player?", `Remove ${q.name} from the queue?`, () => handleRemoveFromQueue(q.uid))} className="p-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Remove from Queue">
+                                                       <Trash2 size={16}/>
+                                                   </button>
+                                               </div>
                                            </td>
                                        </tr>
                                    ))}

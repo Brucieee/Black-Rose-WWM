@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement } from '../types';
@@ -42,6 +43,9 @@ const GuildDashboard: React.FC = () => {
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  // Global Party State
+  const [userActiveParty, setUserActiveParty] = useState<Party | null>(null);
 
   const [newPartyData, setNewPartyData] = useState({
     name: '',
@@ -90,6 +94,26 @@ const GuildDashboard: React.FC = () => {
       }
     }
   }, [parties, prevParties, currentUser, allUsers, showAlert]);
+
+  // Global Party Listener
+  useEffect(() => {
+    if (!currentUser) {
+        setUserActiveParty(null);
+        return;
+    }
+
+    // Listen to ANY party where the user is a member, regardless of guild
+    const q = db.collection("parties").where("memberUids", "array-contains", currentUser.uid);
+    const unsub = q.onSnapshot(snap => {
+       if (!snap.empty) {
+           // User is in at least one party
+           setUserActiveParty({ id: snap.docs[0].id, ...snap.docs[0].data() } as Party);
+       } else {
+           setUserActiveParty(null);
+       }
+    });
+    return () => unsub();
+  }, [currentUser]);
 
   useEffect(() => {
     if (!guildId) return;
@@ -155,8 +179,11 @@ const GuildDashboard: React.FC = () => {
         
         if (membersToRemove.length > 0) {
             const partyRef = db.collection("parties").doc(party.id);
-            // FIX: Use FieldValue for arrayRemove
-            batch.update(partyRef, { currentMembers: firebase.firestore.FieldValue.arrayRemove(...membersToRemove) });
+            // Remove from both arrays
+            batch.update(partyRef, { 
+                currentMembers: firebase.firestore.FieldValue.arrayRemove(...membersToRemove),
+                memberUids: firebase.firestore.FieldValue.arrayRemove(...membersToRemove.map(m => m.uid))
+            });
         }
       });
 
@@ -167,7 +194,7 @@ const GuildDashboard: React.FC = () => {
     return () => clearInterval(cleanupInterval);
   }, [parties, allUsers]);
   
-  const isUserInAnyParty = allUsers.length > 0 && parties.some(p => p.currentMembers.some(m => m.uid === currentUser?.uid));
+  // This derived state is for UI logic within the current guild dashboard context
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
   const canPostAnnouncement = currentUserProfile && (currentUserProfile.systemRole === 'Admin' || (currentUserProfile.systemRole === 'Officer' && currentUserProfile.guildId === guildId));
   
@@ -195,8 +222,8 @@ const GuildDashboard: React.FC = () => {
         navigate('/register');
         return;
     }
-    if (isUserInAnyParty) {
-        showAlert("You are already in a party.", 'error');
+    if (userActiveParty) {
+        showAlert("You are already in a party (possibly in another branch).", 'error');
         return;
     }
     if (!canCreatePartyInThisBranch) {
@@ -211,6 +238,7 @@ const GuildDashboard: React.FC = () => {
             guildId: guildId,
             leaderId: currentUserProfile.uid,
             leaderName: currentUserProfile.displayName,
+            memberUids: [currentUserProfile.uid], // Init with leader uid
             currentMembers: [{
                 uid: currentUserProfile.uid,
                 name: currentUserProfile.displayName,
@@ -244,7 +272,7 @@ const GuildDashboard: React.FC = () => {
             authorName: currentUserProfile.displayName,
             guildId: targetGuildId,
             timestamp: new Date().toISOString(),
-            isGlobal: false // Always false for local dashboard, forceGlobal overrides if true in modal
+            isGlobal: false 
           };
           await db.collection("announcements").add(newAnnouncement);
           showAlert("Announcement posted!", 'success');
@@ -270,8 +298,8 @@ const GuildDashboard: React.FC = () => {
         navigate('/register');
         return;
     }
-    if (isUserInAnyParty) {
-        showAlert("You are already in another party.", 'error');
+    if (userActiveParty) {
+        showAlert("You are already in a party.", 'error');
         return;
     }
     if (currentUserProfile.guildId !== party.guildId) {
@@ -287,7 +315,6 @@ const GuildDashboard: React.FC = () => {
   
   const joinParty = async (party: Party) => {
     if (!currentUserProfile) return;
-    // FIX: Use Firebase v8 compat syntax
     const partyRef = db.collection("parties").doc(party.id);
     await partyRef.update({
         currentMembers: firebase.firestore.FieldValue.arrayUnion({
@@ -295,13 +322,13 @@ const GuildDashboard: React.FC = () => {
             name: currentUserProfile.displayName,
             role: currentUserProfile.role,
             photoURL: currentUserProfile.photoURL,
-        })
+        }),
+        memberUids: firebase.firestore.FieldValue.arrayUnion(currentUserProfile.uid)
     });
   };
 
   const leaveParty = async (party: Party) => {
     if (!currentUserProfile) return;
-    // FIX: Use Firebase v8 compat syntax
     const partyRef = db.collection("parties").doc(party.id);
 
     if (currentUserProfile.uid === party.leaderId) {
@@ -319,7 +346,8 @@ const GuildDashboard: React.FC = () => {
         const memberToRemove = party.currentMembers.find(m => m.uid === currentUserProfile.uid);
         if (memberToRemove) {
             await partyRef.update({
-                currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove)
+                currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove),
+                memberUids: firebase.firestore.FieldValue.arrayRemove(currentUserProfile.uid)
             });
         }
     }
@@ -336,9 +364,9 @@ const GuildDashboard: React.FC = () => {
         async () => {
             const memberToRemove = party.currentMembers.find(m => m.uid === memberUid);
             if (memberToRemove) {
-                // FIX: Use Firebase v8 compat syntax
                 await db.collection("parties").doc(party.id).update({
-                    currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove)
+                    currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove),
+                    memberUids: firebase.firestore.FieldValue.arrayRemove(memberUid)
                 });
                 showAlert("Member kicked.", 'info');
             }
@@ -424,7 +452,7 @@ const GuildDashboard: React.FC = () => {
             <div className="relative group">
                 <button 
                     onClick={() => setIsCreateModalOpen(true)}
-                    disabled={!canCreatePartyInThisBranch || isUserInAnyParty}
+                    disabled={!canCreatePartyInThisBranch || !!userActiveParty}
                     className="bg-rose-900 text-white px-4 py-2 rounded-lg hover:bg-rose-950 flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Plus size={16} /> Create Party
@@ -450,33 +478,34 @@ const GuildDashboard: React.FC = () => {
                 
                 return (
                 <div key={party.id} className="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-rose-900/30 transition-colors group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">{party.name}</h3>
-                        <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs rounded-full font-medium border border-zinc-200 dark:border-zinc-700">{party.activity}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 truncate max-w-full">{party.name}</h3>
+                        <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs rounded-full font-medium border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">{party.activity}</span>
                       </div>
                       <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                        <Crown size={14} className="text-yellow-500" /> Leader: <span className="font-medium text-zinc-700 dark:text-zinc-300">{party.leaderName}</span>
+                        <Crown size={14} className="text-yellow-500 flex-shrink-0" /> Leader: <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-sm font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg">
+                    
+                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                        <div className="flex items-center gap-1 text-sm font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg whitespace-nowrap">
                             <Users size={14} />
                             <span>{party.currentMembers.length} / {party.maxMembers}</span>
                         </div>
                         {isMember ? (
                              <button 
                                 onClick={() => leaveParty(party)}
-                                className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1"
+                                className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1 whitespace-nowrap"
                              >
                                 <LogOut size={14} /> {isLeader ? 'Disband' : 'Leave'}
                              </button>
                         ) : (
                             <button 
                                 onClick={() => handleJoinClick(party)}
-                                disabled={isUserInAnyParty || currentUserProfile?.guildId !== party.guildId} 
-                                className="bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!!userActiveParty || currentUserProfile?.guildId !== party.guildId} 
+                                className="bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                             >
                                 Join
                             </button>

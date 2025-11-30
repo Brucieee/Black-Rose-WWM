@@ -43,6 +43,7 @@ export const MOCK_EVENTS: GuildEvent[] = [
 export const MOCK_PARTIES: Party[] = [
   {
     id: 'p1', guildId: 'g1', name: 'Dungeon Grinders', activity: 'High Level Dungeons', leaderId: 'u1', leaderName: 'ShadowBlade', maxMembers: 5,
+    memberUids: ['u1', 'u2'],
     currentMembers: [
       { uid: 'u1', name: 'ShadowBlade', role: RoleType.DPS, photoURL: 'https://picsum.photos/200' },
       { uid: 'u2', name: 'IronWall', role: RoleType.TANK, photoURL: 'https://picsum.photos/201' }
@@ -50,6 +51,7 @@ export const MOCK_PARTIES: Party[] = [
   },
   {
     id: 'p2', guildId: 'g1', name: 'Chill PvP', activity: 'Arena', leaderId: 'u4', leaderName: 'MysticFlex', maxMembers: 3,
+    memberUids: ['u4'],
     currentMembers: [
       { uid: 'u4', name: 'MysticFlex', role: RoleType.HYBRID, photoURL: 'https://picsum.photos/203' }
     ]

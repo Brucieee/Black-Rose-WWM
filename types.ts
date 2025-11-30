@@ -86,6 +86,7 @@ export interface Party {
   leaderId: string;
   leaderName: string;
   maxMembers: number;
+  memberUids: string[]; // Array of UIDs for efficient querying
   currentMembers: {
     uid: string;
     name: string;
