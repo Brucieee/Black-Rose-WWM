@@ -73,10 +73,11 @@ const Arena: React.FC = () => {
   }, [matches]);
 
   // Current User Match Info
-  const myActiveMatch = matches.find(m => 
+  // FIX: Ensure currentUser exists to avoid undefined === undefined matches with empty slots
+  const myActiveMatch = currentUser ? matches.find(m => 
     !m.winner && 
-    ((m.player1?.uid === currentUser?.uid) || (m.player2?.uid === currentUser?.uid))
-  );
+    ((m.player1?.uid === currentUser.uid) || (m.player2?.uid === currentUser.uid))
+  ) : undefined;
 
   const opponent = myActiveMatch 
     ? (myActiveMatch.player1?.uid === currentUser?.uid ? myActiveMatch.player2 : myActiveMatch.player1)
