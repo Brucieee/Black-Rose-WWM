@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2 } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile } from '../types';
@@ -662,7 +663,7 @@ const Arena: React.FC = () => {
                      <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
                      Current Matchup - Round {myActiveMatch.round}
                  </h3>
-                 <div className="flex items-center gap-8 md:gap-16">
+                 <div className="flex items-center justify-center gap-8 md:gap-16">
                      {/* YOU */}
                      <div className="flex items-center gap-4">
                          <div className="relative">
