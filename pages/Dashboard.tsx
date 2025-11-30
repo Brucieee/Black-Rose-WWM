@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe } from 'lucide-react';
+import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,6 +31,10 @@ const Dashboard: React.FC = () => {
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [selectedLeaderboardUser, setSelectedLeaderboardUser] = useState<UserProfile | null>(null);
 
+  // Leaderboard Filters
+  const [leaderboardFilterBoss, setLeaderboardFilterBoss] = useState<string>('All');
+  const [leaderboardFilterGuild, setLeaderboardFilterGuild] = useState<string>('All');
+
   useEffect(() => {
     // Fetch Guilds
     // FIX: Use Firebase v8 compat syntax
@@ -53,7 +58,7 @@ const Dashboard: React.FC = () => {
     // Fetch Leaderboard
     const unsubLeaderboard = db.collection("leaderboard")
       .orderBy("time", "asc")
-      .limit(5)
+      .limit(50) // Increased limit to allow filtering on client side properly
       .onSnapshot(snap => {
         setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry)));
       });
@@ -183,6 +188,16 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  // Filter Leaderboard Logic
+  const uniqueBosses = Array.from(new Set(leaderboard.map(l => l.boss))).sort();
+  const uniqueGuilds = Array.from(new Set(leaderboard.map(l => l.branch))).sort();
+
+  const filteredLeaderboard = leaderboard.filter(entry => {
+      const matchBoss = leaderboardFilterBoss === 'All' || entry.boss === leaderboardFilterBoss;
+      const matchGuild = leaderboardFilterGuild === 'All' || entry.branch === leaderboardFilterGuild;
+      return matchBoss && matchGuild;
+  }).slice(0, 5); // Limit to top 5 after filter
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-6 space-y-8">
       {/* Welcome Section */}
@@ -209,37 +224,59 @@ const Dashboard: React.FC = () => {
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
             
-            {/* Breaking Army Card */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-                <div className="relative h-40 bg-zinc-900">
+            {/* Breaking Army Card - Redesigned */}
+            <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-zinc-950 flex flex-col md:flex-row">
+                {/* Left Side: Boss Image */}
+                <div className="w-full md:w-2/5 relative h-48 md:h-auto overflow-hidden">
                     {currentBoss?.imageUrl ? (
-                        <img src={currentBoss.imageUrl} alt={currentBoss.name} className="w-full h-full object-cover opacity-60" />
+                        <img 
+                            src={currentBoss.imageUrl} 
+                            alt={currentBoss.name} 
+                            className="w-full h-full object-cover"
+                            style={{ clipPath: 'polygon(0 0, 100% 0, 90% 100%, 0 100%)' }}
+                        />
                     ) : (
-                        <div className="w-full h-full bg-gradient-to-r from-rose-900 to-zinc-900" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-6">
-                        <div className="w-full flex justify-between items-end">
-                            <div>
-                                <div className="text-rose-400 font-bold text-sm uppercase tracking-wider mb-1 flex items-center gap-2">
-                                    <Sword size={16} /> Breaking Army
-                                </div>
-                                <h2 className="text-2xl font-bold text-white">{currentBoss?.name || "No Active Boss"}</h2>
-                                {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
-                                    <p className="text-zinc-300 text-sm mt-1">
-                                        Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}
-                                    </p>
-                                )}
-                            </div>
-                            <button 
-                                onClick={() => setIsQueueModalOpen(true)}
-                                className="bg-white text-zinc-900 px-6 py-2 rounded-lg font-bold hover:bg-zinc-100 transition-colors shadow-lg"
-                                disabled={!currentBossName}
-                            >
-                                {queue.find(q => q.uid === currentUser?.uid) ? 'View Queue' : 'Join Queue'}
-                            </button>
+                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-zinc-600">
+                            <Sword size={48} />
                         </div>
-                    </div>
+                    )}
+                    {/* Mobile gradient overlay since clip-path might look weird stacked */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-rose-950 to-transparent md:hidden"></div>
                 </div>
+
+                {/* Right Side: Info */}
+                <div className="flex-1 p-6 flex flex-col justify-center text-white relative z-10">
+                     <div className="mb-4">
+                        <div className="text-rose-400 font-bold text-sm uppercase tracking-wider mb-2 flex items-center gap-2">
+                            <Activity size={16} className="animate-pulse" /> Breaking Army
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-extrabold leading-tight mb-2">
+                            {currentBoss?.name || "No Active Boss"}
+                        </h2>
+                        {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
+                            <div className="inline-flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full text-sm text-zinc-300 border border-white/10">
+                                <Clock size={14} />
+                                <span>Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
+                            </div>
+                        )}
+                     </div>
+
+                     <div className="flex items-center gap-4">
+                         <button 
+                            onClick={() => setIsQueueModalOpen(true)}
+                            className="bg-white text-rose-950 hover:bg-zinc-100 px-6 py-2.5 rounded-lg font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!currentBossName}
+                         >
+                            {queue.find(q => q.uid === currentUser?.uid) ? 'View Queue Status' : 'Join Queue'}
+                         </button>
+                         {queue.find(q => q.uid === currentUser?.uid) && (
+                             <span className="text-sm text-zinc-400">You are in queue</span>
+                         )}
+                     </div>
+                </div>
+                
+                {/* Decorative background element */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-rose-600/10 rounded-full blur-3xl pointer-events-none"></div>
             </div>
 
             {/* Global Announcements */}
@@ -318,11 +355,34 @@ const Dashboard: React.FC = () => {
         <div className="space-y-8">
             {/* Leaderboard Preview */}
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                 <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-                    <Trophy className="text-yellow-500" /> Top Speedruns
-                </h3>
+                 <div className="mb-4">
+                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2 mb-3">
+                        <Trophy className="text-yellow-500" /> Top Speedruns
+                    </h3>
+                    
+                    {/* Filters */}
+                    <div className="flex flex-col gap-2">
+                        <select 
+                            value={leaderboardFilterBoss} 
+                            onChange={(e) => setLeaderboardFilterBoss(e.target.value)}
+                            className="w-full text-xs p-1.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                        >
+                            <option value="All">All Bosses</option>
+                            {uniqueBosses.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                        <select 
+                            value={leaderboardFilterGuild} 
+                            onChange={(e) => setLeaderboardFilterGuild(e.target.value)}
+                            className="w-full text-xs p-1.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                        >
+                            <option value="All">All Branches</option>
+                            {uniqueGuilds.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                    </div>
+                 </div>
+
                 <div className="space-y-1">
-                    {leaderboard.map((entry, idx) => (
+                    {filteredLeaderboard.map((entry, idx) => (
                         <div key={entry.id} className="flex items-center justify-between p-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer" onClick={() => handleProfileClick(entry.playerUid)}>
                             <div className="flex items-center gap-3">
                                 <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold rounded-full ${
@@ -339,7 +399,7 @@ const Dashboard: React.FC = () => {
                             <span className="font-mono text-sm font-bold text-rose-900 dark:text-rose-500">{entry.time}</span>
                         </div>
                     ))}
-                    {leaderboard.length === 0 && <p className="text-zinc-500 text-sm">No records yet.</p>}
+                    {filteredLeaderboard.length === 0 && <p className="text-zinc-500 text-sm py-2">No records found matching filters.</p>}
                 </div>
             </div>
 

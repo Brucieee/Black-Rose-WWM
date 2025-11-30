@@ -10,6 +10,7 @@ import { JoinArenaModal } from '../components/modals/JoinArenaModal';
 import { InitializeBracketModal } from '../components/modals/InitializeBracketModal';
 import { EditPointsModal } from '../components/modals/EditPointsModal';
 import { ArenaSettingsModal } from '../components/modals/ArenaSettingsModal';
+import { UserProfileModal } from '../components/modals/UserProfileModal';
 import firebase from 'firebase/compat/app';
 
 const Arena: React.FC = () => {
@@ -29,6 +30,9 @@ const Arena: React.FC = () => {
   
   // Edit Points State
   const [editingPointsParticipant, setEditingPointsParticipant] = useState<ArenaParticipant | null>(null);
+
+  // Profile Viewing State
+  const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
 
   // Pan & Zoom State
   const [zoom, setZoom] = useState(1);
@@ -307,12 +311,48 @@ const Arena: React.FC = () => {
   
   const handleLeaveArena = async () => {
     if (!currentUser) return;
-    try {
-      await db.collection("arena_participants").doc(currentUser.uid).delete();
-      showAlert("You have left the arena.", 'info');
-    } catch (err: any) {
-      showAlert(`Error leaving arena: ${err.message}`, 'error');
-    }
+    setConfModal({
+      isOpen: true,
+      title: "Leave Arena?",
+      message: "Are you sure you want to leave the tournament? This will remove you from any active matches.",
+      action: async () => {
+        try {
+          const batch = db.batch();
+          
+          // 1. Delete participant record
+          batch.delete(db.collection("arena_participants").doc(currentUser.uid));
+
+          // 2. Remove from matches if assigned
+          matches.forEach(m => {
+              let updateNeeded = false;
+              const updateData: any = {};
+              if (m.player1?.uid === currentUser.uid) {
+                  updateData.player1 = null;
+                  updateData.winner = null; // Reset winner if a player is removed
+                  updateNeeded = true;
+              }
+              if (m.player2?.uid === currentUser.uid) {
+                  updateData.player2 = null;
+                  updateData.winner = null;
+                  updateNeeded = true;
+              }
+              if (m.winner?.uid === currentUser.uid) {
+                  updateData.winner = null;
+                  updateNeeded = true;
+              }
+
+              if (updateNeeded) {
+                  batch.update(db.collection("arena_matches").doc(m.id), updateData);
+              }
+          });
+
+          await batch.commit();
+          showAlert("You have left the arena.", 'info');
+        } catch (err: any) {
+          showAlert(`Error leaving arena: ${err.message}`, 'error');
+        }
+      }
+    });
   };
 
   const handleRemoveParticipant = async (uid: string, name: string) => {
@@ -379,6 +419,19 @@ const Arena: React.FC = () => {
           showAlert("Points updated.", 'success');
       } catch (err: any) {
           showAlert(`Failed to update points: ${err.message}`, 'error');
+      }
+  };
+
+  const handleViewProfile = async (uid: string) => {
+      try {
+          const doc = await db.collection("users").doc(uid).get();
+          if (doc.exists) {
+              setViewingProfile(doc.data() as UserProfile);
+          } else {
+              showAlert("User profile not found.", 'error');
+          }
+      } catch (err) {
+          console.error("Error fetching profile", err);
       }
   };
 
@@ -525,6 +578,24 @@ const Arena: React.FC = () => {
   const renderMatch = (match: ArenaMatch) => {
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
         const isWinner = match.winner?.uid === player?.uid;
+        // Determine interaction based on role
+        // Member: Always view profile.
+        // Manager: Declare Winner (if active), View Profile (if done).
+        
+        const isInteractive = !!player;
+
+        const handleClick = (e: React.MouseEvent) => {
+            if (!player) return;
+            
+            if (canManage && !match.winner) {
+                // Admin Action: Declare winner if match is active
+                handleDeclareWinner(match, player);
+            } else {
+                // Member Action (or Admin on finished match): View profile
+                handleViewProfile(player.uid);
+            }
+        };
+
         return (
             <div 
                 onDragOver={handleDragOver}
@@ -534,9 +605,9 @@ const Arena: React.FC = () => {
                         ? 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900' 
                         : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700'
                     }
-                    ${canManage && !match.winner && player ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800' : ''}
+                    ${isInteractive ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800' : ''}
                 `}
-                onClick={() => player && !match.winner && handleDeclareWinner(match, player)}
+                onClick={handleClick}
             >
                 {player ? (
                     <div className="flex items-center gap-2 min-w-0">
@@ -665,7 +736,10 @@ const Arena: React.FC = () => {
                  </h3>
                  <div className="flex items-center justify-center gap-8 md:gap-16">
                      {/* YOU */}
-                     <div className="flex items-center gap-4">
+                     <div 
+                        className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => currentUserParticipant && handleViewProfile(currentUserParticipant.uid)}
+                     >
                          <div className="relative">
                             <img src={currentUserParticipant?.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-white dark:border-zinc-800 shadow-lg object-cover" />
                             <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">YOU</span>
@@ -680,7 +754,10 @@ const Arena: React.FC = () => {
 
                      {/* OPPONENT */}
                      {opponent ? (
-                         <div className="flex items-center gap-4">
+                         <div 
+                            className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => handleViewProfile(opponent.uid)}
+                         >
                             <div className="text-right">
                                 <h4 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{opponent.displayName}</h4>
                                 <p className="text-xs text-zinc-500">{opponent.activityPoints} pts</p>
@@ -854,14 +931,14 @@ const Arena: React.FC = () => {
                         transformOrigin: '0 0',
                         transition: isDragging ? 'none' : 'transform 0.1s ease-out'
                     }}
-                    className="p-16 origin-top-left absolute top-0 left-0"
+                    className="origin-top-left absolute top-0 left-0 min-w-full min-h-full"
                 >
                     <div 
-                        className="flex gap-16"
+                        className="flex gap-16 p-16"
                         style={{ minHeight: `${minContainerHeight}px` }} 
                     >
                         {matches.length === 0 ? (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center text-zinc-400 min-w-[300px] min-h-[300px]">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-zinc-400">
                                 <Trophy size={48} className="mx-auto mb-4 opacity-20" />
                                 <p>Bracket not initialized.</p>
                                 {canManage && <p className="text-sm mt-2">Click the <RefreshCw size={14} className="inline" /> icon to setup.</p>}
@@ -919,6 +996,12 @@ const Arena: React.FC = () => {
         onClose={() => setIsSettingsModalOpen(false)}
         currentMin={arenaMinPoints}
         onSave={handleSaveMinPoints}
+      />
+
+      <UserProfileModal 
+        user={viewingProfile}
+        onClose={() => setViewingProfile(null)}
+        guilds={guilds}
       />
     </div>
   );

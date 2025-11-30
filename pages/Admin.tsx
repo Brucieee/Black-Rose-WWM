@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, User, ListOrdered, Plane, Settings, Shield, Megaphone, ArrowLeft, ArrowRight, GripHorizontal } from 'lucide-react';
+import { Plus, Trash2, Calendar, Database, Crown, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, User, ListOrdered, Plane, Settings, Shield, Megaphone, ArrowLeft, ArrowRight, GripHorizontal, Globe } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
@@ -105,11 +105,15 @@ const Admin: React.FC = () => {
                 const profile = docSnap.data() as UserProfile;
                 setUserProfile(profile);
                 
-                // If officer, automatically select their branch and don't allow changing
+                // If officer, automatically select their branch and don't allow changing for certain tabs
                 if (profile.systemRole === 'Officer') {
                     setSelectedBranchId(profile.guildId);
                     // Also preset event form guild ID
                     setEventForm(prev => ({...prev, guildId: profile.guildId}));
+                    // Default to allowed tab if current is restricted
+                    if (!['events', 'breakingArmy', 'leaves', 'announcements'].includes(activeTab)) {
+                         setActiveTab('events');
+                    }
                 }
             }
         });
@@ -193,7 +197,7 @@ const Admin: React.FC = () => {
     switch (key) {
       case 'guilds': return 'Guild Branches';
       case 'events': return 'Events';
-      case 'announcements': return 'Global Announcements';
+      case 'announcements': return 'Announcements';
       case 'breakingArmy': return 'Breaking Army';
       case 'leaderboard': return 'Leaderboard';
       case 'winnerLogs': return 'Winner Logs';
@@ -311,7 +315,25 @@ const Admin: React.FC = () => {
   // ANNOUNCEMENT LOGIC
   const handleSaveAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
       try {
+          // Determine target guild. If Admin and isGlobal checked -> 'global'.
+          // If Officer -> userProfile.guildId.
+          // If Admin and !isGlobal -> this modal in Admin doesn't really have a Guild Selector, 
+          // so we default to 'global' OR if we want admins to post for specific guilds, we'd need a selector.
+          // For now, in Admin Tab, new posts are 'global' for Admins, and 'branch' for Officers.
+          
+          let targetGuildId = 'global';
+          
+          if (isOfficer) {
+              targetGuildId = userProfile.guildId;
+              isGlobal = false; // Force false for officers
+          } else if (isAdmin) {
+             // Admin keeps the isGlobal flag. If false, it's effectively "global" in our current model unless we add a selector.
+             // But the prompt implies Officers editing their branch announcements.
+             targetGuildId = isGlobal ? 'global' : 'global'; 
+          }
+
           if (editingAnnouncement) {
+              // Preserve existing guildId unless we want to change it, but usually we just edit content
               await db.collection("announcements").doc(editingAnnouncement.id).update({
                   title, content, isGlobal
               });
@@ -322,7 +344,7 @@ const Admin: React.FC = () => {
                   authorId: userProfile.uid,
                   authorName: userProfile.displayName,
                   timestamp: new Date().toISOString(),
-                  guildId: isGlobal ? 'global' : 'global' // Admin tab is for Global mainly
+                  guildId: targetGuildId
               });
               showAlert("Announcement posted!", 'success');
           }
@@ -529,6 +551,15 @@ const Admin: React.FC = () => {
   const filteredLeaves = leaves.filter(l => 
       isOfficer ? l.guildId === userProfile.guildId : (leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter)
   );
+  
+  // Announcement Filter:
+  // Admin sees ALL.
+  // Officer sees only their guild.
+  const filteredAnnouncements = announcements.filter(a => {
+      if (isAdmin) return true;
+      if (isOfficer) return a.guildId === userProfile.guildId;
+      return false;
+  });
 
   const formatTime12Hour = (time24: string) => {
     if (!time24) return '';
@@ -553,7 +584,7 @@ const Admin: React.FC = () => {
   // Filter tabs based on role
   const availableTabs = tabOrder.filter(tab => {
       if (isAdmin) return true;
-      if (isOfficer) return ['events', 'breakingArmy', 'leaves'].includes(tab);
+      if (isOfficer) return ['events', 'breakingArmy', 'leaves', 'announcements'].includes(tab);
       return false;
   });
 
@@ -686,11 +717,11 @@ const Admin: React.FC = () => {
       )}
 
       {/* --- ANNOUNCEMENTS TAB --- */}
-      {activeTab === 'announcements' && isAdmin && (
+      {activeTab === 'announcements' && (
           <div className={cardClass}>
               <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
                   <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                      <Megaphone size={20} className="text-blue-500" /> Global Announcements
+                      <Megaphone size={20} className="text-blue-500" /> {isOfficer ? 'My Branch Announcements' : 'Global Announcements'}
                   </h2>
                   <button 
                       onClick={() => { setEditingAnnouncement(null); setIsAnnouncementModalOpen(true); }}
@@ -704,6 +735,7 @@ const Admin: React.FC = () => {
                       <thead>
                           <tr>
                               <th className={tableHeaderClass}>Title</th>
+                              <th className={tableHeaderClass}>Target</th>
                               <th className={tableHeaderClass}>Author</th>
                               <th className={tableHeaderClass}>Date</th>
                               <th className={tableHeaderClass}>Content Preview</th>
@@ -711,10 +743,21 @@ const Admin: React.FC = () => {
                           </tr>
                       </thead>
                       <tbody>
-                          {announcements.filter(a => a.isGlobal).map(a => (
+                          {filteredAnnouncements.map(a => (
                               <tr key={a.id} className={tableRowClass}>
                                   <td className={tableCellClass}>
                                       <span className="font-bold text-zinc-900 dark:text-zinc-100">{a.title}</span>
+                                  </td>
+                                  <td className={tableCellClass}>
+                                      {a.isGlobal ? (
+                                          <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
+                                              <Globe size={10} /> Global
+                                          </span>
+                                      ) : (
+                                          <span className="inline-flex items-center gap-1 text-xs font-bold text-zinc-600 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded">
+                                              {guilds.find(g => g.id === a.guildId)?.name || 'Branch'}
+                                          </span>
+                                      )}
                                   </td>
                                   <td className={tableCellClass}>{a.authorName}</td>
                                   <td className={tableCellClass}>{new Date(a.timestamp).toLocaleDateString()}</td>
@@ -741,8 +784,8 @@ const Admin: React.FC = () => {
                                   </td>
                               </tr>
                           ))}
-                          {announcements.filter(a => a.isGlobal).length === 0 && (
-                              <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">No global announcements.</td></tr>
+                          {filteredAnnouncements.length === 0 && (
+                              <tr><td colSpan={6} className="p-8 text-center text-zinc-400 text-sm">No announcements found.</td></tr>
                           )}
                       </tbody>
                   </table>
@@ -1240,7 +1283,7 @@ const Admin: React.FC = () => {
 
       {/* Modals */}
       <CreateGuildModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateGuild} data={newGuildData} onChange={setNewGuildData} />
-      <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} onSubmit={handleSaveAnnouncement} userProfile={userProfile} forceGlobal={true} initialData={editingAnnouncement} />
+      <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} onSubmit={handleSaveAnnouncement} userProfile={userProfile} forceGlobal={false} initialData={editingAnnouncement} />
       <DeclareWinnerModal isOpen={isWinnerModalOpen} onClose={()=>setIsWinnerModalOpen(false)} winnerName={selectedWinner?.name || ''} time={winnerTime} onTimeChange={setWinnerTime} onConfirm={handleConfirmWinner} />
       {editingLeaderboardEntry && <EditLeaderboardModal isOpen={isLeaderboardModalOpen} onClose={()=>setIsLeaderboardModalOpen(false)} entry={editingLeaderboardEntry} setEntry={setEditingLeaderboardEntry} onUpdate={handleUpdateLeaderboardEntry} bossPool={bossPool} guilds={guilds} allUsers={allUsers} mode={leaderboardModalMode} />}
       <ConfirmationModal isOpen={deleteConf.isOpen} onClose={()=>setDeleteConf({...deleteConf, isOpen: false})} onConfirm={deleteConf.action} title={deleteConf.title} message={deleteConf.message} />

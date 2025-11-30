@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone } from 'lucide-react';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -40,6 +40,7 @@ const GuildDashboard: React.FC = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   const [newPartyData, setNewPartyData] = useState({
@@ -228,20 +229,27 @@ const GuildDashboard: React.FC = () => {
   const handlePostAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
     if (!currentUserProfile) return;
     try {
-      // Force local guild ID if not global, to ensure it doesn't leak
-      const targetGuildId = isGlobal ? 'global' : guildId;
-      
-      const newAnnouncement = {
-        title,
-        content,
-        authorId: currentUserProfile.uid,
-        authorName: currentUserProfile.displayName,
-        guildId: targetGuildId,
-        timestamp: new Date().toISOString(),
-        isGlobal
-      };
-      await db.collection("announcements").add(newAnnouncement);
-      showAlert("Announcement posted!", 'success');
+      if (editingAnnouncement) {
+          await db.collection("announcements").doc(editingAnnouncement.id).update({
+              title,
+              content
+          });
+          showAlert("Announcement updated!", 'success');
+      } else {
+          const targetGuildId = isGlobal ? 'global' : guildId;
+          const newAnnouncement = {
+            title,
+            content,
+            authorId: currentUserProfile.uid,
+            authorName: currentUserProfile.displayName,
+            guildId: targetGuildId,
+            timestamp: new Date().toISOString(),
+            isGlobal: false // Always false for local dashboard, forceGlobal overrides if true in modal
+          };
+          await db.collection("announcements").add(newAnnouncement);
+          showAlert("Announcement posted!", 'success');
+      }
+      setEditingAnnouncement(null);
     } catch (err: any) {
       showAlert(`Error posting announcement: ${err.message}`, 'error');
     }
@@ -532,7 +540,7 @@ const GuildDashboard: React.FC = () => {
                   </h3>
                   {canPostAnnouncement && (
                       <button 
-                        onClick={() => setIsAnnouncementModalOpen(true)}
+                        onClick={() => { setEditingAnnouncement(null); setIsAnnouncementModalOpen(true); }}
                         className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 font-medium transition-colors"
                       >
                           + Post
@@ -545,9 +553,10 @@ const GuildDashboard: React.FC = () => {
                   ) : (
                       announcements.map(ann => {
                           // Allow delete if: Admin, or Officer of this guild, or original author
-                          const canDelete = currentUserProfile?.systemRole === 'Admin' || 
-                                          (currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId) ||
-                                          currentUser?.uid === ann.authorId;
+                          const isAuthor = currentUser?.uid === ann.authorId;
+                          const isOfficer = currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId;
+                          const isAdmin = currentUserProfile?.systemRole === 'Admin';
+                          const canManage = isAdmin || isOfficer || isAuthor;
                           
                           return (
                               <div key={ann.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 relative group">
@@ -566,13 +575,21 @@ const GuildDashboard: React.FC = () => {
                                     className="text-sm text-zinc-600 dark:text-zinc-400" 
                                     onMentionClick={handleMentionClick}
                                   />
-                                  {canDelete && (
-                                      <button 
-                                        onClick={() => openDeleteModal("Delete Announcement?", "Are you sure you want to delete this?", () => handleDeleteAnnouncement(ann.id))}
-                                        className="absolute top-2 right-2 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                      >
-                                          <Trash2 size={14} />
-                                      </button>
+                                  {canManage && (
+                                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button 
+                                            onClick={() => { setEditingAnnouncement(ann); setIsAnnouncementModalOpen(true); }}
+                                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                                          >
+                                              <Edit size={14} />
+                                          </button>
+                                          <button 
+                                            onClick={() => openDeleteModal("Delete Announcement?", "Are you sure you want to delete this?", () => handleDeleteAnnouncement(ann.id))}
+                                            className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
+                                          >
+                                              <Trash2 size={14} />
+                                          </button>
+                                      </div>
                                   )}
                               </div>
                           );
@@ -596,6 +613,7 @@ const GuildDashboard: React.FC = () => {
         onClose={() => setIsAnnouncementModalOpen(false)}
         onSubmit={handlePostAnnouncement}
         userProfile={currentUserProfile}
+        initialData={editingAnnouncement}
       />
 
       <ConfirmationModal
