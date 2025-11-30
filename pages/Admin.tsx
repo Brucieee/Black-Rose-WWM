@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Calendar, Database, Crown, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, User, ListOrdered, Plane, Settings, Shield, Megaphone, ArrowLeft, ArrowRight, GripHorizontal, Globe } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement } from '../types';
@@ -13,6 +14,7 @@ import { EditLeaderboardModal } from '../components/modals/EditLeaderboardModal'
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
 import { RichText } from '../components/RichText';
+import { ImageUpload } from '../components/ImageUpload';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
@@ -68,7 +70,7 @@ const Admin: React.FC = () => {
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<Partial<GuildEvent>>({
-    title: '', description: '', type: 'Raid', date: '', guildId: ''
+    title: '', description: '', type: 'Raid', date: '', guildId: '', imageUrl: ''
   });
 
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
@@ -302,7 +304,7 @@ const Admin: React.FC = () => {
               showAlert("Event scheduled!", 'success');
           }
           setEditingEventId(null);
-          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '' });
+          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '', imageUrl: '' });
       } catch (err: any) {
           showAlert(err.message, 'error');
       }
@@ -327,7 +329,8 @@ const Admin: React.FC = () => {
         description: event.description,
         type: event.type,
         date: event.date,
-        guildId: event.guildId || ''
+        guildId: event.guildId || '',
+        imageUrl: event.imageUrl || ''
     });
   };
 
@@ -828,8 +831,8 @@ const Admin: React.FC = () => {
 
       {/* --- EVENTS TAB --- */}
       {activeTab === 'events' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className={`${cardClass} lg:col-span-1`}>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <div className={`${cardClass}`}>
                 <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">{editingEventId ? 'Edit Event' : 'Schedule Event'}</h3>
                 </div>
@@ -840,12 +843,28 @@ const Admin: React.FC = () => {
                     </div>
                     <div>
                         <label className={labelClass}>Description</label>
-                        <textarea required placeholder="Event details..." value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className={`${inputClass} min-h-[100px]`} />
+                        <textarea 
+                            required 
+                            placeholder="Event details..." 
+                            value={eventForm.description} 
+                            onChange={e => setEventForm({...eventForm, description: e.target.value})} 
+                            className={`${inputClass} min-h-[100px]`}
+                            maxLength={500}
+                        />
+                         <div className="text-right text-xs text-zinc-400 mt-1">
+                             {(eventForm.description || '').length} / 500
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className={labelClass}>Date & Time</label>
-                            <input type="datetime-local" required value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className={inputClass} />
+                            <input 
+                                type="datetime-local" 
+                                required 
+                                value={eventForm.date} 
+                                onChange={e => setEventForm({...eventForm, date: e.target.value})} 
+                                className={`${inputClass} w-full [color-scheme:light] dark:[color-scheme:dark]`}
+                            />
                         </div>
                         <div>
                             <label className={labelClass}>Type</label>
@@ -877,6 +896,15 @@ const Admin: React.FC = () => {
                         </div>
                     </div>
                     <div>
+                        <label className={labelClass}>Event Banner (Optional)</label>
+                        <ImageUpload
+                            initialUrl={eventForm.imageUrl}
+                            onUploadComplete={(url) => setEventForm({...eventForm, imageUrl: url})}
+                            folder="events"
+                            className="mb-4"
+                        />
+                    </div>
+                    <div>
                         <label className={labelClass}>Branch</label>
                         {isOfficer ? (
                             // Officer: Locked to their own branch
@@ -897,13 +925,13 @@ const Admin: React.FC = () => {
                         {isOfficer && <p className="text-xs text-zinc-400 mt-1">Officers can only schedule events for their branch.</p>}
                     </div>
                     <div className="pt-2 flex gap-3">
-                        {editingEventId && <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '' }); }} className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium">Cancel</button>}
+                        {editingEventId && <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '', imageUrl: '' }); }} className="flex-1 px-4 py-2 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium">Cancel</button>}
                         <button type="submit" className="flex-1 bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg font-medium shadow-lg shadow-rose-900/20 transition-all">{editingEventId ? 'Update Event' : 'Create Event'}</button>
                     </div>
                 </form>
             </div>
 
-            <div className={`${cardClass} lg:col-span-2 flex flex-col`}>
+            <div className={`${cardClass} flex flex-col`}>
                 <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Calendar size={20} className="text-zinc-500" /> Upcoming Events
@@ -918,7 +946,10 @@ const Admin: React.FC = () => {
                                     <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100">{new Date(e.date).getDate()}</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">{e.title}</h4>
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition-colors">{e.title}</h4>
+                                        {e.imageUrl && <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold">IMG</span>}
+                                    </div>
                                     <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{guilds.find(g => g.id === e.guildId)?.name || 'Global Event'}</p>
                                     <div className="flex items-center gap-2 mt-2">
                                         <span className="text-[10px] font-bold px-2 py-0.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-500">{e.type}</span>
@@ -943,6 +974,7 @@ const Admin: React.FC = () => {
       {/* --- BREAKING ARMY TAB --- */}
       {activeTab === 'breakingArmy' && (
         <div className="space-y-8">
+            {/* ... Existing Breaking Army code ... */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 {/* CONFIGURATION CARD */}

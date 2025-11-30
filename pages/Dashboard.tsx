@@ -46,8 +46,10 @@ const Dashboard: React.FC = () => {
     const unsubEvents = db.collection("events")
       .orderBy("date", "asc")
       .onSnapshot(snap => {
-        // Filter client side for future events
+        // Filter client side for future events (including today)
         const now = new Date();
+        now.setHours(0, 0, 0, 0); // Reset time to start of day to include today's events
+
         const futureEvents = snap.docs
             .map(d => ({id: d.id, ...d.data()} as GuildEvent))
             .filter(e => new Date(e.date) >= now)
@@ -86,12 +88,16 @@ const Dashboard: React.FC = () => {
     });
 
     // Fetch Global Announcements
+    // NOTE: Removed orderBy("timestamp", "desc") to prevent "Missing Index" error on composite queries.
+    // We fetch recent ones and sort in memory.
     const unsubAnnouncements = db.collection("announcements")
       .where("isGlobal", "==", true)
-      .orderBy("timestamp", "desc")
-      .limit(5)
+      .limit(20) 
       .onSnapshot(snap => {
-         setGlobalAnnouncements(snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement)));
+         const data = snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement));
+         // Sort in memory (Newest first)
+         data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+         setGlobalAnnouncements(data.slice(0, 5));
       });
 
     return () => {
@@ -334,17 +340,24 @@ const Dashboard: React.FC = () => {
                     ) : (
                         events.map(event => (
                             <div key={event.id} className="flex gap-4 items-start p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                                <div className="bg-zinc-100 dark:bg-zinc-800 p-3 rounded-lg text-center min-w-[60px]">
-                                    <span className="block text-xs font-bold text-rose-900 dark:text-rose-500 uppercase">{new Date(event.date).toLocaleDateString(undefined, {month: 'short'})}</span>
-                                    <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100">{new Date(event.date).getDate()}</span>
+                                <div className="flex-shrink-0">
+                                    {event.imageUrl ? (
+                                        <div className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                                            <img src={event.imageUrl} alt="Event" className="w-full h-full object-cover" />
+                                        </div>
+                                    ) : (
+                                        <div className="bg-zinc-100 dark:bg-zinc-800 p-2.5 rounded-lg text-center w-16 h-16 flex flex-col items-center justify-center border border-zinc-200 dark:border-zinc-700">
+                                            <span className="block text-[10px] font-bold text-rose-900 dark:text-rose-500 uppercase leading-none mb-1">{new Date(event.date).toLocaleDateString(undefined, {month: 'short'})}</span>
+                                            <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{new Date(event.date).getDate()}</span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex-1">
-                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors">{event.title}</h4>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors truncate">{event.title}</h4>
                                     <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-1">{event.description}</p>
                                     <div className="flex gap-2 mt-2">
                                         <span className="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded font-medium">{event.type}</span>
                                         <span className="text-xs text-zinc-400 flex items-center gap-1"><Clock size={12} /> {new Date(event.date).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}</span>
-                                        <span className="text-xs text-zinc-400">• {guilds.find(g => g.id === event.guildId)?.name || 'Global'}</span>
                                     </div>
                                 </div>
                             </div>

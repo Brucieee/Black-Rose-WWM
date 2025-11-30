@@ -1,5 +1,6 @@
 
 
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -65,6 +66,7 @@ export interface GuildEvent {
   date: string;
   description: string;
   type: 'Raid' | 'PvP' | 'Social' | 'Meeting' | string;
+  imageUrl?: string;
 }
 
 export interface Announcement {

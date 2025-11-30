@@ -1,7 +1,9 @@
 
 
+
+
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, Image as ImageIcon } from 'lucide-react';
 import { db } from '../services/firebase';
 import { GuildEvent, Guild } from '../types';
 import { RichText } from '../components/RichText';
@@ -51,41 +53,51 @@ const Events: React.FC = () => {
               const eventDate = new Date(event.date);
               
               return (
-                <div key={event.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-start gap-6 group">
-                  {/* Date Box */}
-                  <div className="flex-shrink-0 flex sm:flex-col items-center gap-2 sm:gap-0 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 min-w-[80px] text-center group-hover:bg-rose-50 dark:group-hover:bg-rose-900/20 transition-colors sticky top-4">
-                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase">{eventDate.toLocaleDateString(undefined, { month: 'short' })}</span>
-                    <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{eventDate.getDate()}</span>
-                    <span className="text-xs text-zinc-400 hidden sm:block">{eventDate.toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                  </div>
-
-                  {/* Event Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                        event.type === 'Raid' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300' :
-                        event.type === 'PvP' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' : 
-                        'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                      }`}>
-                        {event.type}
-                      </span>
-                      <span className="text-xs font-medium text-zinc-400 flex items-center gap-1">
-                        • {branchName}
-                      </span>
+                <div key={event.id} className="p-4 sm:p-6 group hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                  <div className="flex flex-col md:flex-row gap-6">
+                    {/* Left: Image or Date */}
+                    <div className="w-full md:w-64 flex-shrink-0">
+                        {event.imageUrl ? (
+                            <div className="aspect-video w-full rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 relative">
+                                <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+                                <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-bold uppercase">
+                                    {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="w-full h-full min-h-[140px] bg-zinc-100 dark:bg-zinc-800 rounded-lg flex flex-col items-center justify-center text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                                <span className="text-3xl font-bold text-zinc-300 dark:text-zinc-600 mb-1">{eventDate.getDate()}</span>
+                                <span className="text-xs font-bold uppercase tracking-wider">{eventDate.toLocaleDateString(undefined, { month: 'long' })}</span>
+                            </div>
+                        )}
                     </div>
-                    <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h4>
-                    <RichText text={event.description} className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed" />
-                  </div>
 
-                  {/* Time / Action */}
-                  <div className="flex items-center gap-4 sm:border-l sm:border-zinc-100 dark:sm:border-zinc-800 sm:pl-6 min-w-[150px] pt-1">
-                     <div className="flex flex-col">
-                        <span className="text-xs text-zinc-400 uppercase tracking-wider font-bold mb-1">Start Time</span>
-                        <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-medium">
-                          <Clock size={16} />
-                          {eventDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    {/* Right: Details */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            event.type === 'Raid' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300' :
+                            event.type === 'PvP' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' : 
+                            'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                          }`}>
+                            {event.type}
+                          </span>
+                          <span className="text-xs font-medium text-zinc-400 flex items-center gap-1">
+                            • {branchName}
+                          </span>
                         </div>
-                     </div>
+                        
+                        <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{event.title}</h3>
+                        
+                        <div className="flex-1">
+                            <RichText text={event.description} className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed" />
+                        </div>
+
+                        <div className="mt-4 flex items-center text-zinc-500 dark:text-zinc-400 text-sm font-medium">
+                            <Clock size={16} className="mr-2" />
+                            {eventDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', weekday: 'long' })}
+                        </div>
+                    </div>
                   </div>
                 </div>
               );
