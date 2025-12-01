@@ -9,6 +9,7 @@ interface BaseModalProps {
   children: ReactNode;
   className?: string;
   hideCloseButton?: boolean;
+  allowOverflow?: boolean;
 }
 
 export const BaseModal: React.FC<BaseModalProps> = ({ 
@@ -16,7 +17,8 @@ export const BaseModal: React.FC<BaseModalProps> = ({
   onClose, 
   children, 
   className = "max-w-md",
-  hideCloseButton = false
+  hideCloseButton = false,
+  allowOverflow = false
 }) => {
   const mouseDownTarget = useRef<EventTarget | null>(null);
 
@@ -45,7 +47,7 @@ export const BaseModal: React.FC<BaseModalProps> = ({
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
-      <div className={`bg-white dark:bg-zinc-900 w-full rounded-xl shadow-2xl relative animate-in zoom-in-95 duration-200 overflow-hidden ${className}`}>
+      <div className={`bg-white dark:bg-zinc-900 w-full rounded-xl shadow-2xl relative animate-in zoom-in-95 duration-200 ${allowOverflow ? 'overflow-visible' : 'overflow-hidden'} ${className}`}>
         {!hideCloseButton && (
           <button 
             onClick={onClose}

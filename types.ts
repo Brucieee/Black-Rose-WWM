@@ -1,6 +1,9 @@
 
 
 
+
+
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -168,6 +171,13 @@ export interface ArenaParticipant {
   status: 'pending' | 'approved' | 'denied';
 }
 
+export interface CustomTournament {
+  id: string;
+  title: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface ArenaMatch {
   id: string;
   round: number;
@@ -175,5 +185,22 @@ export interface ArenaMatch {
   player1: ArenaParticipant | null;
   player2: ArenaParticipant | null;
   winner: ArenaParticipant | null;
+  guildId: string; // Or tournamentId
+  isThirdPlace?: boolean; // Flag for 3rd place match
+}
+
+export interface HerosRealmRequest {
+  id: string;
   guildId: string;
+  day: string;
+  time: string;
+  createdByUid: string;
+  createdByName: string;
+  votes: string[]; // List of UIDs who voted for this time
+  timestamp: string;
+}
+
+export interface HerosRealmConfig {
+  schedules: Record<string, ScheduleSlot[]>; // guildId -> [{day, time}]
+  currentBosses?: Record<string, string[]>; // guildId -> [BossName1, BossName2]
 }

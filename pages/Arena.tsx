@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus } from 'lucide-react';
-import { Guild, ArenaParticipant, ArenaMatch, UserProfile } from '../types';
+import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal } from 'lucide-react';
+import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -10,6 +10,7 @@ import { JoinArenaModal } from '../components/modals/JoinArenaModal';
 import { InitializeBracketModal } from '../components/modals/InitializeBracketModal';
 import { EditPointsModal } from '../components/modals/EditPointsModal';
 import { ArenaSettingsModal } from '../components/modals/ArenaSettingsModal';
+import { CreateTournamentModal } from '../components/modals/CreateTournamentModal';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import firebase from 'firebase/compat/app';
 
@@ -17,7 +18,10 @@ const Arena: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [selectedGuildId, setSelectedGuildId] = useState<string>('');
+  const [customTournaments, setCustomTournaments] = useState<CustomTournament[]>([]);
+  
+  // ID can be a Guild ID OR a Tournament ID
+  const [selectedId, setSelectedId] = useState<string>(''); 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
@@ -27,6 +31,7 @@ const Arena: React.FC = () => {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isInitModalOpen, setIsInitModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isCreateTourneyModalOpen, setIsCreateTourneyModalOpen] = useState(false);
   
   // Edit Points State
   const [editingPointsParticipant, setEditingPointsParticipant] = useState<ArenaParticipant | null>(null);
@@ -49,8 +54,15 @@ const Arena: React.FC = () => {
     action: () => Promise<void>;
   }>({ isOpen: false, title: '', message: '', action: async () => {} });
 
-  // Permissions: Admin can do all. Officer can only manage THEIR guild.
-  const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedGuildId);
+  // Determine if viewing a Guild or a Custom Tournament
+  const selectedGuild = guilds.find(g => g.id === selectedId);
+  const selectedTournament = customTournaments.find(t => t.id === selectedId);
+  const isCustomMode = !!selectedTournament;
+
+  // Permissions: Admin can do all. Officer can manage THEIR guild.
+  const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedId && !isCustomMode);
+  // Custom tournaments can be managed by Admin or Creator (assuming creator check logic if needed, simplied to Admin for now)
+  const canDeleteCustom = userProfile?.systemRole === 'Admin';
 
   // User Status
   const currentUserParticipant = currentUser ? participants.find(p => p.uid === currentUser.uid) : undefined;
@@ -59,7 +71,6 @@ const Arena: React.FC = () => {
   const approvedParticipants = participants.filter(p => p.status === 'approved');
   const pendingParticipants = participants.filter(p => p.status === 'pending');
 
-  const selectedGuild = guilds.find(g => g.id === selectedGuildId);
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
   const arenaChampion = selectedGuild?.lastArenaChampion;
 
@@ -73,7 +84,6 @@ const Arena: React.FC = () => {
   }, [matches]);
 
   // Current User Match Info
-  // FIX: Ensure currentUser exists to avoid undefined === undefined matches with empty slots
   const myActiveMatch = currentUser ? matches.find(m => 
     !m.winner && 
     ((m.player1?.uid === currentUser.uid) || (m.player2?.uid === currentUser.uid))
@@ -83,14 +93,40 @@ const Arena: React.FC = () => {
     ? (myActiveMatch.player1?.uid === currentUser?.uid ? myActiveMatch.player2 : myActiveMatch.player1)
     : null;
 
+  // Calculate Tournament Winners (Top 3)
+  const getTournamentWinners = () => {
+      if (matches.length === 0) return { first: null, second: null, third: null };
+      
+      const regularMatches = matches.filter(m => !m.isThirdPlace);
+      const maxRound = Math.max(...regularMatches.map(m => m.round));
+      const finalMatch = regularMatches.find(m => m.round === maxRound);
+      const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
+
+      if (!finalMatch || !finalMatch.winner) return { first: null, second: null, third: null };
+
+      const first = finalMatch.winner;
+      const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
+      const third = thirdPlaceMatch?.winner || null;
+
+      return { first, second, third };
+  };
+
+  const { first, second, third } = getTournamentWinners();
+  const isTournamentDone = !!first;
+
   useEffect(() => {
     // Fetch Guilds
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
       const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
       setGuilds(g);
-      if (g.length > 0 && !selectedGuildId) {
-        setSelectedGuildId(g[0].id);
+      if (g.length > 0 && !selectedId) {
+        setSelectedId(g[0].id);
       }
+    });
+
+    // Fetch Custom Tournaments
+    const unsubTourneys = db.collection("custom_tournaments").orderBy("createdAt", "desc").onSnapshot(snap => {
+        setCustomTournaments(snap.docs.map(d => ({ id: d.id, ...d.data() } as CustomTournament)));
     });
 
     // Fetch User Profile
@@ -98,25 +134,25 @@ const Arena: React.FC = () => {
       const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot(snap => {
         if (snap.exists) setUserProfile(snap.data() as UserProfile);
       });
-      return () => { unsubGuilds(); unsubUser(); };
+      return () => { unsubGuilds(); unsubUser(); unsubTourneys(); };
     }
     
-    return () => unsubGuilds();
-  }, [currentUser, selectedGuildId]);
+    return () => { unsubGuilds(); unsubTourneys(); };
+  }, [currentUser, selectedId]);
 
   useEffect(() => {
-    if (!selectedGuildId) return;
+    if (!selectedId) return;
 
-    // Fetch Participants for selected guild
+    // Fetch Participants for selected guild/tournament
     const unsubParticipants = db.collection("arena_participants")
-      .where("guildId", "==", selectedGuildId)
+      .where("guildId", "==", selectedId)
       .onSnapshot(snap => {
         setParticipants(snap.docs.map(d => d.data() as ArenaParticipant));
       });
 
-    // Fetch Matches for selected guild
+    // Fetch Matches for selected guild/tournament
     const unsubMatches = db.collection("arena_matches")
-      .where("guildId", "==", selectedGuildId)
+      .where("guildId", "==", selectedId)
       .onSnapshot(snap => {
         const matchesData = snap.docs.map(d => ({id: d.id, ...d.data()} as ArenaMatch));
         // Sort by Round ASC, then Position ASC
@@ -128,11 +164,10 @@ const Arena: React.FC = () => {
       });
 
     return () => { unsubParticipants(); unsubMatches(); };
-  }, [selectedGuildId]);
+  }, [selectedId]);
 
   // --- Pan/Zoom Handlers ---
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Ignore if clicking interactive elements inside the bracket
     if ((e.target as HTMLElement).closest('button') || 
         (e.target as HTMLElement).closest('[draggable="true"]') ||
         (e.target as HTMLElement).closest('.match-card')) { 
@@ -165,7 +200,6 @@ const Arena: React.FC = () => {
   const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.2));
   const resetView = () => { setZoom(1); setPan({x: 50, y: 50}); };
 
-  // Initialize with a bit of padding
   useEffect(() => {
     setPan({x: 50, y: 50});
   }, []);
@@ -175,7 +209,7 @@ const Arena: React.FC = () => {
     const batch = db.batch();
     try {
       // 1. Delete existing matches
-      const existingMatchesQuery = await db.collection("arena_matches").where("guildId", "==", selectedGuildId).get();
+      const existingMatchesQuery = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
       existingMatchesQuery.forEach(doc => {
           batch.delete(doc.ref);
       });
@@ -188,7 +222,7 @@ const Arena: React.FC = () => {
           for (let i = 0; i < matchCount; i++) {
               const matchRef = db.collection("arena_matches").doc();
               batch.set(matchRef, { 
-                  guildId: selectedGuildId, 
+                  guildId: selectedId, 
                   round: round, 
                   position: i, 
                   player1: null, 
@@ -200,9 +234,22 @@ const Arena: React.FC = () => {
           round++;
       }
 
+      // 3. Create 3rd Place Match (If size >= 4)
+      if (size >= 4) {
+          const thirdPlaceRef = db.collection("arena_matches").doc();
+          batch.set(thirdPlaceRef, {
+              guildId: selectedId,
+              round: 99, // Special Round ID for 3rd Place
+              position: 0,
+              player1: null,
+              player2: null,
+              winner: null,
+              isThirdPlace: true
+          });
+      }
+
       await batch.commit();
       
-      // Auto-adjust zoom for large brackets
       if (size >= 32) setZoom(0.6);
       else if (size >= 16) setZoom(0.8);
       else setZoom(1);
@@ -236,17 +283,12 @@ const Arena: React.FC = () => {
       message: "This will remove ALL participants and clear them from the bracket. This cannot be undone.",
       action: async () => {
         const batch = db.batch();
-        
-        // 1. Delete all participants
-        const parts = await db.collection("arena_participants").where("guildId", "==", selectedGuildId).get();
+        const parts = await db.collection("arena_participants").where("guildId", "==", selectedId).get();
         parts.forEach(doc => batch.delete(doc.ref));
-
-        // 2. Clear all match slots
         matches.forEach(m => {
              const ref = db.collection("arena_matches").doc(m.id);
              batch.update(ref, { player1: null, player2: null, winner: null });
         });
-
         await batch.commit();
         showAlert("All participants cleared.", 'success');
       }
@@ -255,31 +297,10 @@ const Arena: React.FC = () => {
 
   const handleShuffleClick = () => {
     if (!canManage || approvedParticipants.length === 0) return;
-
-    const hasPlayers = matches.some(m => m.player1 !== null || m.player2 !== null);
-    if (hasPlayers) {
-        setConfModal({
-            isOpen: true,
-            title: "Overwrite Bracket?",
-            message: "The bracket already has players assigned. Shuffling will remove them from their current slots and randomize the layout. Continue?",
-            action: async () => executeShuffle()
-        });
-    } else {
-        executeShuffle();
-    }
-  };
-  
-  const executeShuffle = async () => {
-    const shuffled = [...approvedParticipants].sort(() => 0.5 - Math.random());
     const round1Matches = matches.filter(m => m.round === 1);
-    
-    if (round1Matches.length * 2 < shuffled.length) {
-        showAlert("Not enough bracket slots for all participants. Some will be left out.", 'info');
-    }
-
+    const shuffled = [...approvedParticipants].sort(() => 0.5 - Math.random());
     const batch = db.batch();
     
-    // Clear all matches first
     matches.forEach(m => {
          const matchRef = db.collection("arena_matches").doc(m.id);
          batch.update(matchRef, { player1: null, player2: null, winner: null });
@@ -290,295 +311,169 @@ const Arena: React.FC = () => {
         if (participantIndex >= shuffled.length) break;
         const player1 = shuffled[participantIndex++];
         const player2 = (participantIndex < shuffled.length) ? shuffled[participantIndex++] : null;
-        
-        const matchRef = db.collection("arena_matches").doc(match.id);
-        batch.update(matchRef, { player1, player2 });
+        batch.update(db.collection("arena_matches").doc(match.id), { player1, player2 });
     }
     
-    try {
-        await batch.commit();
-        showAlert("Participants have been shuffled into Round 1.", 'success');
-    } catch (err: any) {
-        showAlert(`Error shuffling participants: ${err.message}`, 'error');
-    }
+    batch.commit().then(() => showAlert("Shuffled into Round 1.", 'success'));
   };
 
   const handleJoinSubmit = async (points: number) => {
     if (!userProfile) return;
-    if (userProfile.guildId !== selectedGuildId) {
+    if (userProfile.guildId !== selectedId) {
       showAlert("You can only join the Arena for your own Guild Branch.", 'error');
       return;
     }
-    
     try {
       await db.collection("arena_participants").doc(userProfile.uid).set({
         uid: userProfile.uid,
         displayName: userProfile.displayName,
         photoURL: userProfile.photoURL,
-        guildId: selectedGuildId,
+        guildId: selectedId,
         activityPoints: points,
-        status: 'pending' // Default status
+        status: 'pending'
       });
       setIsJoinModalOpen(false);
-      showAlert("Entry submitted! Waiting for officer approval.", 'success');
+      showAlert("Entry submitted!", 'success');
     } catch (err: any) {
-      showAlert(`Error joining arena: ${err.message}`, 'error');
+      showAlert(`Error: ${err.message}`, 'error');
     }
+  };
+
+  const handleCreateTournament = async (title: string, importedParticipants: ArenaParticipant[]) => {
+      try {
+          // 1. Create Tournament Doc
+          const tourneyRef = await db.collection("custom_tournaments").add({
+              title,
+              createdAt: new Date().toISOString(),
+              createdBy: userProfile?.uid || 'Admin'
+          });
+
+          // 2. Add Participants
+          const batch = db.batch();
+          importedParticipants.forEach(p => {
+              // Override guildId with new tournamentId so they show up in this view
+              const pRef = db.collection("arena_participants").doc(); // New ID for custom tourney entry
+              batch.set(pRef, {
+                  ...p,
+                  guildId: tourneyRef.id,
+                  status: 'approved'
+              });
+          });
+          await batch.commit();
+          
+          setSelectedId(tourneyRef.id);
+          showAlert("Custom Tournament Created!", 'success');
+      } catch (err: any) {
+          showAlert(`Error: ${err.message}`, 'error');
+      }
+  };
+
+  const handleDeleteTournament = async () => {
+      if (!isCustomMode || !selectedId) return;
+      setConfModal({
+          isOpen: true,
+          title: "Delete Tournament?",
+          message: `Are you sure you want to delete "${selectedTournament?.title}"? This action cannot be undone.`,
+          action: async () => {
+              try {
+                  const batch = db.batch();
+                  // 1. Delete Tournament Doc
+                  batch.delete(db.collection("custom_tournaments").doc(selectedId));
+                  
+                  // 2. Delete Participants
+                  const parts = await db.collection("arena_participants").where("guildId", "==", selectedId).get();
+                  parts.forEach(doc => batch.delete(doc.ref));
+
+                  // 3. Delete Matches
+                  const matchSnaps = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
+                  matchSnaps.forEach(doc => batch.delete(doc.ref));
+
+                  await batch.commit();
+                  showAlert("Tournament Deleted.", 'success');
+                  if (guilds.length > 0) setSelectedId(guilds[0].id);
+                  else setSelectedId('');
+              } catch (err: any) {
+                  showAlert(`Delete failed: ${err.message}`, 'error');
+              }
+          }
+      });
   };
 
   const handleSaveMinPoints = async (min: number) => {
       try {
-          await db.collection("guilds").doc(selectedGuildId).update({ arenaMinPoints: min });
-          showAlert("Arena configuration updated.", 'success');
-      } catch (err: any) {
-          showAlert(`Failed to update settings: ${err.message}`, 'error');
-      }
+          await db.collection("guilds").doc(selectedId).update({ arenaMinPoints: min });
+          showAlert("Updated.", 'success');
+      } catch (err: any) { showAlert(err.message, 'error'); }
   };
   
   const handleLeaveArena = async () => {
     if (!currentUser) return;
-    setConfModal({
-      isOpen: true,
-      title: "Leave Arena?",
-      message: "Are you sure you want to leave the tournament? This will remove you from any active matches.",
-      action: async () => {
-        try {
-          const batch = db.batch();
-          
-          // 1. Delete participant record
-          batch.delete(db.collection("arena_participants").doc(currentUser.uid));
+    try {
+        const batch = db.batch();
+        const pRef = db.collection("arena_participants").doc(currentUser.uid);
+        batch.delete(pRef);
 
-          // 2. Remove from matches if assigned
-          matches.forEach(m => {
-              let updateNeeded = false;
-              const updateData: any = {};
-              if (m.player1?.uid === currentUser.uid) {
-                  updateData.player1 = null;
-                  updateData.winner = null; // Reset winner if a player is removed
-                  updateNeeded = true;
-              }
-              if (m.player2?.uid === currentUser.uid) {
-                  updateData.player2 = null;
-                  updateData.winner = null;
-                  updateNeeded = true;
-              }
-              if (m.winner?.uid === currentUser.uid) {
-                  updateData.winner = null;
-                  updateNeeded = true;
-              }
+        const activeMatches = matches.filter(m => 
+            m.player1?.uid === currentUser.uid || m.player2?.uid === currentUser.uid || m.winner?.uid === currentUser.uid
+        );
 
-              if (updateNeeded) {
-                  batch.update(db.collection("arena_matches").doc(m.id), updateData);
-              }
-          });
+        activeMatches.forEach(m => {
+            const updates: any = {};
+            if (m.player1?.uid === currentUser.uid) updates.player1 = null;
+            if (m.player2?.uid === currentUser.uid) updates.player2 = null;
+            if (m.winner?.uid === currentUser.uid) updates.winner = null;
+            
+            const matchRef = db.collection("arena_matches").doc(m.id);
+            batch.update(matchRef, updates);
+        });
 
-          await batch.commit();
-          showAlert("You have left the arena.", 'info');
-        } catch (err: any) {
-          showAlert(`Error leaving arena: ${err.message}`, 'error');
-        }
-      }
-    });
+        await batch.commit();
+        showAlert("You have left the arena.", 'info');
+    } catch (err: any) {
+        showAlert(`Error leaving: ${err.message}`, 'error');
+    }
   };
 
   const handleRemoveParticipant = async (uid: string, name: string) => {
       setConfModal({
           isOpen: true,
-          title: "Remove Participant?",
-          message: `Are you sure you want to remove ${name} from the arena? This will also remove them from any active brackets.`,
+          title: `Remove ${name}?`,
+          message: "This will remove the user from the participants list and clear any active match slots they occupy.",
           action: async () => {
               const batch = db.batch();
               
-              // 1. Delete participant record
-              batch.delete(db.collection("arena_participants").doc(uid));
+              const pQuery = await db.collection("arena_participants").where("guildId", "==", selectedId).where("uid", "==", uid).get();
+              pQuery.forEach(doc => batch.delete(doc.ref));
 
-              // 2. Remove from matches if assigned
-              matches.forEach(m => {
-                  let updateNeeded = false;
-                  const updateData: any = {};
-                  if (m.player1?.uid === uid) {
-                      updateData.player1 = null;
-                      updateData.winner = null; // Reset winner if a player is removed
-                      updateNeeded = true;
-                  }
-                  if (m.player2?.uid === uid) {
-                      updateData.player2 = null;
-                      updateData.winner = null;
-                      updateNeeded = true;
-                  }
-                  if (m.winner?.uid === uid) {
-                      updateData.winner = null;
-                      updateNeeded = true;
-                  }
-
-                  if (updateNeeded) {
-                      batch.update(db.collection("arena_matches").doc(m.id), updateData);
-                  }
+              const activeMatches = matches.filter(m => 
+                m.player1?.uid === uid || m.player2?.uid === uid || m.winner?.uid === uid
+              );
+              
+              activeMatches.forEach(m => {
+                const updates: any = {};
+                if (m.player1?.uid === uid) updates.player1 = null;
+                if (m.player2?.uid === uid) updates.player2 = null;
+                if (m.winner?.uid === uid) updates.winner = null;
+                batch.update(db.collection("arena_matches").doc(m.id), updates);
               });
 
               await batch.commit();
-              showAlert(`${name} has been removed.`, 'success');
+              showAlert(`${name} removed.`, 'success');
           }
       });
   };
   
   const handleRemoveChampion = async () => {
-    setConfModal({
-        isOpen: true,
-        title: "Remove Champion?",
-        message: "This will remove the current reigning champion banner.",
-        action: async () => {
-             await db.collection("guilds").doc(selectedGuildId).update({
-                 lastArenaChampion: firebase.firestore.FieldValue.delete()
-             });
-             showAlert("Champion removed.", 'success');
-        }
-    });
+     await db.collection("guilds").doc(selectedId).update({ lastArenaChampion: firebase.firestore.FieldValue.delete() });
   };
 
-  const handleApprove = async (uid: string) => {
-    try {
-      await db.collection("arena_participants").doc(uid).update({ status: 'approved' });
-      showAlert("Participant approved.", 'success');
-    } catch (err: any) {
-      showAlert(`Error approving: ${err.message}`, 'error');
-    }
-  };
-
-  const handleDeny = async (uid: string) => {
-    try {
-      await db.collection("arena_participants").doc(uid).update({ status: 'denied' });
-    } catch (err: any) {
-      showAlert(`Error denying: ${err.message}`, 'error');
-    }
-  };
-
-  const handleUpdatePoints = async (uid: string, newPoints: number) => {
-      try {
-          await db.collection("arena_participants").doc(uid).update({ activityPoints: newPoints });
-          showAlert("Points updated.", 'success');
-      } catch (err: any) {
-          showAlert(`Failed to update points: ${err.message}`, 'error');
-      }
-  };
+  const handleApprove = async (uid: string) => db.collection("arena_participants").doc(uid).update({ status: 'approved' });
+  const handleDeny = async (uid: string) => db.collection("arena_participants").doc(uid).update({ status: 'denied' });
+  const handleUpdatePoints = async (uid: string, newPoints: number) => db.collection("arena_participants").doc(uid).update({ activityPoints: newPoints });
 
   const handleViewProfile = async (uid: string) => {
-      try {
-          const doc = await db.collection("users").doc(uid).get();
-          if (doc.exists) {
-              setViewingProfile(doc.data() as UserProfile);
-          } else {
-              showAlert("User profile not found.", 'error');
-          }
-      } catch (err) {
-          console.error("Error fetching profile", err);
-      }
-  };
-
-  // Logic for the Join Button Area
-  const renderJoinButton = () => {
-      if (!currentUserParticipant) {
-          return (
-            <button 
-                onClick={() => setIsJoinModalOpen(true)}
-                className="w-full py-3 bg-rose-900 text-white rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2"
-            >
-                <Shield size={18} /> Join Tournament
-            </button>
-          );
-      }
-
-      if (currentUserParticipant.status === 'pending') {
-          return (
-            <button 
-                disabled
-                className="w-full py-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-700"
-            >
-                <Clock size={18} /> Pending Approval
-            </button>
-          );
-      }
-
-      if (currentUserParticipant.status === 'denied') {
-        return (
-            <div className="flex flex-col gap-2">
-                <button 
-                    disabled
-                    className="w-full py-2 bg-transparent text-red-600 dark:text-red-500 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-red-200 dark:border-red-900/50"
-                >
-                    <AlertCircle size={18} /> Entry Denied
-                </button>
-                <button 
-                    onClick={() => setIsJoinModalOpen(true)}
-                    className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 underline"
-                >
-                    Update Points & Re-apply
-                </button>
-            </div>
-        );
-      }
-
-      // Approved
-      return (
-        <button 
-            onClick={handleLeaveArena}
-            className="w-full py-3 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-white rounded-lg font-bold hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2"
-        >
-            <LogOut size={18} /> Leave Arena
-        </button>
-      );
-  };
-
-  // Drag and Drop Logic
-  const handleDragStart = (e: React.DragEvent, user: ArenaParticipant) => {
-    if (!canManage || assignedParticipantUids.has(user.uid)) return;
-    e.dataTransfer.setData("application/json", JSON.stringify(user));
-  };
-
-  const handleDrop = async (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => {
-    if (!canManage) return;
-    e.preventDefault();
-    const data = e.dataTransfer.getData("application/json");
-    if (!data) return;
-    
-    const droppedUser: ArenaParticipant = JSON.parse(data);
-    
-    const isDuplicateInRound = matches.some(m => 
-        m.round === match.round && 
-        ((m.player1?.uid === droppedUser.uid && m.id !== match.id) || 
-         (m.player2?.uid === droppedUser.uid && m.id !== match.id))
-    );
-
-    if(isDuplicateInRound) {
-        showAlert("This player is already assigned to a match in this round.", 'error');
-        return;
-    }
-    
-    try {
-        await db.collection("arena_matches").doc(match.id).update({
-            [slot]: droppedUser,
-            winner: null
-        });
-    } catch (err: any) {
-        showAlert(`Error placing player: ${err.message}`, 'error');
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    if (canManage) e.preventDefault();
-  };
-  
-  const handleClearSlot = async (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => {
-      e.stopPropagation();
-      if (!canManage) return;
-      try {
-          await db.collection("arena_matches").doc(matchId).update({
-              [slot]: null,
-              winner: null
-          });
-      } catch (err: any) {
-          showAlert(`Error clearing slot: ${err.message}`, 'error');
-      }
+      const doc = await db.collection("users").doc(uid).get();
+      if (doc.exists) setViewingProfile(doc.data() as UserProfile);
   };
 
   const handleDeclareWinner = async (match: ArenaMatch, winner: ArenaParticipant) => {
@@ -590,13 +485,29 @@ const Arena: React.FC = () => {
         
         batch.update(matchRef, { winner });
 
-        // Find the next round match
         const nextRound = match.round + 1;
+        
+        const regularMatches = matches.filter(m => !m.isThirdPlace);
+        const maxRoundNum = Math.max(...regularMatches.map(m => m.round));
+        
+        const isSemiFinal = match.round === maxRoundNum - 1;
+
+        if (isSemiFinal) {
+            const loser = match.player1?.uid === winner.uid ? match.player2 : match.player1;
+            const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
+            
+            if (thirdPlaceMatch && loser) {
+                const slot = match.position % 2 === 0 ? 'player1' : 'player2';
+                const thirdRef = db.collection("arena_matches").doc(thirdPlaceMatch.id);
+                batch.update(thirdRef, { [slot]: loser });
+            }
+        }
+
         const nextPosition = Math.floor(match.position / 2);
         const nextSlot = match.position % 2 === 0 ? 'player1' : 'player2';
 
         const nextMatchQuery = await db.collection("arena_matches")
-            .where("guildId", "==", selectedGuildId)
+            .where("guildId", "==", selectedId)
             .where("round", "==", nextRound)
             .where("position", "==", nextPosition)
             .get();
@@ -606,15 +517,14 @@ const Arena: React.FC = () => {
             const nextMatchDoc = nextMatchQuery.docs[0];
             batch.update(nextMatchDoc.ref, {
                 [nextSlot]: winner,
-                winner: null
+                winner: null // Reset next match winner if re-deciding
             });
-        } else if (matches.every(m => m.round < nextRound)) {
+        } else if (match.round === maxRoundNum) {
              isChampion = true;
         }
 
-        if (isChampion) {
-            // Save champion to Guild
-            const guildRef = db.collection("guilds").doc(selectedGuildId);
+        if (isChampion && !isCustomMode) {
+            const guildRef = db.collection("guilds").doc(selectedId);
             batch.update(guildRef, {
                 lastArenaChampion: {
                     uid: winner.uid,
@@ -636,25 +546,39 @@ const Arena: React.FC = () => {
     }
   };
 
+  const handleClearSlot = async (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => {
+      e.stopPropagation();
+      if (!canManage) return;
+      await db.collection("arena_matches").doc(matchId).update({ [slot]: null, winner: null });
+  };
+
+  // Drag & Drop
+  const handleDragStart = (e: React.DragEvent, user: ArenaParticipant) => {
+    if (!canManage || assignedParticipantUids.has(user.uid)) return;
+    e.dataTransfer.setData("application/json", JSON.stringify(user));
+  };
+
+  const handleDrop = async (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => {
+    if (!canManage) return;
+    e.preventDefault();
+    const data = e.dataTransfer.getData("application/json");
+    if (!data) return;
+    const droppedUser: ArenaParticipant = JSON.parse(data);
+    
+    await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => { if (canManage) e.preventDefault(); };
+
   const renderMatch = (match: ArenaMatch) => {
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
         const isWinner = match.winner?.uid === player?.uid;
-        // Determine interaction based on role
-        // Member: Always view profile.
-        // Manager: Declare Winner (if active), View Profile (if done).
-        
         const isInteractive = !!player;
 
         const handleClick = (e: React.MouseEvent) => {
             if (!player) return;
-            
-            if (canManage && !match.winner) {
-                // Admin Action: Declare winner if match is active
-                handleDeclareWinner(match, player);
-            } else {
-                // Member Action (or Admin on finished match): View profile
-                handleViewProfile(player.uid);
-            }
+            if (canManage && !match.winner) handleDeclareWinner(match, player);
+            else handleViewProfile(player.uid);
         };
 
         return (
@@ -690,71 +614,82 @@ const Arena: React.FC = () => {
         )
     }
 
-    const maxRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 3;
+    const regularMatches = matches.filter(m => !m.isThirdPlace);
+    const maxRound = regularMatches.length > 0 ? Math.max(...regularMatches.map(m => m.round)) : 3;
 
     return (
-        <div key={match.id} className="match-card relative flex items-center z-10 w-full">
+        <div key={match.id} className="match-card relative flex items-center z-10 w-full mb-8 last:mb-0">
             {/* The Match Box */}
-            <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 w-64 shadow-sm group">
+            <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group`}>
+                {match.isThirdPlace && <div className="text-[10px] text-orange-600 dark:text-orange-500 text-center font-bold uppercase mb-1">3rd Place Match</div>}
                 {renderPlayer(match.player1, 'player1')}
                 <div className="text-[10px] text-zinc-300 dark:text-zinc-600 text-center font-bold py-0.5">VS</div>
                 {renderPlayer(match.player2, 'player2')}
             </div>
             
-            {/* Connector Lines */}
-            {match.round < maxRound && (
+            {/* Connector Lines (Not for 3rd place match) */}
+            {!match.isThirdPlace && match.round < maxRound && (
                 <div className={`absolute left-full top-1/2 w-16 h-[calc(100%+2rem)] -translate-y-1/2 pointer-events-none`}>
-                    {/* Horizontal Stem */}
                     <div className="absolute top-1/2 left-0 w-8 h-[2px] bg-zinc-300 dark:bg-zinc-700"></div>
-                    
-                    {/* Vertical Connector */}
                     {match.position % 2 === 0 ? (
-                        // Even Position (Top of pair): Line goes down and right
                         <div className="absolute top-1/2 left-8 w-[2px] h-[calc(50%+1rem)] bg-zinc-300 dark:bg-zinc-700 origin-top"></div>
                     ) : (
-                        // Odd Position (Bottom of pair): Line goes up and right
                         <div className="absolute bottom-1/2 left-8 w-[2px] h-[calc(50%+1rem)] bg-zinc-300 dark:bg-zinc-700 origin-bottom"></div>
                     )}
                 </div>
             )}
             
             {/* Receiver Horizontal Connector (for rounds > 1) */}
-            {match.round > 1 && (
+            {!match.isThirdPlace && match.round > 1 && (
                  <div className="absolute right-full top-1/2 w-8 h-[2px] bg-zinc-300 dark:bg-zinc-700 -translate-y-1/2"></div>
             )}
         </div>
     );
   };
 
-  // Dynamically calculate Rounds based on current matches
-  const maxRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 3;
+  // Rounds Logic
+  const regularMatches = matches.filter(m => !m.isThirdPlace);
+  const maxRound = regularMatches.length > 0 ? Math.max(...regularMatches.map(m => m.round)) : 3;
   const rounds = Array.from({ length: maxRound }, (_, i) => ({ 
       id: i + 1, 
       name: i + 1 === maxRound ? 'Finals' : (i + 1 === maxRound - 1 ? 'Semi-Finals' : `Round ${i + 1}`) 
   }));
 
+  const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
+
   // Dynamic Bracket Sizing
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
-  // Base height per match slot approx 120px with margins
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
 
   return (
     <div className="p-8 max-w-[1920px] mx-auto h-[calc(100vh-64px)] flex flex-col">
       <div className="flex justify-between items-start mb-6">
         <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
-                <Swords className="text-rose-900" size={32} />
-                Arena Tournament
-            </h1>
+            <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
+                    <Swords className="text-rose-900" size={32} />
+                    {isCustomMode ? selectedTournament?.title : 'Arena Tournament'}
+                </h1>
+                {isCustomMode && canDeleteCustom && (
+                    <button 
+                        onClick={handleDeleteTournament}
+                        className="text-zinc-400 hover:text-red-500 transition-colors p-2"
+                        title="Delete Tournament"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                )}
+            </div>
         </div>
         <div className="flex items-center gap-4">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+                {/* Guild Buttons */}
                 {guilds.map(g => (
                     <button
                         key={g.id}
-                        onClick={() => setSelectedGuildId(g.id)}
+                        onClick={() => setSelectedId(g.id)}
                         className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
-                            selectedGuildId === g.id 
+                            selectedId === g.id 
                             ? 'bg-rose-900 text-white shadow-lg shadow-rose-900/20' 
                             : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
                         }`}
@@ -762,7 +697,37 @@ const Arena: React.FC = () => {
                         {g.name}
                     </button>
                 ))}
+                
+                {/* Divider */}
+                <div className="w-px h-8 bg-zinc-300 dark:bg-zinc-700 mx-2"></div>
+
+                {/* Custom Tournaments */}
+                {customTournaments.map(t => (
+                    <button
+                        key={t.id}
+                        onClick={() => setSelectedId(t.id)}
+                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${
+                            selectedId === t.id 
+                            ? 'bg-purple-900 text-white shadow-lg shadow-purple-900/20' 
+                            : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                        }`}
+                    >
+                        <Globe size={14} /> {t.title}
+                    </button>
+                ))}
+
+                {/* Add Tournament Button (Admins) */}
+                {userProfile?.systemRole === 'Admin' && (
+                    <button 
+                        onClick={() => setIsCreateTourneyModalOpen(true)}
+                        className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700 p-2 rounded-lg transition-colors"
+                        title="Create Custom Tournament"
+                    >
+                        <Plus size={20} />
+                    </button>
+                )}
             </div>
+
             {canManage && (
                 <div className="flex gap-2">
                     <button 
@@ -784,61 +749,116 @@ const Arena: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Reigning Champion Banner --- */}
-      {arenaChampion && (
-        <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
-            <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
-                {/* Background particles/glow */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
-                    <div className="relative group cursor-pointer" onClick={() => handleViewProfile(arenaChampion.uid)}>
-                        <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
-                        <img 
-                            src={arenaChampion.photoURL || 'https://via.placeholder.com/150'} 
-                            className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
-                            alt="Champion"
-                        />
-                        <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
-                            #1
+      {/* --- Tournament Results Banner (Replaces Reigning Champion if done) --- */}
+      {isTournamentDone ? (
+          <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-zinc-900 to-black p-[2px] shadow-lg border border-zinc-800">
+              <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-center relative overflow-hidden min-h-[160px]">
+                  
+                  {/* Background Effects */}
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-yellow-500/10 via-zinc-950 to-zinc-950"></div>
+                  <Sparkles className="absolute top-4 left-10 text-yellow-500/20" size={40} />
+                  <Sparkles className="absolute bottom-4 right-10 text-yellow-500/20" size={60} />
+
+                  <div className="relative z-10 flex items-end gap-8 md:gap-16">
+                      
+                      {/* 2nd Place (Only for Main Guilds) */}
+                      {!isCustomMode && second && (
+                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(second.uid)}>
+                              <div className="relative mb-2">
+                                  <img src={second.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-zinc-400 object-cover shadow-lg" />
+                                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-white">#2</div>
+                              </div>
+                              <h3 className="font-bold text-zinc-300 text-sm">{second.displayName}</h3>
+                              <p className="text-xs text-zinc-500 font-medium">Silver</p>
+                          </div>
+                      )}
+
+                      {/* 1st Place (Champion) */}
+                      {first && (
+                          <div className="flex flex-col items-center -mt-8 group cursor-pointer" onClick={() => handleViewProfile(first.uid)}>
+                              <Trophy className="text-yellow-500 mb-2 drop-shadow-glow animate-bounce-slow" size={32} />
+                              <div className="relative mb-3">
+                                  <div className="absolute -inset-2 bg-yellow-500/30 rounded-full blur-md animate-pulse"></div>
+                                  <img src={first.photoURL || 'https://via.placeholder.com/150'} className="relative w-24 h-24 rounded-full border-4 border-yellow-500 object-cover shadow-2xl" />
+                                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-xs font-black px-3 py-1 rounded-full border-2 border-white shadow-sm">
+                                      CHAMPION
+                                  </div>
+                              </div>
+                              <h2 className="font-black text-white text-xl uppercase tracking-wide text-center">{first.displayName}</h2>
+                              <p className="text-xs text-yellow-500/80 font-bold uppercase tracking-widest mt-1">
+                                  {isCustomMode ? 'Tournament Winner' : 'Grand Champion'}
+                              </p>
+                          </div>
+                      )}
+
+                      {/* 3rd Place (Only for Main Guilds) */}
+                      {!isCustomMode && third && (
+                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(third.uid)}>
+                              <div className="relative mb-2">
+                                  <img src={third.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-orange-700 object-cover shadow-lg" />
+                                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white">#3</div>
+                              </div>
+                              <h3 className="font-bold text-zinc-300 text-sm">{third.displayName}</h3>
+                              <p className="text-xs text-zinc-500 font-medium">Bronze</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      ) : (
+          /* --- Fallback: Reigning Champion Banner (Only for Guilds if tourney not just finished) --- */
+          !isCustomMode && arenaChampion && (
+            <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
+                <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                    
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
+                        <div className="relative group cursor-pointer" onClick={() => handleViewProfile(arenaChampion.uid)}>
+                            <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
+                            <img 
+                                src={arenaChampion.photoURL || 'https://via.placeholder.com/150'} 
+                                className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
+                                alt="Champion"
+                            />
+                            <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
+                                #1
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
+                                <Trophy size={14} /> Reigning Champion
+                            </h3>
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tight">
+                                {arenaChampion.displayName}
+                            </h2>
+                            <p className="text-zinc-400 text-sm mt-1">
+                                Current Title Holder for {selectedGuild?.name}
+                            </p>
                         </div>
                     </div>
-                    <div>
-                        <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
-                            <Trophy size={14} /> Reigning Champion
-                        </h3>
-                        <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-                            {arenaChampion.displayName}
-                        </h2>
-                        <p className="text-zinc-400 text-sm mt-1">
-                            Current Title Holder for {selectedGuild?.name}
-                        </p>
-                    </div>
-                </div>
 
-                <div className="hidden md:block">
-                    <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
+                    <div className="hidden md:block">
+                        <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
+                    </div>
+                    
+                    {canManage && (
+                        <button 
+                            onClick={handleRemoveChampion}
+                            className="absolute top-4 right-4 bg-black/30 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm transition-colors z-20"
+                            title="Remove Champion"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    )}
                 </div>
-                
-                {canManage && (
-                    <button 
-                        onClick={handleRemoveChampion}
-                        className="absolute top-4 right-4 bg-black/30 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm transition-colors z-20"
-                        title="Remove Champion"
-                    >
-                        <Trash2 size={16} />
-                    </button>
-                )}
             </div>
-        </div>
+          )
       )}
 
       {/* --- Current Matchup Banner --- */}
       {myActiveMatch && (
         <div className="mb-6 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 p-6 rounded-xl border border-rose-200 dark:border-rose-900/30 shadow-sm relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-4 opacity-10">
-                 <Swords size={120} className="text-rose-900" />
-             </div>
+             {/* ... (Existing code kept same) ... */}
              <div className="relative z-10">
                  <h3 className="text-sm font-bold text-rose-700 dark:text-rose-500 uppercase tracking-widest mb-4 flex items-center gap-2">
                      <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
@@ -896,8 +916,7 @@ const Arena: React.FC = () => {
       <div className="flex flex-1 gap-6 overflow-hidden">
         {/* Left Sidebar: Participants */}
         <div className="w-80 flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex-shrink-0 z-10">
-            
-            {/* Pending Requests Section (Officers Only) */}
+            {/* ... Existing Participant List ... */}
             {canManage && pendingParticipants.length > 0 && (
                 <div className="border-b-4 border-zinc-100 dark:border-zinc-950 bg-rose-50 dark:bg-rose-900/10">
                     <div className="p-3 flex items-center justify-between">
@@ -954,17 +973,19 @@ const Arena: React.FC = () => {
                             <img src={p.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700" alt={p.displayName} />
                             <div className="flex flex-col min-w-0 flex-1">
                                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{p.displayName}</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-zinc-400">{p.activityPoints} pts</span>
-                                    {canManage && (
-                                        <button 
-                                            onClick={() => setEditingPointsParticipant(p)}
-                                            className="text-zinc-300 hover:text-zinc-500 dark:hover:text-zinc-200"
-                                        >
-                                            <Edit2 size={10} />
-                                        </button>
-                                    )}
-                                </div>
+                                {!isCustomMode && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-zinc-400">{p.activityPoints} pts</span>
+                                        {canManage && (
+                                            <button 
+                                                onClick={() => setEditingPointsParticipant(p)}
+                                                className="text-zinc-300 hover:text-zinc-500 dark:hover:text-zinc-200"
+                                            >
+                                                <Edit2 size={10} />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             {canManage && (
                                 <button 
@@ -984,28 +1005,44 @@ const Arena: React.FC = () => {
             </div>
 
             <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-2 bg-zinc-50 dark:bg-zinc-900/50">
-                {renderJoinButton()}
+                {/* Join button hidden in Custom Mode (usually invite only) */}
+                {!isCustomMode && (
+                    <>
+                        {!currentUserParticipant ? (
+                            <button 
+                                onClick={() => setIsJoinModalOpen(true)}
+                                className="w-full py-3 bg-rose-900 text-white rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2"
+                            >
+                                <Shield size={18} /> Join Tournament
+                            </button>
+                        ) : currentUserParticipant.status === 'pending' ? (
+                            <button disabled className="w-full py-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-700">
+                                <Clock size={18} /> Pending Approval
+                            </button>
+                        ) : currentUserParticipant.status === 'denied' ? (
+                            <div className="flex flex-col gap-2">
+                                <button disabled className="w-full py-2 bg-transparent text-red-600 dark:text-red-500 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-red-200 dark:border-red-900/50">
+                                    <AlertCircle size={18} /> Entry Denied
+                                </button>
+                                <button onClick={() => setIsJoinModalOpen(true)} className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 underline">Update Points & Re-apply</button>
+                            </div>
+                        ) : (
+                            <button onClick={handleLeaveArena} className="w-full py-3 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-white rounded-lg font-bold hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2">
+                                <LogOut size={18} /> Leave Arena
+                            </button>
+                        )}
+                    </>
+                )}
 
                 {canManage && (
                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                      <button 
-                          onClick={handleShuffleClick}
-                          className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
-                      >
+                      <button onClick={handleShuffleClick} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
                           <Shuffle size={12} /> Shuffle
                       </button>
-                      <button 
-                          onClick={handleManualReset}
-                          className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400"
-                          title="Resets matches, keeps participants"
-                      >
+                      <button onClick={handleManualReset} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
                           <RefreshCw size={12} /> Reset Bracket
                       </button>
-                      <button 
-                          onClick={handleClearAllParticipants}
-                          className="col-span-2 text-xs flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2 rounded border border-red-100 dark:border-red-900/30 transition-colors"
-                          title="Removes all participants and clears bracket"
-                      >
+                      <button onClick={handleClearAllParticipants} className="col-span-2 text-xs flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2 rounded border border-red-100 dark:border-red-900/30 transition-colors">
                           <UserMinus size={12} /> Remove All Participants
                       </button>
                    </div>
@@ -1022,7 +1059,7 @@ const Arena: React.FC = () => {
                 <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                     <Trophy size={18} className="text-rose-900 dark:text-rose-500" /> Tournament Bracket
                 </h3>
-                {arenaMinPoints > 0 && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
+                {arenaMinPoints > 0 && !isCustomMode && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
             </div>
 
             {/* Zoom Controls */}
@@ -1042,7 +1079,7 @@ const Arena: React.FC = () => {
                 onMouseLeave={handleMouseUp}
                 onWheel={handleWheel}
             >
-                {/* Centered Empty State - Outside Transform */}
+                {/* Centered Empty State */}
                 {matches.length === 0 && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-zinc-400 z-10 pointer-events-none">
                         <Trophy size={48} className="mx-auto mb-4 opacity-20" />
@@ -1064,18 +1101,35 @@ const Arena: React.FC = () => {
                         style={{ minHeight: `${minContainerHeight}px` }} 
                     >
                         {matches.length > 0 && (
-                            rounds.map(round => (
-                                <div key={round.id} className="flex flex-col min-w-[260px] relative z-0">
-                                    <div className="mb-4 text-center">
-                                        <div className="inline-block px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 shadow-sm">
-                                            {round.name}
+                            <>
+                                {rounds.map(round => {
+                                    const matchesInRound = regularMatches.filter(m => m.round === round.id);
+                                    const isSemiFinal = round.id === maxRound - 1;
+                                    
+                                    return (
+                                        <div key={round.id} className="flex flex-col min-w-[260px] relative z-0">
+                                            <div className="mb-4 text-center">
+                                                <div className="inline-block px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                                                    {round.name}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col justify-around flex-grow gap-4 py-8 relative">
+                                                {matchesInRound.map((match, i) => (
+                                                    <React.Fragment key={match.id}>
+                                                        {renderMatch(match)}
+                                                        {/* Inject 3rd Place Match visually in the middle of Semi-Finals */}
+                                                        {isSemiFinal && i === 0 && thirdPlaceMatch && (
+                                                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 scale-90 opacity-90">
+                                                                {renderMatch(thirdPlaceMatch)}
+                                                            </div>
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col justify-around flex-grow gap-4 py-8">
-                                        {matches.filter(m => m.round === round.id).map(renderMatch)}
-                                    </div>
-                                </div>
-                            ))
+                                    );
+                                })}
+                            </>
                         )}
                     </div>
                 </div>
@@ -1083,46 +1137,13 @@ const Arena: React.FC = () => {
         </div>
       </div>
 
-      <ConfirmationModal 
-        isOpen={confModal.isOpen} 
-        onClose={() => setConfModal({ ...confModal, isOpen: false })} 
-        onConfirm={confModal.action} 
-        title={confModal.title} 
-        message={confModal.message}
-      />
-
-      <JoinArenaModal 
-        isOpen={isJoinModalOpen}
-        onClose={() => setIsJoinModalOpen(false)}
-        onSubmit={handleJoinSubmit}
-        minPoints={arenaMinPoints}
-      />
-
-      <InitializeBracketModal 
-        isOpen={isInitModalOpen}
-        onClose={() => setIsInitModalOpen(false)}
-        onConfirm={handleInitializeBracket}
-      />
-
-      <EditPointsModal 
-        isOpen={!!editingPointsParticipant}
-        onClose={() => setEditingPointsParticipant(null)}
-        participant={editingPointsParticipant}
-        onConfirm={handleUpdatePoints}
-      />
-
-      <ArenaSettingsModal 
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        currentMin={arenaMinPoints}
-        onSave={handleSaveMinPoints}
-      />
-
-      <UserProfileModal 
-        user={viewingProfile}
-        onClose={() => setViewingProfile(null)}
-        guilds={guilds}
-      />
+      <ConfirmationModal isOpen={confModal.isOpen} onClose={() => setConfModal({ ...confModal, isOpen: false })} onConfirm={confModal.action} title={confModal.title} message={confModal.message} />
+      <JoinArenaModal isOpen={isJoinModalOpen} onClose={() => setIsJoinModalOpen(false)} onSubmit={handleJoinSubmit} minPoints={arenaMinPoints} />
+      <InitializeBracketModal isOpen={isInitModalOpen} onClose={() => setIsInitModalOpen(false)} onConfirm={handleInitializeBracket} />
+      <EditPointsModal isOpen={!!editingPointsParticipant} onClose={() => setEditingPointsParticipant(null)} participant={editingPointsParticipant} onConfirm={handleUpdatePoints} />
+      <ArenaSettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} currentMin={arenaMinPoints} onSave={handleSaveMinPoints} />
+      <CreateTournamentModal isOpen={isCreateTourneyModalOpen} onClose={() => setIsCreateTourneyModalOpen(false)} guilds={guilds} onConfirm={handleCreateTournament} />
+      <UserProfileModal user={viewingProfile} onClose={() => setViewingProfile(null)} guilds={guilds} />
     </div>
   );
 };

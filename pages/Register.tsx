@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
-import { Check, Sword, Shield, Cross, Zap, Edit2 } from 'lucide-react';
+import { Check, Sword, Shield, Cross, Zap, Edit2, AlertTriangle, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
+import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 
 const { useNavigate } = ReactRouterDOM as any;
 
@@ -34,6 +35,10 @@ const Register: React.FC = () => {
   const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
+  // Guild Selection State
+  const [isGuildModalOpen, setIsGuildModalOpen] = useState(false);
+  const [tempSelectedGuild, setTempSelectedGuild] = useState<Guild | null>(null);
+
   useEffect(() => {
     const fetchGuilds = async () => {
       // FIX: Use Firebase v8 compat syntax
@@ -41,9 +46,7 @@ const Register: React.FC = () => {
       const snapshot = await q.get();
       const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
       setGuilds(guildsData);
-      if (guildsData.length > 0) {
-        setFormData(prev => ({ ...prev, guildId: guildsData[0].id }));
-      }
+      // Removed auto-select to force manual selection via modal
     };
     fetchGuilds();
   }, []);
@@ -120,8 +123,26 @@ const Register: React.FC = () => {
       setFormData({...formData, inGameId: val});
   };
 
+  const handleGuildClick = (guild: Guild) => {
+      if (formData.guildId === guild.id) return; // Already selected
+      setTempSelectedGuild(guild);
+      setIsGuildModalOpen(true);
+  };
+
+  const handleConfirmGuild = () => {
+      if (tempSelectedGuild) {
+          setFormData(prev => ({ ...prev, guildId: tempSelectedGuild.id }));
+          setIsGuildModalOpen(false);
+          setTempSelectedGuild(null);
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.guildId) {
+        showAlert("Please select a Guild Branch.", 'error');
+        return;
+    }
     if (selectedWeapons.length !== 2) {
       showAlert("Please select exactly 2 Martial Arts.", 'error');
       return;
@@ -190,6 +211,7 @@ const Register: React.FC = () => {
 
       {!currentUser ? (
         <div className="max-w-md mx-auto bg-white dark:bg-zinc-900 p-8 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800">
+          {/* ... Login/Signup Form UI (Unchanged) ... */}
           <div className="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
             <button 
               onClick={() => setIsLoginMode(true)}
@@ -274,21 +296,40 @@ const Register: React.FC = () => {
                   onChange={handleInGameIdChange}
                 />
               </div>
+              
+              {/* Guild Selection Buttons */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Guild Branch</label>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Guild Branch</label>
                 {guilds.length === 0 ? (
                     <div className="text-sm text-red-500 border border-red-200 bg-red-50 p-2 rounded">System Not Initialized. Contact Admin.</div>
                 ) : (
-                  <select 
-                    className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
-                    value={formData.guildId}
-                    onChange={e => setFormData({...formData, guildId: e.target.value})}
-                  >
-                    {guilds.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    {guilds.map(g => {
+                        const isSelected = formData.guildId === g.id;
+                        return (
+                            <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => handleGuildClick(g)}
+                                className={`flex items-center justify-between p-3 rounded-lg border text-sm font-medium transition-all ${
+                                    isSelected
+                                    ? 'bg-rose-900 text-white border-rose-900 shadow-md ring-2 ring-rose-900/20'
+                                    : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-rose-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Building2 size={14} className={isSelected ? 'text-white' : 'text-zinc-400'} />
+                                    {g.name}
+                                </span>
+                                {isSelected && <Check size={14} className="text-white" />}
+                            </button>
+                        );
+                    })}
+                  </div>
                 )}
+                <p className="text-xs text-zinc-500 mt-2">
+                    <span className="text-rose-600 font-bold">*</span> Selection is locked upon confirmation.
+                </p>
               </div>
             </div>
 
@@ -385,6 +426,16 @@ const Register: React.FC = () => {
         onClose={() => setIsAvatarModalOpen(false)}
         selectedAvatar={selectedAvatar}
         onSelect={setSelectedAvatar}
+      />
+
+      <ConfirmationModal 
+        isOpen={isGuildModalOpen}
+        onClose={() => setIsGuildModalOpen(false)}
+        onConfirm={handleConfirmGuild}
+        title={`Join ${tempSelectedGuild?.name}?`}
+        message="This selection is final. If you wish to change your branch later, you will need to contact an Officer or Admin."
+        confirmText="Confirm Branch"
+        type="warning"
       />
     </div>
   );

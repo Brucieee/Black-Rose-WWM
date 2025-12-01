@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement } from '../types';
+import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -27,6 +26,7 @@ const Dashboard: React.FC = () => {
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   const [breakingArmyConfig, setBreakingArmyConfig] = useState<BreakingArmyConfig | null>(null);
+  const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [selectedLeaderboardUser, setSelectedLeaderboardUser] = useState<UserProfile | null>(null);
@@ -65,9 +65,13 @@ const Dashboard: React.FC = () => {
         setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry)));
       });
 
-    // Fetch Config
+    // Fetch Configs
     const unsubConfig = db.collection("system").doc("breakingArmy").onSnapshot(doc => {
         if (doc.exists) setBreakingArmyConfig(doc.data() as BreakingArmyConfig);
+    });
+    
+    const unsubHeroConfig = db.collection("system").doc("herosRealm").onSnapshot(doc => {
+        if (doc.exists) setHerosRealmConfig(doc.data() as HerosRealmConfig);
     });
 
     // Fetch Queue
@@ -88,8 +92,6 @@ const Dashboard: React.FC = () => {
     });
 
     // Fetch Global Announcements
-    // NOTE: Removed orderBy("timestamp", "desc") to prevent "Missing Index" error on composite queries.
-    // We fetch recent ones and sort in memory.
     const unsubAnnouncements = db.collection("announcements")
       .where("isGlobal", "==", true)
       .limit(20) 
@@ -101,7 +103,7 @@ const Dashboard: React.FC = () => {
       });
 
     return () => {
-        unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers(); unsubAnnouncements();
+        unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers(); unsubAnnouncements(); unsubHeroConfig();
     };
   }, []);
 
@@ -118,8 +120,19 @@ const Dashboard: React.FC = () => {
   const currentBoss = currentBossName ? breakingArmyConfig?.bossPool.find(b => b.name === currentBossName) : null;
   const guildQueue = queue.filter(q => q.guildId === userGuildId);
   
-  // STRICT COOLDOWN: If user is in recentWinners, they are blocked. Prize status doesn't matter for re-queueing.
-  // They must be manually removed or reset by admin to join again.
+  // Hero's Realm Schedule & Configured Bosses
+  const heroSchedule = userGuildId && herosRealmConfig?.schedules?.[userGuildId]?.[0];
+  const configuredBossNames = userGuildId && herosRealmConfig?.currentBosses?.[userGuildId];
+  
+  // Resolve Boss Objects from Pool
+  // If configured in Admin, use those. If not, fallback to first 2 in pool.
+  const heroBoss1Name = configuredBossNames?.[0] || breakingArmyConfig?.bossPool?.[0]?.name;
+  const heroBoss2Name = configuredBossNames?.[1] || breakingArmyConfig?.bossPool?.[1]?.name;
+  
+  const heroBoss1 = breakingArmyConfig?.bossPool?.find(b => b.name === heroBoss1Name);
+  const heroBoss2 = breakingArmyConfig?.bossPool?.find(b => b.name === heroBoss2Name);
+
+
   const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId) || false) : false;
 
   const isAdmin = currentUserProfile?.systemRole === 'Admin';
@@ -237,60 +250,105 @@ const Dashboard: React.FC = () => {
         {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-8">
             
-            {/* Breaking Army Card - Compact Design */}
-            <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-black flex">
-                {/* Left Side: Boss Image */}
-                <div className="w-48 relative overflow-hidden flex-shrink-0">
-                    {currentBoss?.imageUrl ? (
-                        <img 
-                            src={currentBoss.imageUrl} 
-                            alt={currentBoss.name} 
-                            className="w-full h-full object-cover"
-                            style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}
-                        />
-                    ) : (
-                        <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700">
-                            <Sword size={32} />
-                        </div>
-                    )}
-                </div>
-
-                {/* Right Side: Info */}
-                <div className="flex-1 p-4 flex flex-col justify-center text-white relative z-10">
-                     <div className="mb-3">
-                        <div className="text-rose-500 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
-                            <Activity size={14} className="animate-pulse" /> Breaking Army
-                        </div>
-                        <h2 className="text-xl font-extrabold leading-tight mb-1 truncate">
-                            {currentBoss?.name || "No Active Boss"}
-                        </h2>
-                        {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
-                            <div className="inline-flex items-center gap-2 text-xs text-zinc-400">
-                                <Clock size={12} />
-                                <span>Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Breaking Army Card */}
+                <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-black flex md:col-span-2 lg:col-span-1">
+                    {/* Adjusted width from w-48 to w-40 to give more space for text */}
+                    <div className="w-40 relative overflow-hidden flex-shrink-0">
+                        {currentBoss?.imageUrl ? (
+                            <img 
+                                src={currentBoss.imageUrl} 
+                                alt={currentBoss.name} 
+                                className="w-full h-full object-cover"
+                                style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0 100%)' }}
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-700">
+                                <Sword size={32} />
                             </div>
                         )}
-                     </div>
+                    </div>
+                    {/* Adjusted padding from p-4 to p-4 (unchanged) but parent width change helps. Added whitespace-nowrap to time */}
+                    <div className="flex-1 p-4 flex flex-col justify-center text-white relative z-10 min-w-0">
+                        <div className="mb-3">
+                            <div className="text-rose-500 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
+                                <Activity size={14} className="animate-pulse" /> Breaking Army
+                            </div>
+                            <h2 className="text-xl font-extrabold leading-tight mb-1 truncate">
+                                {currentBoss?.name || "No Active Boss"}
+                            </h2>
+                            {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
+                                <div className="inline-flex items-center gap-2 text-xs text-zinc-400 leading-tight">
+                                    <Clock size={12} className="flex-shrink-0" />
+                                    {/* Added whitespace-nowrap to prevent line break */}
+                                    <span className="whitespace-nowrap">Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
+                                </div>
+                            )}
+                        </div>
 
-                     <div className="flex items-center gap-4">
-                         <button 
-                            onClick={() => setIsQueueModalOpen(true)}
-                            className="bg-white text-rose-950 hover:bg-zinc-200 px-4 py-2 rounded font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                            disabled={!currentBossName}
-                         >
-                            {myQueuePosition ? 'View Queue' : 'Join Queue'}
-                         </button>
-                         {myQueuePosition && (
-                             <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-900/50 border border-zinc-800">
-                                 <span className="text-xs font-medium text-zinc-300">Position:</span>
-                                 <span className="text-sm font-bold text-green-400">#{myQueuePosition}</span>
-                             </div>
-                         )}
-                     </div>
+                        <div className="flex items-center gap-4">
+                            <button 
+                                onClick={() => setIsQueueModalOpen(true)}
+                                className="bg-white text-rose-950 hover:bg-zinc-200 px-4 py-2 rounded font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                                disabled={!currentBossName}
+                            >
+                                {myQueuePosition ? 'View Queue' : 'Join Queue'}
+                            </button>
+                            {myQueuePosition && (
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-900/50 border border-zinc-800">
+                                    <span className="text-xs font-medium text-zinc-300">Position:</span>
+                                    <span className="text-sm font-bold text-green-400">#{myQueuePosition}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                
-                {/* Decorative background element */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-600/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                {/* Hero's Realm Widget */}
+                <div className="relative rounded-xl overflow-hidden shadow-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 md:col-span-2 lg:col-span-1 min-h-[160px]">
+                    {/* Background Images Layer */}
+                    <div className="absolute inset-0 flex">
+                        <div className="w-1/2 relative h-full">
+                            {heroBoss1?.imageUrl ? (
+                                <img src={heroBoss1.imageUrl} className="w-full h-full object-cover opacity-30 mask-image-linear-to-r-transparent" style={{ maskImage: 'linear-gradient(to right, black, transparent)' }} alt="Left Boss" />
+                            ) : (
+                                <div className="w-full h-full bg-purple-900/10 dark:bg-purple-900/20"></div>
+                            )}
+                        </div>
+                        <div className="w-1/2 relative h-full">
+                            {heroBoss2?.imageUrl ? (
+                                <img src={heroBoss2.imageUrl} className="w-full h-full object-cover opacity-30" style={{ maskImage: 'linear-gradient(to left, black, transparent)' }} alt="Right Boss" />
+                            ) : (
+                                <div className="w-full h-full bg-purple-900/10 dark:bg-purple-900/20"></div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Content Layer */}
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center">
+                        <div className="flex items-center gap-2 mb-2">
+                             <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+                                <Clock size={16} />
+                            </div>
+                            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 tracking-wide">HERO'S REALM</h3>
+                        </div>
+
+                         {heroSchedule ? (
+                            <div>
+                                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase font-bold tracking-wider mb-1">Next Session</p>
+                                <p className="text-2xl font-black text-purple-600 dark:text-purple-400 leading-none mb-1">{heroSchedule.day}</p>
+                                <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300 bg-white/50 dark:bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                                    @ {formatTime12Hour(heroSchedule.time)}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="text-center py-2">
+                                <p className="text-zinc-400 text-sm italic">No active schedule.</p>
+                                <Link to={`/guild/${userGuildId}`} className="text-xs text-purple-600 hover:underline block mt-2 font-medium">Vote Now</Link>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Global Announcements */}

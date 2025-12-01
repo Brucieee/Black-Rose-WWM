@@ -1,9 +1,15 @@
 
 
+
+
+
+
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit } from 'lucide-react';
+import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -11,6 +17,7 @@ import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
+import { HerosRealmModal } from '../components/modals/HerosRealmModal';
 import { RichText } from '../components/RichText';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -39,8 +46,12 @@ const GuildDashboard: React.FC = () => {
   const [memberCount, setMemberCount] = useState(0);
   const [events, setEvents] = useState<GuildEvent[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
+  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [isHerosRealmModalOpen, setIsHerosRealmModalOpen] = useState(false);
+  
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
@@ -151,7 +162,14 @@ const GuildDashboard: React.FC = () => {
         setAnnouncements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement)));
       });
 
-    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); };
+    // Fetch Hero's Realm Config
+    const unsubHerosRealm = db.collection("system").doc("herosRealm").onSnapshot(snap => {
+        if (snap.exists) {
+            setHerosRealmConfig(snap.data() as HerosRealmConfig);
+        }
+    });
+
+    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); unsubHerosRealm(); };
   }, [guildId, currentUser]);
 
   useEffect(() => {
@@ -210,6 +228,15 @@ const GuildDashboard: React.FC = () => {
   });
   
   const onlineMembers = allUsers.filter(u => u.guildId === guildId && isUserOnline(u));
+  const activeHeroSchedule = herosRealmConfig?.schedules?.[guildId || '']?.[0];
+  
+  const formatTime = (time: string) => {
+      const [h, m] = time.split(':');
+      let hour = parseInt(h);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      return `${hour}:${m} ${ampm}`;
+  };
 
   const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
     setDeleteConf({ isOpen: true, title, message, action });
@@ -393,7 +420,7 @@ const GuildDashboard: React.FC = () => {
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{guild.name} Dashboard</h1>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4">
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl"><Users size={28} /></div>
           <div><p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Total Members</p><p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{memberCount} / {guild.memberCap}</p></div>
@@ -402,7 +429,33 @@ const GuildDashboard: React.FC = () => {
           <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl"><Sword size={28} /></div>
           <div><p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Active Parties</p><p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{parties.length}</p></div>
         </div>
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 max-h-[300px] overflow-y-auto custom-scrollbar">
+        
+        {/* Hero's Realm Card */}
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+           <div className="flex items-center gap-3 mb-2">
+               <div className="p-2 bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg">
+                   <Clock size={20} />
+               </div>
+               <div>
+                   <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Hero's Realm</p>
+                   {activeHeroSchedule ? (
+                       <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                           {activeHeroSchedule.day} @ {formatTime(activeHeroSchedule.time)}
+                       </p>
+                   ) : (
+                       <p className="text-xs text-zinc-400 italic">Schedule Pending</p>
+                   )}
+               </div>
+           </div>
+           <button 
+                onClick={() => setIsHerosRealmModalOpen(true)}
+                className="w-full py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded transition-colors"
+           >
+               View Requests / Vote
+           </button>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 max-h-[160px] overflow-y-auto custom-scrollbar">
            <div className="flex-1">
               <h3 className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-2 mb-2"><Calendar size={16} /> Branch Events</h3>
               {branchEvents.length === 0 ? (
@@ -513,12 +566,13 @@ const GuildDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  {/* Party Grid Layout - Using CSS Grid for 5 columns if > 5 members */}
+                  <div className={`grid gap-2 ${party.maxMembers > 5 ? 'grid-cols-5' : 'flex flex-wrap'}`}>
                     {party.currentMembers.map((member) => {
                         const memberProfile = allUsers.find(u => u.uid === member.uid);
                         const isOnline = memberProfile ? isUserOnline(memberProfile) : false;
                         return (
-                          <div key={member.uid} className="relative group/member cursor-pointer" onClick={() => { if(memberProfile) setSelectedUser(memberProfile); }}>
+                          <div key={member.uid} className="relative w-10 h-10 group/member cursor-pointer" onClick={() => { if(memberProfile) setSelectedUser(memberProfile); }}>
                             <img 
                               src={memberProfile?.photoURL || member.photoURL || 'https://via.placeholder.com/150'} 
                               alt={member.name} 
@@ -527,7 +581,7 @@ const GuildDashboard: React.FC = () => {
                             />
                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
                             {/* Role Badge - Adjusted Styling */}
-                            <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap
+                            <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap z-10
                                 ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}
                             `}>
                                 {member.role}
@@ -535,7 +589,7 @@ const GuildDashboard: React.FC = () => {
                             {isLeader && member.uid !== currentUser?.uid && (
                                 <button 
                                     onClick={(e) => kickMember(e, party, member.uid)}
-                                    className="absolute -bottom-2 -left-1 bg-zinc-800 text-white p-0.5 rounded-full opacity-0 group-hover/member:opacity-100 transition-opacity hover:bg-red-600"
+                                    className="absolute -bottom-2 -left-1 bg-zinc-800 text-white p-0.5 rounded-full opacity-0 group-hover/member:opacity-100 transition-opacity hover:bg-red-600 z-10"
                                     title="Kick Member"
                                 >
                                     <Trash2 size={10} />
@@ -643,6 +697,13 @@ const GuildDashboard: React.FC = () => {
         onSubmit={handlePostAnnouncement}
         userProfile={currentUserProfile}
         initialData={editingAnnouncement}
+      />
+      
+      <HerosRealmModal 
+        isOpen={isHerosRealmModalOpen}
+        onClose={() => setIsHerosRealmModalOpen(false)}
+        guildId={guildId || ''}
+        currentUser={currentUserProfile}
       />
 
       <ConfirmationModal
