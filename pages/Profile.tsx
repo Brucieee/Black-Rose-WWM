@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
-import { Check, Sword, Shield, Cross, Zap, Save, Edit2 } from 'lucide-react';
+import { Check, Sword, Shield, Cross, Zap, Save, Edit2, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -216,16 +216,28 @@ const Profile: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Guild Branch</label>
-                <select 
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
-                  value={formData.guildId}
-                  onChange={e => setFormData({...formData, guildId: e.target.value})}
-                >
-                    <option value="" disabled>Select Guild</option>
-                    {guilds.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                </select>
+                {profileExists ? (
+                    <div className="relative">
+                        <div className="flex items-center w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-not-allowed">
+                            <Lock size={14} className="mr-2 opacity-70" />
+                            <span>{guilds.find(g => g.id === formData.guildId)?.name || 'Unknown Guild'}</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1 italic">
+                            Branch locked. Contact an Officer to transfer.
+                        </p>
+                    </div>
+                ) : (
+                    <select 
+                      className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900"
+                      value={formData.guildId}
+                      onChange={e => setFormData({...formData, guildId: e.target.value})}
+                    >
+                        <option value="" disabled>Select Guild</option>
+                        {guilds.map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                    </select>
+                )}
               </div>
             </div>
 
