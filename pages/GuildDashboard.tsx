@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
@@ -163,13 +155,13 @@ const GuildDashboard: React.FC = () => {
       });
 
     // Fetch Hero's Realm Config
-    const unsubHerosRealm = db.collection("system").doc("herosRealm").onSnapshot(snap => {
+    const unsubHerosRealmCorrect = db.collection("system").doc("herosRealm").onSnapshot(snap => {
         if (snap.exists) {
             setHerosRealmConfig(snap.data() as HerosRealmConfig);
         }
     });
 
-    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); unsubHerosRealm(); };
+    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); unsubHerosRealmCorrect(); };
   }, [guildId, currentUser]);
 
   useEffect(() => {
@@ -214,7 +206,6 @@ const GuildDashboard: React.FC = () => {
   
   // This derived state is for UI logic within the current guild dashboard context
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
-  const canPostAnnouncement = currentUserProfile && (currentUserProfile.systemRole === 'Admin' || (currentUserProfile.systemRole === 'Officer' && currentUserProfile.guildId === guildId));
   
   // Filter events: Must match guildId OR be global (empty), AND must be in the future (or today)
   const now = new Date();
@@ -291,18 +282,8 @@ const GuildDashboard: React.FC = () => {
           });
           showAlert("Announcement updated!", 'success');
       } else {
-          const targetGuildId = isGlobal ? 'global' : guildId;
-          const newAnnouncement = {
-            title,
-            content,
-            authorId: currentUserProfile.uid,
-            authorName: currentUserProfile.displayName,
-            guildId: targetGuildId,
-            timestamp: new Date().toISOString(),
-            isGlobal: false 
-          };
-          await db.collection("announcements").add(newAnnouncement);
-          showAlert("Announcement posted!", 'success');
+          // Fallback if triggered unexpectedly, though button is removed
+          return;
       }
       setEditingAnnouncement(null);
     } catch (err: any) {
@@ -566,8 +547,8 @@ const GuildDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Party Grid Layout - Using CSS Grid for 5 columns if > 5 members */}
-                  <div className={`grid gap-2 ${party.maxMembers > 5 ? 'grid-cols-5' : 'flex flex-wrap'}`}>
+                  {/* Party Grid Layout - Using CSS Grid for 5+ columns if large, else horizontal flex */}
+                  <div className={party.maxMembers > 5 ? 'grid grid-cols-5 gap-2' : 'flex flex-row gap-2'}>
                     {party.currentMembers.map((member) => {
                         const memberProfile = allUsers.find(u => u.uid === member.uid);
                         const isOnline = memberProfile ? isUserOnline(memberProfile) : false;
@@ -614,28 +595,22 @@ const GuildDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Announcements */}
+        {/* Right Column: Announcements (Read Only) */}
         <div className="space-y-6">
            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                       <Megaphone className="text-rose-900 dark:text-rose-500" size={20} /> Announcements
                   </h3>
-                  {canPostAnnouncement && (
-                      <button 
-                        onClick={() => { setEditingAnnouncement(null); setIsAnnouncementModalOpen(true); }}
-                        className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 font-medium transition-colors"
-                      >
-                          + Post
-                      </button>
-                  )}
+                  {/* Post Button Removed as requested */}
               </div>
               <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
                   {announcements.length === 0 ? (
                       <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4">No announcements.</p>
                   ) : (
                       announcements.map(ann => {
-                          // Allow delete if: Admin, or Officer of this guild, or original author
+                          // Allow delete if: Admin, or Officer of this guild, or original author (but editing disabled from here per request implied)
+                          // Keeping delete logic for management but removing edit/post triggering from UI
                           const isAuthor = currentUser?.uid === ann.authorId;
                           const isOfficer = currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId;
                           const isAdmin = currentUserProfile?.systemRole === 'Admin';
@@ -660,12 +635,7 @@ const GuildDashboard: React.FC = () => {
                                   />
                                   {canManage && (
                                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button 
-                                            onClick={() => { setEditingAnnouncement(ann); setIsAnnouncementModalOpen(true); }}
-                                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-                                          >
-                                              <Edit size={14} />
-                                          </button>
+                                          {/* Edit removed per request to only manage on admin page, but keeping delete for quick moderation */}
                                           <button 
                                             onClick={() => openDeleteModal("Delete Announcement?", "Are you sure you want to delete this?", () => handleDeleteAnnouncement(ann.id))}
                                             className="p-1 text-zinc-400 hover:text-red-500 transition-colors"

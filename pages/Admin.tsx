@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, RefreshCw, Skull, Clock, X, Edit, Trophy, Save, ShieldAlert, FileText, User, ListOrdered, Plane, Settings, Shield, Megaphone, ArrowLeft, ArrowRight, GripHorizontal, Globe, CheckCircle } from 'lucide-react';
-import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement, HerosRealmRequest, HerosRealmConfig } from '../types';
+import { Plus, Trash2, Calendar, Database, Crown, Skull, Clock, Edit, Trophy, ShieldAlert, FileText, User, Plane, Megaphone, GripVertical, Globe, Check, Image as ImageIcon, Search, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement, HerosRealmRequest, HerosRealmConfig, RoleType } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
 import { CreateGuildModal } from '../components/modals/CreateGuildModal';
-import { DeclareWinnerModal } from '../components/modals/DeclareWinnerModal';
 import { EditLeaderboardModal } from '../components/modals/EditLeaderboardModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
-import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
+import { AddBossModal } from '../components/modals/AddBossModal';
 import { RichText } from '../components/RichText';
 import { ImageUpload } from '../components/ImageUpload';
 
@@ -18,19 +17,17 @@ const Admin: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   
   // Tab Management
-  // Added 'herosRealm'
-  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'users', 'members', 'leaves'];
+  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves'];
   
-  // Lazy init to prevent reset
   const [tabOrder, setTabOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('adminTabOrder');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-            // Merge parsed with defaultTabs to ensure new tabs appear
             const uniqueTabs = new Set([...parsed, ...defaultTabs]);
             return Array.from(uniqueTabs);
         }
@@ -41,14 +38,14 @@ const Admin: React.FC = () => {
     return defaultTabs;
   });
 
-  // Lazy init active tab
   const [activeTab, setActiveTab] = useState<string>(() => {
     return sessionStorage.getItem('adminActiveTab') || 'guilds';
   });
 
-  const [isReorderMode, setIsReorderMode] = useState(false);
+  // Drag State for Tabs
+  const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateGuildModalOpen, setIsCreateGuildModalOpen] = useState(false);
   const [newGuildData, setNewGuildData] = useState({ name: '', id: '', memberCap: 80});
   
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -57,40 +54,48 @@ const Admin: React.FC = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [winnerLogs, setWinnerLogs] = useState<WinnerLog[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
   
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
   const [bossPool, setBossPool] = useState<Boss[]>([]);
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
-  const [recentWinners, setRecentWinners] = useState<CooldownEntry[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   
-  // Hero's Realm
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   const [herosRealmRequests, setHerosRealmRequests] = useState<HerosRealmRequest[]>([]);
 
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [userSearch, setUserSearch] = useState('');
 
+  // Forms & Editing
   const [editingGuildId, setEditingGuildId] = useState<string | null>(null);
   const [guildEditForm, setGuildEditForm] = useState({ name: '', memberCap: 80 });
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [eventForm, setEventForm] = useState<Partial<GuildEvent>>({
-    title: '', description: '', type: 'Raid', date: '', guildId: '', imageUrl: ''
+  const [eventForm, setEventForm] = useState<{
+    title: string;
+    description: string;
+    type: string;
+    customType: string;
+    date: string;
+    guildId: string;
+    imageUrl: string;
+  }>({
+    title: '', description: '', type: 'Raid', customType: '', date: '', guildId: '', imageUrl: ''
   });
 
-  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [announcementForm, setAnnouncementForm] = useState({ title: '', content: '', isGlobal: true });
 
-  const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
-  const [selectedWinner, setSelectedWinner] = useState<QueueEntry | null>(null);
-  const [winnerTime, setWinnerTime] = useState('');
-
+  const [isAddBossModalOpen, setIsAddBossModalOpen] = useState(false);
   const [editingBossOriginalName, setEditingBossOriginalName] = useState<string | null>(null);
   const [bossForm, setBossForm] = useState({ name: '', imageUrl: '' });
 
-  const [newSchedule, setNewSchedule] = useState({ day: 'Wednesday', time: '20:00' });
+  // 12-Hour Schedule Input State
+  const [newScheduleDay, setNewScheduleDay] = useState('Wednesday');
+  const [newScheduleTime, setNewScheduleTime] = useState({ hour: '8', minute: '00', ampm: 'PM' });
+  
+  // Admin Config Filters
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
 
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState(false);
   const [editingLeaderboardEntry, setEditingLeaderboardEntry] = useState<LeaderboardEntry | null>(null);
@@ -104,62 +109,74 @@ const Admin: React.FC = () => {
   }>({ isOpen: false, title: '', message: '', action: async () => {} });
 
   const [leaveBranchFilter, setLeaveBranchFilter] = useState('All');
+  const [memberListFilter, setMemberListFilter] = useState('All');
+
+  // Drag State for Boss Pool
+  const [draggedBossIndex, setDraggedBossIndex] = useState<number | null>(null);
 
   const isAdmin = userProfile?.systemRole === 'Admin';
   const isOfficer = userProfile?.systemRole === 'Officer';
 
-  // Standard Event Types
   const standardEventTypes = ['Raid', 'PvP', 'Social', 'Meeting'];
 
   useEffect(() => {
-    // Save tab order to localStorage whenever it changes
     localStorage.setItem('adminTabOrder', JSON.stringify(tabOrder));
   }, [tabOrder]);
 
   useEffect(() => {
-    // Save active tab to sessionStorage whenever it changes
     sessionStorage.setItem('adminActiveTab', activeTab);
   }, [activeTab]);
 
   useEffect(() => {
     if (currentUser) {
+        setLoadingProfile(true);
         const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot((docSnap) => {
             if (docSnap.exists) {
                 const profile = docSnap.data() as UserProfile;
                 setUserProfile(profile);
-                
-                // If officer, automatically select their branch and don't allow changing for certain tabs
                 if (profile.systemRole === 'Officer') {
                     setSelectedBranchId(profile.guildId);
                     setEventForm(prev => ({...prev, guildId: profile.guildId}));
+                    setAnnouncementForm(prev => ({...prev, isGlobal: false}));
+                    // Officer: Force Member List to their guild
+                    setMemberListFilter(profile.guildId);
+                } else if (profile.systemRole === 'Admin') {
+                    setAnnouncementForm(prev => ({...prev, isGlobal: true}));
                 }
+            } else {
+                setUserProfile(null);
             }
+            setLoadingProfile(false);
         });
         return () => unsubUser();
+    } else {
+        setLoadingProfile(false);
     }
   }, [currentUser]);
 
-  // Enforce restricted tabs for Officers (Safety check)
   useEffect(() => {
-      if (userProfile?.systemRole === 'Officer') {
+      if (!loadingProfile && userProfile?.systemRole === 'Officer') {
           const allowedTabs = ['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members'];
           if (!allowedTabs.includes(activeTab)) {
                setActiveTab('events');
           }
       }
-  }, [userProfile?.systemRole, activeTab]);
+  }, [loadingProfile, userProfile?.systemRole, activeTab]);
+
+  // Ensure default branch is selected if admin hasn't selected one
+  useEffect(() => {
+    if (isAdmin && !selectedBranchId && guilds.length > 0) {
+      setSelectedBranchId(guilds[0].id);
+    }
+  }, [guilds, isAdmin, selectedBranchId]);
 
   useEffect(() => {
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
       const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
       setGuilds(g);
-      // Only set default branch for Admins, Officers are handled in user effect
-      if (g.length > 0 && !selectedBranchId && isAdmin) {
-          setSelectedBranchId(g[0].id);
-      }
     });
 
-    const unsubEvents = db.collection("events").onSnapshot(snap => {
+    const unsubEvents = db.collection("events").orderBy("date", "desc").onSnapshot(snap => {
       setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as GuildEvent)));
     });
 
@@ -179,30 +196,32 @@ const Admin: React.FC = () => {
       setLeaves(snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaveRequest)));
     });
 
+    const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => {
+        const qData = snap.docs.map(d => {
+            const data = d.data();
+            const joinedAt = data.joinedAt?.toDate ? data.joinedAt.toDate() : new Date(data.joinedAt);
+            return { ...data, joinedAt } as QueueEntry;
+        });
+        setQueue(qData);
+    });
+
     const unsubConfig = db.collection("system").doc("breakingArmy").onSnapshot(snap => {
       if (snap.exists) {
         const data = snap.data() as BreakingArmyConfig;
         setCurrentBossMap(data.currentBoss || {});
         setSchedulesMap(data.schedules || {});
-        setRecentWinners(data.recentWinners || []);
         setBossPool(data.bossPool || []);
       }
     });
     
-    // Hero's Realm Config
     const unsubHRConfig = db.collection("system").doc("herosRealm").onSnapshot(snap => {
       if (snap.exists) {
           setHerosRealmConfig(snap.data() as HerosRealmConfig);
       }
     });
     
-    // Hero's Realm Requests
     const unsubHRRequests = db.collection("heros_realm_requests").onSnapshot(snap => {
         setHerosRealmRequests(snap.docs.map(d => ({id: d.id, ...d.data()} as HerosRealmRequest)));
-    });
-
-    const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => {
-      setQueue(snap.docs.map(d => ({ ...d.data() } as QueueEntry)));
     });
 
     const unsubUsers = db.collection("users").onSnapshot(snap => {
@@ -210,1436 +229,1356 @@ const Admin: React.FC = () => {
     });
 
     return () => {
-      unsubGuilds(); unsubEvents(); unsubConfig(); unsubQueue(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves(); unsubAnnouncements(); unsubHRConfig(); unsubHRRequests();
+      unsubGuilds(); unsubEvents(); unsubConfig(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves(); unsubAnnouncements(); unsubHRConfig(); unsubHRRequests(); unsubQueue();
     };
-  }, [isAdmin, selectedBranchId]);
+  }, []);
 
-  if (!currentUser || !userProfile) {
-    return <div className="p-8">Access Denied. You must be logged in.</div>;
-  }
-  if (!isAdmin && !isOfficer) {
-    return <div className="p-8">Access Denied. You do not have permission to view this page.</div>;
-  }
+  // --- Logic for Hero's Realm Reset (Weekly Monday) ---
+  useEffect(() => {
+    const checkWeeklyReset = async () => {
+        if (!isAdmin) return;
+        // Logic placehoder
+    };
+    checkWeeklyReset();
+  }, [isAdmin]);
 
-  // --- TAB SORTING ---
-  const handleMoveTab = (index: number, direction: 'left' | 'right') => {
-    const newOrder = [...tabOrder];
-    const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    
-    if (targetIndex >= 0 && targetIndex < newOrder.length) {
-      [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
-      setTabOrder(newOrder);
-      // localStorage is updated via useEffect
-    }
-  };
-
-  const getTabLabel = (key: string) => {
-    switch (key) {
-      case 'guilds': return 'Guild Branches';
-      case 'events': return 'Events';
-      case 'announcements': return 'Announcements';
-      case 'breakingArmy': return 'Breaking Army';
-      case 'herosRealm': return "Hero's Realm";
-      case 'leaderboard': return 'Leaderboard';
-      case 'winnerLogs': return 'Winner Logs';
-      case 'users': return 'User Database'; // Renamed for clarity vs Members
-      case 'members': return 'Members';
-      case 'leaves': return 'Leaves';
-      default: return key;
-    }
-  };
-
-  // GUILD LOGIC
-  const handleInitializeSystem = async () => {
-    try {
-        const batch = db.batch();
-        batch.set(db.collection("guilds").doc("br1"), { name: "Black Rose I", memberCap: 80 });
-        batch.set(db.collection("guilds").doc("br2"), { name: "Black Rose II", memberCap: 80 });
-        batch.set(db.collection("guilds").doc("br3"), { name: "Black Rose III", memberCap: 50 });
-        batch.set(db.collection("system").doc("breakingArmy"), {
-            currentBoss: { 'br1': 'Dao Lord' },
-            schedules: {},
-            recentWinners: [],
-            bossPool: []
-        });
-        batch.set(db.collection("system").doc("herosRealm"), {
-            schedules: {}
-        });
-        if (currentUser) {
-            batch.update(db.collection("users").doc(currentUser.uid), { systemRole: 'Admin' });
-        }
-        await batch.commit();
-        showAlert("System Initialized Successfully!", 'success');
-        window.location.reload(); 
-    } catch (err: any) {
-        showAlert(err.message, 'error');
-    }
-  };
-
-  const handleCreateGuild = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!isAdmin) return;
-      try {
-        await db.collection("guilds").doc(newGuildData.id).set({name: newGuildData.name, memberCap: newGuildData.memberCap});
-        showAlert("Guild Branch created!", 'success');
-        setIsCreateModalOpen(false);
-      } catch (err: any) {
-        showAlert(err.message, 'error');
-      }
-  };
-
-  const handleDeleteGuild = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!id) return;
-    try {
-        await db.collection("guilds").doc(id).delete();
-        showAlert("Guild Branch deleted.", 'success');
-    } catch (error: any) {
-        showAlert(`Failed to delete: ${error.message}`, 'error');
-    }
-  };
-
-  const handleSaveGuild = async (id: string) => {
-    if (!isAdmin) return;
-    await db.collection("guilds").doc(id).update(guildEditForm);
-    setEditingGuildId(null);
-    showAlert("Guild updated!", 'success');
-  };
-
-  const handleEditGuild = (guild: Guild) => {
-    setEditingGuildId(guild.id);
-    setGuildEditForm({ name: guild.name, memberCap: guild.memberCap });
-  };
-
-  // EVENT LOGIC
-  const handleSaveEvent = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (isOfficer && eventForm.guildId !== userProfile.guildId) {
-          showAlert("You can only create events for your own branch.", 'error');
-          return;
-      }
-      try {
-          if (editingEventId) {
-              await db.collection("events").doc(editingEventId).update(eventForm);
-              showAlert("Event updated!", 'success');
-          } else {
-              await db.collection("events").add(eventForm);
-              showAlert("Event scheduled!", 'success');
+  const handleResetHerosRealm = async () => {
+      setDeleteConf({
+          isOpen: true,
+          title: "Reset Weekly Polls?",
+          message: "This will clear all votes and requests for Hero's Realm. Do this every Monday.",
+          action: async () => {
+              const batch = db.batch();
+              const snaps = await db.collection("heros_realm_requests").get();
+              snaps.forEach(doc => batch.delete(doc.ref));
+              await batch.commit();
+              showAlert("Weekly polls reset.", 'success');
           }
-          setEditingEventId(null);
-          setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '', imageUrl: '' });
+      });
+  };
+
+  const handleApproveHerosRealm = async (req: HerosRealmRequest) => {
+      // Set the schedule for this guild in system/herosRealm
+      const newSchedule: ScheduleSlot = { day: req.day, time: req.time };
+      const currentConfig = herosRealmConfig || { schedules: {}, currentBosses: {} };
+      
+      const updatedSchedules = { ...currentConfig.schedules, [req.guildId]: [newSchedule] };
+      
+      try {
+          await db.collection("system").doc("herosRealm").set({ schedules: updatedSchedules }, { merge: true });
+          // removed showAlert('success') as requested
       } catch (err: any) {
           showAlert(err.message, 'error');
       }
   };
-
-  const handleDeleteEvent = async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (!id) return;
-      try {
-        await db.collection("events").doc(id).delete();
-        showAlert("Event deleted.", 'success');
-      } catch (error: any) {
-        showAlert(`Failed to delete event: ${error.message}`, 'error');
-      }
-  };
   
-  const handleEditEvent = (event: GuildEvent) => {
-    setEditingEventId(event.id);
-    setEventForm({
-        title: event.title,
-        description: event.description,
-        type: event.type,
-        date: event.date,
-        guildId: event.guildId || '',
-        imageUrl: event.imageUrl || ''
-    });
-  };
+  // --- Breaking Army Logic ---
+  const handleDeclareBossWinner = async (entry: QueueEntry) => {
+      setDeleteConf({
+          isOpen: true,
+          title: `Declare ${entry.name} Winner?`,
+          message: "This will record them in the Winner Logs and start their cooldown period.",
+          action: async () => {
+             const batch = db.batch();
+             
+             // 1. Add to Winner Logs
+             const winnerLogRef = db.collection("winner_logs").doc();
+             batch.set(winnerLogRef, {
+                 playerName: entry.name,
+                 playerUid: entry.uid,
+                 guildId: entry.guildId,
+                 branch: guilds.find(g => g.id === entry.guildId)?.name || 'Unknown',
+                 boss: currentBossMap[entry.guildId] || 'Breaking Army',
+                 date: new Date().toISOString(),
+                 time: 'N/A', // Boss kills usually don't have speedrun time in this context or it's manual
+                 status: 'verified',
+                 prizeGiven: false
+             });
 
-  // ANNOUNCEMENT LOGIC
-  const handleSaveAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
-      try {
-          const finalIsGlobal = isOfficer ? false : isGlobal;
-          const finalGuildId = isOfficer ? userProfile.guildId : (isGlobal ? 'global' : 'global');
+             // 2. Remove from Queue
+             const queueRef = db.collection("queue").doc(entry.uid);
+             batch.delete(queueRef);
 
-          if (editingAnnouncement) {
-              await db.collection("announcements").doc(editingAnnouncement.id).update({
-                  title, content, isGlobal: finalIsGlobal, guildId: editingAnnouncement.guildId 
-              });
-              showAlert("Announcement updated!", 'success');
-          } else {
-              await db.collection("announcements").add({
-                  title, content, isGlobal: finalIsGlobal,
-                  authorId: userProfile.uid,
-                  authorName: userProfile.displayName,
-                  timestamp: new Date().toISOString(),
-                  guildId: finalGuildId
-              });
-              showAlert("Announcement posted!", 'success');
+             // 3. Add to Recent Winners (Cooldown) in system config
+             // Need to fetch current config first or use optimistic update? 
+             // Better to just add to a subcollection or separate array if possible, but structure dictates system/breakingArmy
+             // We'll skip complex array union logic here for brevity and assume it works via arrayUnion if we had the ref, 
+             // but 'recentWinners' is inside the big config object.
+             const cooldownEntry: CooldownEntry = {
+                 uid: entry.uid,
+                 branchId: entry.guildId,
+                 timestamp: new Date().toISOString(),
+                 prizeGiven: false
+             };
+             const systemRef = db.collection("system").doc("breakingArmy");
+             batch.update(systemRef, {
+                 recentWinners: firebase.firestore.FieldValue.arrayUnion(cooldownEntry)
+             });
+
+             await batch.commit();
+             showAlert(`${entry.name} declared winner!`, 'success');
           }
-          setEditingAnnouncement(null);
-      } catch (err: any) {
-          showAlert(err.message, 'error');
-      }
-  };
-
-  const handleDeleteAnnouncement = async (id: string) => {
-      try {
-          await db.collection("announcements").doc(id).delete();
-          showAlert("Announcement deleted.", 'success');
-      } catch (err: any) {
-          showAlert(err.message, 'error');
-      }
-  };
-
-  // BREAKING ARMY LOGIC
-  const configRef = db.collection("system").doc("breakingArmy");
-  
-  const handleUpdateCurrentBoss = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!selectedBranchId) return;
-    const bossName = e.target.value;
-    try {
-        await configRef.set({ currentBoss: { ...currentBossMap, [selectedBranchId]: bossName } }, { merge: true });
-    } catch(err) { console.error(err); }
-  };
-
-  const handleAddSchedule = async () => {
-      if (!selectedBranchId) return;
-      const currentList = schedulesMap[selectedBranchId] || [];
-      if (currentList.length >= 2) {
-          showAlert("Maximum of 2 schedules per branch reached.", 'error');
-          return;
-      }
-      const updatedList = [...currentList, newSchedule];
-      const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
-      await configRef.set({ schedules: updatedMap }, { merge: true });
-  };
-
-  const handleRemoveSchedule = async (index: number) => {
-      if (!selectedBranchId) return;
-      const currentList = schedulesMap[selectedBranchId] || [];
-      const updatedList = currentList.filter((_, i) => i !== index);
-      const updatedMap = { ...schedulesMap, [selectedBranchId]: updatedList };
-      await configRef.set({ schedules: updatedMap }, { merge: true });
-  };
-
-  const handleSaveBoss = async (e: React.FormEvent) => {
-      e.preventDefault();
-      try {
-          let updatedPool = [...bossPool];
-          if (editingBossOriginalName) {
-              const index = updatedPool.findIndex(b => b.name === editingBossOriginalName);
-              if (index > -1) updatedPool[index] = bossForm;
-          } else {
-              updatedPool.push(bossForm);
-          }
-          await configRef.set({ bossPool: updatedPool }, { merge: true });
-          setBossForm({ name: '', imageUrl: '' });
-          setEditingBossOriginalName(null);
-      } catch (err) {
-          console.error("Error saving boss:", err);
-      }
-  };
-
-  const handleDeleteBoss = async (e: React.MouseEvent, bossName: string) => {
-      e.stopPropagation();
-      e.preventDefault();
-      const updatedPool = bossPool.filter(b => b.name !== bossName);
-      try {
-        await configRef.set({ bossPool: updatedPool }, { merge: true });
-        showAlert("Boss removed.", 'success');
-      } catch (error: any) {
-        showAlert(`Failed to remove boss: ${error.message}`, 'error');
-      }
-  };
-
-  // HERO'S REALM LOGIC
-  const handleSetHerosRealmSchedule = async (req: HerosRealmRequest) => {
-      if (!selectedBranchId) return;
-      try {
-          const systemRef = db.collection("system").doc("herosRealm");
-          const currentSchedules = herosRealmConfig?.schedules || {};
-          
-          // Set as the only schedule for now, or append? Let's treat it as setting THE schedule
-          const updatedSchedules = {
-              ...currentSchedules,
-              [selectedBranchId]: [{ day: req.day, time: req.time }]
-          };
-          
-          await systemRef.set({ schedules: updatedSchedules }, { merge: true });
-          showAlert("Hero's Realm schedule updated.", 'success');
-      } catch (err: any) {
-          showAlert(`Error: ${err.message}`, 'error');
-      }
-  };
-
-  const handleClearHerosRealmSchedule = async () => {
-      if (!selectedBranchId) return;
-       try {
-          const batch = db.batch();
-          const systemRef = db.collection("system").doc("herosRealm");
-          
-          // 1. Clear config schedule
-          const currentSchedules = herosRealmConfig?.schedules || {};
-          const updatedSchedules = { ...currentSchedules };
-          delete updatedSchedules[selectedBranchId];
-          batch.set(systemRef, { schedules: updatedSchedules }, { merge: true });
-
-          // 2. Delete all requests for this branch
-          const reqs = await db.collection("heros_realm_requests").where("guildId", "==", selectedBranchId).get();
-          reqs.forEach(doc => batch.delete(doc.ref));
-
-          await batch.commit();
-          showAlert("Schedule cleared and requests reset.", 'info');
-      } catch (err: any) {
-          showAlert(`Error: ${err.message}`, 'error');
-      }
-  };
-  
-  const handleUpdateHerosRealmBoss = async (index: number, bossName: string) => {
-      if (!selectedBranchId) return;
-      try {
-          const systemRef = db.collection("system").doc("herosRealm");
-          const currentBosses = herosRealmConfig?.currentBosses || {};
-          const branchBosses = currentBosses[selectedBranchId] ? [...currentBosses[selectedBranchId]] : ["", ""];
-          
-          // Ensure array has at least 2 slots
-          while(branchBosses.length < 2) branchBosses.push("");
-          
-          branchBosses[index] = bossName;
-          
-          await systemRef.set({
-              currentBosses: { ...currentBosses, [selectedBranchId]: branchBosses }
-          }, { merge: true });
-          
-      } catch (err) {
-          console.error(err);
-      }
-  };
-
-  const handleDeleteHerosRealmRequest = async (id: string) => {
-      await db.collection("heros_realm_requests").doc(id).delete();
-  };
-
-
-  const handleConfirmWinner = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!selectedWinner) return;
-
-      const batch = db.batch();
-      
-      const leaderboardDocRef = db.collection("leaderboard").doc();
-      const winnerLogDocRef = db.collection("winner_logs").doc();
-
-      const newEntry: LeaderboardEntry = {
-        id: leaderboardDocRef.id,
-        rank: 1,
-        playerName: selectedWinner.name,
-        playerUid: selectedWinner.uid,
-        branch: guilds.find(g => g.id === selectedWinner.guildId)?.name || 'Unknown',
-        boss: currentBossMap[selectedWinner.guildId] || 'Unknown Boss',
-        time: winnerTime,
-        date: new Date().toISOString(),
-        status: 'verified'
-      };
-      
-      const winnerLogEntry: WinnerLog = {
-          ...newEntry,
-          id: winnerLogDocRef.id, // Winner log gets its own ID
-          prizeGiven: false,
-          status: 'verified'
-      };
-
-      batch.set(leaderboardDocRef, newEntry);
-      batch.set(winnerLogDocRef, winnerLogEntry);
-      batch.delete(db.collection("queue").doc(selectedWinner.uid));
-      
-      const newCooldownEntry: CooldownEntry = {
-          uid: selectedWinner.uid,
-          branchId: selectedWinner.guildId,
-          timestamp: new Date().toISOString(),
-          prizeGiven: false
-      };
-      batch.set(configRef, { recentWinners: firebase.firestore.FieldValue.arrayUnion(newCooldownEntry) }, { merge: true });
-      await batch.commit();
-      
-      setIsWinnerModalOpen(false);
-      setSelectedWinner(null);
-      setWinnerTime('');
-      showAlert(`${selectedWinner.name} is the winner!`, 'success');
+      });
   };
 
   const handleRemoveFromQueue = async (uid: string) => {
-      try {
-          await db.collection("queue").doc(uid).delete();
-          showAlert("Player removed from queue.", 'success');
-      } catch (err: any) {
-          showAlert(`Failed to remove player: ${err.message}`, 'error');
-      }
+      await db.collection("queue").doc(uid).delete();
+  };
+  // ----------------------------------------------------
+
+  if (loadingProfile) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-900"></div></div>;
+  if (!isAdmin && !isOfficer) return <div className="p-8 text-center text-red-500">Access Denied.</div>;
+
+  // -- Helpers --
+  const formatTime = (time: string) => {
+      if(!time) return '';
+      const [h, m] = time.split(':');
+      let hour = parseInt(h);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      return `${hour}:${m} ${ampm}`;
   };
 
-  const handleResetQueue = async () => {
-      if (!selectedBranchId) return;
-      const batch = db.batch();
-      const branchQueue = queue.filter(q => q.guildId === selectedBranchId);
-      branchQueue.forEach(q => {
-          batch.delete(db.collection("queue").doc(q.uid));
+  const convertTo24Hour = (hour: string, minute: string, ampm: string) => {
+      let h = parseInt(hour, 10);
+      if (ampm === 'PM' && h < 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      return `${h.toString().padStart(2, '0')}:${minute}`;
+  };
+
+  // -- Handlers --
+
+  const handleCreateGuildOpen = () => {
+      // Logic to auto-generate name
+      const base = "Black Rose";
+      const romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+      let nextNum = 1;
+      
+      // Find highest number
+      guilds.forEach(g => {
+          if (g.name.startsWith(base)) {
+              const suffix = g.name.replace(base, '').trim();
+              const idx = romans.indexOf(suffix);
+              if (idx !== -1 && idx + 1 >= nextNum) {
+                  nextNum = idx + 2;
+              }
+          }
       });
-      await batch.commit();
-      showAlert("Queue cleared for this branch.", 'info');
+      
+      const nextRoman = romans[nextNum - 1] || `${nextNum}`;
+      const nextName = `${base} ${nextRoman}`;
+      // Generate ID
+      const nextId = `g${Date.now().toString().slice(-4)}`;
+
+      setNewGuildData({ name: nextName, id: nextId, memberCap: 80 });
+      setIsCreateGuildModalOpen(true);
   };
 
-  const handleResetCooldowns = async () => {
-    if (!selectedBranchId) return;
-    const branchWinners = recentWinners.filter(w => w.branchId === selectedBranchId);
-    if (branchWinners.length > 0) {
-        await configRef.update({
-            recentWinners: firebase.firestore.FieldValue.arrayRemove(...branchWinners)
-        });
-        showAlert("Winners reset for this branch.", 'info');
-    }
-  };
-  
-  const handleToggleWinnerLogPrize = async (logId: string, currentVal: boolean) => {
-      try {
-          await db.collection("winner_logs").doc(logId).update({ prizeGiven: !currentVal });
-      } catch (err: any) {
-          showAlert(`Failed to update prize status: ${err.message}`, 'error');
-      }
-  };
-
-  const handleRemoveWinner = async (winner: CooldownEntry) => {
-      await configRef.update({
-          recentWinners: firebase.firestore.FieldValue.arrayRemove(winner)
-      });
-  };
-
-  // LEADERBOARD & LOGS LOGIC
-  const handleUpdateLeaderboardEntry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingLeaderboardEntry) return;
-
-    const collectionName = leaderboardModalMode === 'winnerLog' ? 'winner_logs' : 'leaderboard';
-
-    if (editingLeaderboardEntry.id) {
-        await db.collection(collectionName).doc(editingLeaderboardEntry.id).set(editingLeaderboardEntry, { merge: true });
-    } else {
-        await db.collection(collectionName).add(editingLeaderboardEntry);
-    }
-    setIsLeaderboardModalOpen(false);
-    showAlert("Record updated!", 'success');
-  };
-
-  const handleDeleteLeaderboardEntry = async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      e.preventDefault();
-      try {
-        await db.collection("leaderboard").doc(id).delete();
-        showAlert("Leaderboard entry deleted.", 'success');
-      } catch (error: any) {
-        showAlert(`Failed to delete: ${error.message}`, 'error');
-      }
-  };
-  
-  const handleDeleteWinnerLog = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    try {
-        await db.collection("winner_logs").doc(id).delete();
-        showAlert("Winner log deleted.", 'success');
-    } catch (error: any) {
-        showAlert(`Failed to delete: ${error.message}`, 'error');
-    }
-  };
-
-  // USER MANAGEMENT
-  const handleRoleChange = async (uid: string, newRole: 'Member' | 'Officer' | 'Admin') => {
-      await db.collection("users").doc(uid).update({ systemRole: newRole });
-  };
-  
-  const handleKickUser = async (e: React.MouseEvent, uid: string) => {
-      e.stopPropagation();
-      e.preventDefault();
-      try {
-        await db.collection("users").doc(uid).delete();
-        showAlert("User has been kicked from the guild.", 'success');
-      } catch (error: any) {
-        showAlert(`Failed to kick user: ${error.message}`, 'error');
-      }
-  };
-
-  const filteredUsers = allUsers.filter(u => 
-      u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
-      (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase()))
-  );
-  
-  // Filter for Officer's Member tab (or Admin viewing a specific branch)
-  const targetGuildId = isAdmin ? selectedBranchId : userProfile.guildId;
-  const filteredBranchMembers = allUsers.filter(u => 
-      u.guildId === targetGuildId &&
-      (u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
-       (u.inGameId && u.inGameId.toLowerCase().includes(userSearch.toLowerCase())))
-  );
-
-  const filteredLeaves = leaves.filter(l => 
-      isOfficer ? l.guildId === userProfile.guildId : (leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter)
-  );
-  
-  const filteredAnnouncements = announcements.filter(a => {
-      if (isAdmin) return true;
-      if (isOfficer) return a.guildId === userProfile.guildId;
-      return false; 
-  });
-  
-  // Hero's Realm Filter
-  const filteredHerosRealmRequests = herosRealmRequests
-    .filter(req => req.guildId === selectedBranchId)
-    .sort((a, b) => b.votes.length - a.votes.length);
-
-  const formatTime12Hour = (time24: string) => {
-    if (!time24) return '';
-    const [hours, minutes] = time24.split(':');
-    let h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12; h = h ? h : 12; 
-    return `${h}:${minutes} ${ampm}`;
-  };
-
-  const openDeleteModal = (title: string, message: string, action: () => Promise<void>) => {
-    setDeleteConf({ isOpen: true, title, message, action });
-  };
-
-  const inputClass = "w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-zinc-900 dark:text-zinc-100 transition-all text-sm";
-  const labelClass = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
-  const cardClass = "bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden";
-  const tableHeaderClass = "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 uppercase text-xs font-bold px-4 py-3 text-left border-b border-zinc-200 dark:border-zinc-700";
-  const tableCellClass = "px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300 border-b border-zinc-100 dark:border-zinc-800";
-  const tableRowClass = "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors";
-
-  const availableTabs = tabOrder.filter(tab => {
-      if (isAdmin) return true;
-      if (isOfficer) return ['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members'].includes(tab);
-      return false;
-  });
-
-  return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Administration</h1>
-            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Manage system settings, events, and guild rosters.</p>
-        </div>
-        
-        {guilds.length === 0 && (
-            <button 
-                onClick={handleInitializeSystem} 
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
-            >
-                <Database size={18} /> Initialize System
-            </button>
-        )}
-      </div>
-
-      {/* Navigation Pills */}
-      <div className="flex items-center gap-2">
-        {isAdmin && (
-            <button 
-                onClick={() => setIsReorderMode(!isReorderMode)}
-                className={`p-2 rounded-lg transition-colors ${isReorderMode ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
-                title="Configure Tabs"
-            >
-                <Settings size={18} />
-            </button>
-        )}
-        <div className="flex overflow-x-auto pb-2 scrollbar-hide flex-1">
-            <div className="flex space-x-1 bg-zinc-100 dark:bg-zinc-800/50 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/50">
-                {availableTabs.map((tabKey, index) => (
-                    <div key={tabKey} className="flex items-center">
-                        {isReorderMode && isAdmin && (
-                             <button 
-                                onClick={() => handleMoveTab(index, 'left')} 
-                                disabled={index === 0}
-                                className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30"
-                             >
-                                <ArrowLeft size={10} />
-                             </button>
-                        )}
-                        <button 
-                            onClick={() => setActiveTab(tabKey)} 
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                                activeTab === tabKey 
-                                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' 
-                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                            }`}
-                        >
-                            {getTabLabel(tabKey)}
-                        </button>
-                        {isReorderMode && isAdmin && (
-                             <button 
-                                onClick={() => handleMoveTab(index, 'right')} 
-                                disabled={index === availableTabs.length - 1}
-                                className="p-1 text-zinc-400 hover:text-zinc-600 disabled:opacity-30"
-                             >
-                                <ArrowRight size={10} />
-                             </button>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-      </div>
-
-      {/* --- GUILDS TAB --- */}
-      {activeTab === 'guilds' && isAdmin && (
-        <div className={cardClass}>
-           <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Shield size={20} className="text-rose-600" /> Guild Management
-                </h2>
-                <button onClick={() => { setNewGuildData({ name: '', id: '', memberCap: 80 }); setIsCreateModalOpen(true); }} className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-                    <Plus size={16}/> Create Branch
-                </button>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>Branch Name</th>
-                            <th className={tableHeaderClass}>Guild ID</th>
-                            <th className={tableHeaderClass}>Member Cap</th>
-                            <th className={tableHeaderClass}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {guilds.map(g => (
-                            <tr key={g.id} className={tableRowClass}>
-                                <td className={tableCellClass}>
-                                    {editingGuildId === g.id ? 
-                                        <input value={guildEditForm.name} onChange={e => setGuildEditForm({...guildEditForm, name: e.target.value})} className="p-1 border rounded bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 w-full" /> 
-                                        : <span className="font-medium text-zinc-900 dark:text-zinc-100">{g.name}</span>
-                                    }
-                                </td>
-                                <td className={tableCellClass}><code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-xs font-mono">{g.id}</code></td>
-                                <td className={tableCellClass}>
-                                    {editingGuildId === g.id ? 
-                                        <input type="number" value={guildEditForm.memberCap} onChange={e => setGuildEditForm({...guildEditForm, memberCap: parseInt(e.target.value) || 0})} className="p-1 border rounded bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 w-20" /> 
-                                        : g.memberCap
-                                    }
-                                </td>
-                                <td className={tableCellClass}>
-                                    <div className="flex gap-2">
-                                        {editingGuildId === g.id ? (
-                                            <>
-                                                <button type="button" onClick={() => handleSaveGuild(g.id)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"><Save size={16} /></button>
-                                                <button type="button" onClick={() => setEditingGuildId(null)} className="p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><X size={16} /></button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <button type="button" onClick={() => handleEditGuild(g)} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"><Edit size={16}/></button>
-                                                <button type="button" onClick={() => openDeleteModal("Delete Branch?", `Are you sure you want to delete ${g.name}?`, () => handleDeleteGuild(null as any, g.id))} className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
-
-      {/* --- EVENTS TAB --- */}
-      {activeTab === 'events' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className={cardClass}>
-                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                        <Calendar size={20} className="text-zinc-500" /> Schedule Event
-                    </h3>
-                </div>
-                <form onSubmit={handleSaveEvent} className="p-6 space-y-4">
-                    <div>
-                        <label className={labelClass}>Event Title</label>
-                        <input required value={eventForm.title} onChange={e => setEventForm({...eventForm, title: e.target.value})} className={inputClass} placeholder="e.g. Raid Reset" />
-                    </div>
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <label className={labelClass}>Description</label>
-                            <span className="text-[10px] text-zinc-400">{eventForm.description?.length || 0} / 500</span>
-                        </div>
-                        <textarea required value={eventForm.description} onChange={e => setEventForm({...eventForm, description: e.target.value})} className={`${inputClass} min-h-[100px]`} maxLength={500} />
-                    </div>
-                    <div>
-                         <label className={labelClass}>Banner Image (Optional)</label>
-                         <ImageUpload 
-                            initialUrl={eventForm.imageUrl}
-                            onUploadComplete={(url) => setEventForm({...eventForm, imageUrl: url})}
-                            folder="events"
-                         />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className={labelClass}>Date & Time</label>
-                            <input required type="datetime-local" value={eventForm.date} onChange={e => setEventForm({...eventForm, date: e.target.value})} className={`${inputClass} w-full [color-scheme:light] dark:[color-scheme:dark]`} />
-                        </div>
-                        <div>
-                            <label className={labelClass}>Type</label>
-                            {eventForm.type && !standardEventTypes.includes(eventForm.type) ? (
-                                <div className="flex gap-2">
-                                    <input autoFocus type="text" value={eventForm.type} onChange={e => setEventForm({...eventForm, type: e.target.value})} className={inputClass} placeholder="Custom Type" />
-                                    <button type="button" onClick={() => setEventForm({...eventForm, type: 'Raid'})} className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-500"><X size={16} /></button>
-                                </div>
-                            ) : (
-                                <select value={eventForm.type} onChange={e => {
-                                    if(e.target.value === 'Custom') setEventForm({...eventForm, type: ''});
-                                    else setEventForm({...eventForm, type: e.target.value});
-                                }} className={inputClass}>
-                                    {standardEventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                    <option value="Custom">Custom...</option>
-                                </select>
-                            )}
-                        </div>
-                    </div>
-                    {isAdmin && (
-                        <div>
-                            <label className={labelClass}>Guild Branch</label>
-                            <select value={eventForm.guildId} onChange={e => setEventForm({...eventForm, guildId: e.target.value})} className={inputClass}>
-                                <option value="">Global (All Branches)</option>
-                                {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                            </select>
-                        </div>
-                    )}
-                    <button type="submit" className="w-full bg-rose-900 text-white p-3 rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20">
-                        {editingEventId ? 'Update Event' : 'Schedule Event'}
-                    </button>
-                    {editingEventId && (
-                        <button type="button" onClick={() => { setEditingEventId(null); setEventForm({ title: '', description: '', type: 'Raid', date: '', guildId: isOfficer ? userProfile.guildId : '', imageUrl: '' }); }} className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 p-2 rounded-lg font-medium">Cancel Edit</button>
-                    )}
-                </form>
+  const renderContent = () => {
+    switch(activeTab) {
+      case 'guilds':
+        if (!isAdmin) return null;
+        return (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Guild Branches</h2>
+              <button onClick={handleCreateGuildOpen} className="bg-rose-900 text-white px-4 py-2 rounded-lg hover:bg-rose-950 flex items-center gap-2 shadow-lg shadow-rose-900/20">
+                <Plus size={18} /> New Branch
+              </button>
             </div>
             
-            <div className={`${cardClass} flex flex-col`}>
-                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                        <ListOrdered size={20} className="text-zinc-500" /> Upcoming Events
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                 <table className="w-full text-left">
+                     <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                         <tr>
+                             <th className="px-6 py-4 font-bold text-zinc-500 text-xs uppercase tracking-wider">Branch Name</th>
+                             <th className="px-6 py-4 font-bold text-zinc-500 text-xs uppercase tracking-wider">Capacity</th>
+                             <th className="px-6 py-4 text-right font-bold text-zinc-500 text-xs uppercase tracking-wider">Actions</th>
+                         </tr>
+                     </thead>
+                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                         {guilds.map(guild => (
+                             <tr key={guild.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                 <td className="px-6 py-4">
+                                     {editingGuildId === guild.id ? (
+                                         <input 
+                                            value={guildEditForm.name} 
+                                            onChange={e => setGuildEditForm({...guildEditForm, name: e.target.value})}
+                                            className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 text-sm"
+                                         />
+                                     ) : (
+                                         <span className="font-bold text-zinc-900 dark:text-zinc-100">{guild.name}</span>
+                                     )}
+                                 </td>
+                                 <td className="px-6 py-4">
+                                     {editingGuildId === guild.id ? (
+                                         <input 
+                                            type="number"
+                                            value={guildEditForm.memberCap} 
+                                            onChange={e => setGuildEditForm({...guildEditForm, memberCap: parseInt(e.target.value)})}
+                                            className="p-2 border rounded dark:bg-zinc-800 dark:border-zinc-700 text-sm w-24"
+                                         />
+                                     ) : (
+                                         <span className="text-zinc-500">{guild.memberCap} Members</span>
+                                     )}
+                                 </td>
+                                 <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                     {editingGuildId === guild.id ? (
+                                         <>
+                                            <button onClick={() => {
+                                                db.collection("guilds").doc(guild.id).update(guildEditForm);
+                                                setEditingGuildId(null);
+                                            }} className="text-green-600 p-2 hover:bg-green-50 rounded"><Check size={16} /></button>
+                                            <button onClick={() => setEditingGuildId(null)} className="text-zinc-400 p-2 hover:bg-zinc-50 rounded"><Trash2 size={16} /></button>
+                                         </>
+                                     ) : (
+                                         <>
+                                            <button onClick={() => {
+                                                setEditingGuildId(guild.id);
+                                                setGuildEditForm({ name: guild.name, memberCap: guild.memberCap });
+                                            }} className="text-blue-600 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"><Edit size={16} /></button>
+                                            <button onClick={() => setDeleteConf({
+                                                isOpen: true,
+                                                title: "Delete Guild?",
+                                                message: `Delete ${guild.name}? This cannot be undone.`,
+                                                action: async () => await db.collection("guilds").doc(guild.id).delete()
+                                            })} className="text-red-600 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><Trash2 size={16} /></button>
+                                         </>
+                                     )}
+                                 </td>
+                             </tr>
+                         ))}
+                     </tbody>
+                 </table>
+            </div>
+            
+            <CreateGuildModal 
+                isOpen={isCreateGuildModalOpen} onClose={() => setIsCreateGuildModalOpen(false)} 
+                data={newGuildData} onChange={setNewGuildData} 
+                onSubmit={async (e) => {
+                    e.preventDefault();
+                    await db.collection("guilds").doc(newGuildData.id).set(newGuildData);
+                    setIsCreateGuildModalOpen(false);
+                    showAlert("Guild Created", 'success');
+                }}
+            />
+          </div>
+        );
+
+      case 'events':
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
+             {/* Left: Form */}
+             <div className="lg:col-span-1 space-y-4">
+                 <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm sticky top-4">
+                     <h3 className="font-bold mb-6 text-xl text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Calendar className="text-rose-900 dark:text-rose-500" />
+                        {editingEventId ? 'Edit Event' : 'New Event'}
+                     </h3>
+                     
+                     <div className="space-y-4">
+                         <div>
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label>
+                             <input 
+                                className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none" 
+                                placeholder="Event Title" 
+                                value={eventForm.title} 
+                                onChange={e => setEventForm({...eventForm, title: e.target.value})}
+                             />
+                         </div>
+
+                         <div>
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Type</label>
+                            <div className="relative">
+                                <select 
+                                    className="w-full p-3 appearance-none border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                                    value={eventForm.type}
+                                    onChange={e => setEventForm({...eventForm, type: e.target.value})}
+                                >
+                                    {standardEventTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    <option value="Custom">Custom</option>
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>
+                            </div>
+                            {eventForm.type === 'Custom' && (
+                                <input 
+                                    className="w-full mt-2 p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                                    placeholder="Enter custom type..."
+                                    value={eventForm.customType}
+                                    onChange={e => setEventForm({...eventForm, customType: e.target.value})}
+                                />
+                            )}
+                         </div>
+
+                         <div>
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Date & Time</label>
+                            <input 
+                                type="datetime-local" 
+                                className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none" 
+                                value={eventForm.date} 
+                                onChange={e => setEventForm({...eventForm, date: e.target.value})}
+                            />
+                         </div>
+
+                         <div>
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Target Audience</label>
+                             {isAdmin ? (
+                                 <div className="relative">
+                                     <select 
+                                         className="w-full p-3 appearance-none border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                                         value={eventForm.guildId}
+                                         onChange={e => setEventForm({...eventForm, guildId: e.target.value})}
+                                     >
+                                         <option value="">Global (All Branches)</option>
+                                         {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                     </select>
+                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>
+                                 </div>
+                             ) : (
+                                 <div className="p-3 border rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed">
+                                     {guilds.find(g => g.id === selectedBranchId)?.name || 'My Branch'}
+                                 </div>
+                             )}
+                         </div>
+
+                         <div>
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Cover Image</label>
+                             <ImageUpload 
+                                folder="events"
+                                initialUrl={eventForm.imageUrl}
+                                onUploadComplete={(url) => setEventForm({...eventForm, imageUrl: url})}
+                             />
+                         </div>
+
+                         <div>
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label>
+                             <textarea 
+                                className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white resize-none h-32 focus:ring-2 focus:ring-rose-500 outline-none" 
+                                placeholder="Event details..." 
+                                value={eventForm.description}
+                                onChange={e => setEventForm({...eventForm, description: e.target.value})}
+                             />
+                         </div>
+
+                         <div className="flex gap-2 pt-2">
+                             <button 
+                                onClick={async () => {
+                                    if (!eventForm.title || !eventForm.date) return showAlert("Missing fields", 'error');
+                                    const finalType = eventForm.type === 'Custom' ? eventForm.customType : eventForm.type;
+                                    const payload = { 
+                                        title: eventForm.title,
+                                        description: eventForm.description,
+                                        type: finalType,
+                                        date: eventForm.date,
+                                        guildId: eventForm.guildId,
+                                        imageUrl: eventForm.imageUrl
+                                    };
+
+                                    if (editingEventId) {
+                                        await db.collection("events").doc(editingEventId).update(payload);
+                                        setEditingEventId(null);
+                                        showAlert("Event Updated", 'success');
+                                    } else {
+                                        await db.collection("events").add(payload);
+                                        showAlert("Event Created", 'success');
+                                    }
+                                    setEventForm({ title: '', description: '', type: 'Raid', customType: '', date: '', guildId: selectedBranchId, imageUrl: '' });
+                                }}
+                                className="flex-1 bg-rose-900 text-white py-3 rounded-lg hover:bg-rose-950 font-bold shadow-lg shadow-rose-900/20 transition-all active:scale-95"
+                            >
+                                 {editingEventId ? 'Update Event' : 'Create Event'}
+                             </button>
+                             {editingEventId && (
+                                 <button 
+                                    onClick={() => {
+                                        setEditingEventId(null);
+                                        setEventForm({ title: '', description: '', type: 'Raid', customType: '', date: '', guildId: selectedBranchId, imageUrl: '' });
+                                    }}
+                                    className="px-4 bg-zinc-200 text-zinc-800 rounded-lg hover:bg-zinc-300 font-bold"
+                                 >
+                                     Cancel
+                                 </button>
+                             )}
+                         </div>
+                     </div>
+                 </div>
+             </div>
+
+             {/* Right: List */}
+             <div className="lg:col-span-2 space-y-4">
+                 <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Upcoming Events</h2>
+                 {events.filter(e => isAdmin ? true : e.guildId === selectedBranchId || !e.guildId).length === 0 && (
+                     <p className="text-zinc-500 italic">No events found.</p>
+                 )}
+                 {events
+                    .filter(e => isAdmin ? true : e.guildId === selectedBranchId || !e.guildId)
+                    .map(event => (
+                     <div key={event.id} className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 flex gap-5 hover:border-rose-900/30 transition-colors group">
+                         <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden relative">
+                             {event.imageUrl ? (
+                                 <img src={event.imageUrl} className="w-full h-full object-cover" />
+                             ) : (
+                                 <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400">
+                                     <span className="text-2xl font-bold">{new Date(event.date).getDate()}</span>
+                                     <span className="text-xs uppercase font-bold">{new Date(event.date).toLocaleDateString(undefined, {month:'short'})}</span>
+                                 </div>
+                             )}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                             <div className="flex justify-between items-start">
+                                 <div>
+                                     <h4 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 truncate">{event.title}</h4>
+                                     <p className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider mb-2">
+                                         {event.type} • {guilds.find(g => g.id === event.guildId)?.name || 'Global'}
+                                     </p>
+                                 </div>
+                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                     <button 
+                                        onClick={() => {
+                                            setEditingEventId(event.id);
+                                            setEventForm({
+                                                ...event,
+                                                customType: standardEventTypes.includes(event.type) ? '' : event.type,
+                                                type: standardEventTypes.includes(event.type) ? event.type : 'Custom'
+                                            });
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }}
+                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                                     >
+                                         <Edit size={16} />
+                                     </button>
+                                     <button 
+                                        onClick={() => setDeleteConf({
+                                            isOpen: true, 
+                                            title: "Delete Event?", 
+                                            message: "Are you sure?", 
+                                            action: async () => await db.collection("events").doc(event.id).delete()
+                                        })}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded"
+                                     >
+                                         <Trash2 size={16} />
+                                     </button>
+                                 </div>
+                             </div>
+                             <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">{event.description}</p>
+                             <div className="mt-2 text-xs text-zinc-400 flex items-center gap-1">
+                                 <Clock size={12} /> {new Date(event.date).toLocaleString()}
+                             </div>
+                         </div>
+                     </div>
+                 ))}
+             </div>
+          </div>
+        );
+        
+      case 'breakingArmy':
+        const branchQueue = queue.filter(q => q.guildId === selectedBranchId);
+        
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
+             {/* Left: Configuration */}
+             <div className="lg:col-span-1 space-y-6">
+                 <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm sticky top-4">
+                     <h3 className="font-bold mb-6 text-xl text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                         <Skull className="text-rose-900 dark:text-rose-500" /> Configuration
+                     </h3>
+                     
+                     <div className="space-y-6">
+                         <div>
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Target Branch</label>
+                             <div className="relative">
+                                 {isAdmin ? (
+                                     <select 
+                                        value={selectedBranchId} 
+                                        onChange={e => setSelectedBranchId(e.target.value)}
+                                        className="w-full p-3 appearance-none border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                                     >
+                                         {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                     </select>
+                                 ) : (
+                                     <div className="w-full p-3 border rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                         {guilds.find(g => g.id === selectedBranchId)?.name}
+                                     </div>
+                                 )}
+                                 {isAdmin && <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>}
+                             </div>
+                         </div>
+
+                         <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Active Boss</label>
+                             
+                             {/* Boss Visual Selection */}
+                             {currentBossMap[selectedBranchId] && (
+                                 <div className="mb-3 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 aspect-video relative">
+                                     <img 
+                                        src={bossPool.find(b => b.name === currentBossMap[selectedBranchId])?.imageUrl || ''} 
+                                        className="w-full h-full object-cover"
+                                        alt="Current Boss"
+                                     />
+                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-2">
+                                         <span className="text-white font-bold text-sm truncate">{currentBossMap[selectedBranchId]}</span>
+                                     </div>
+                                 </div>
+                             )}
+
+                             <div className="relative">
+                                 <select 
+                                    value={currentBossMap[selectedBranchId] || ''}
+                                    onChange={async (e) => {
+                                        const newMap = { ...currentBossMap, [selectedBranchId]: e.target.value };
+                                        await db.collection("system").doc("breakingArmy").set({ currentBoss: newMap }, { merge: true });
+                                    }}
+                                    className="w-full p-3 appearance-none border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none"
+                                 >
+                                     <option value="">None Selected</option>
+                                     {bossPool.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                 </select>
+                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>
+                             </div>
+                         </div>
+
+                         <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+                             <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Schedule</label>
+                             <div className="flex gap-2 mb-2">
+                                 <select 
+                                    value={newScheduleDay}
+                                    onChange={e => setNewScheduleDay(e.target.value)}
+                                    className="flex-1 p-2 rounded border dark:bg-zinc-800 dark:border-zinc-700 dark:text-white text-xs"
+                                 >
+                                     {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
+                                 </select>
+                                 <div className="flex items-center gap-1">
+                                    <input 
+                                        className="w-8 p-1 text-center border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white text-xs" 
+                                        value={newScheduleTime.hour} onChange={e => setNewScheduleTime({...newScheduleTime, hour: e.target.value})} 
+                                    />
+                                    <span className="text-zinc-400">:</span>
+                                    <select className="p-1 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white text-xs" value={newScheduleTime.minute} onChange={e => setNewScheduleTime({...newScheduleTime, minute: e.target.value})}>
+                                        <option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                                    </select>
+                                    <select className="p-1 border rounded dark:bg-zinc-800 dark:border-zinc-700 dark:text-white text-xs" value={newScheduleTime.ampm} onChange={e => setNewScheduleTime({...newScheduleTime, ampm: e.target.value})}>
+                                        <option value="AM">AM</option><option value="PM">PM</option>
+                                    </select>
+                                 </div>
+                                 <button 
+                                    onClick={async () => {
+                                         const time24 = convertTo24Hour(newScheduleTime.hour, newScheduleTime.minute, newScheduleTime.ampm);
+                                         const newSlot: ScheduleSlot = { day: newScheduleDay, time: time24 };
+                                         const currentSchedules = schedulesMap[selectedBranchId] || [];
+                                         const updated = [...currentSchedules, newSlot];
+                                         await db.collection("system").doc("breakingArmy").set({
+                                             schedules: { ...schedulesMap, [selectedBranchId]: updated }
+                                         }, { merge: true });
+                                    }}
+                                    className="bg-rose-900 text-white px-2 rounded hover:bg-rose-950"
+                                 >
+                                     <Plus size={16} />
+                                 </button>
+                             </div>
+                             <div className="space-y-1">
+                                 {(schedulesMap[selectedBranchId] || []).map((slot, idx) => (
+                                     <div key={idx} className="flex justify-between items-center bg-zinc-50 dark:bg-zinc-800 p-2 rounded border border-zinc-200 dark:border-zinc-700">
+                                         <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">{slot.day} @ {formatTime(slot.time)}</span>
+                                         <button 
+                                            onClick={async () => {
+                                                 const currentSchedules = schedulesMap[selectedBranchId] || [];
+                                                 const updated = currentSchedules.filter((_, i) => i !== idx);
+                                                 await db.collection("system").doc("breakingArmy").set({
+                                                     schedules: { ...schedulesMap, [selectedBranchId]: updated }
+                                                 }, { merge: true });
+                                            }}
+                                            className="text-red-500 hover:text-red-700"
+                                         >
+                                             <Trash2 size={12} />
+                                         </button>
+                                     </div>
+                                 ))}
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+             
+             {/* Right: Boss Pool & Queue */}
+             <div className="lg:col-span-2 space-y-6">
+                 {/* Queue Management (Visible to Officers & Admin) */}
+                 <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+                    <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+                        <User size={20} className="text-blue-500" /> Queue Management
+                        <span className="text-xs font-normal text-zinc-500">({branchQueue.length} waiting)</span>
                     </h3>
-                </div>
-                <div className="overflow-y-auto custom-scrollbar flex-1 max-h-[600px]">
-                    {events.filter(e => isOfficer ? e.guildId === userProfile.guildId || !e.guildId : true).map(event => (
-                        <div key={event.id} className="p-4 border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{event.title}</h4>
-                                    <span className="text-xs text-zinc-500">{new Date(event.date).toLocaleString()}</span>
-                                </div>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleEditEvent(event)} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"><Edit size={14}/></button>
-                                    <button onClick={(e) => openDeleteModal("Delete Event?", "Are you sure?", () => handleDeleteEvent(e, event.id))} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100"><Trash2 size={14}/></button>
-                                </div>
-                            </div>
-                            <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">{event.description}</p>
-                            <div className="mt-2 flex gap-2">
-                                <span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">{event.type}</span>
-                                <span className="text-xs bg-rose-50 dark:bg-rose-900/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded">{event.guildId ? guilds.find(g => g.id === event.guildId)?.name : 'Global'}</span>
-                            </div>
-                        </div>
-                    ))}
-                    {events.length === 0 && <div className="p-8 text-center text-zinc-400">No events scheduled.</div>}
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* --- ANNOUNCEMENTS TAB --- */}
-      {activeTab === 'announcements' && (
-        <div className={cardClass}>
-           <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Megaphone size={20} className="text-blue-500" /> Announcements
-                </h2>
-                <button 
-                    onClick={() => { setEditingAnnouncement(null); setIsAnnouncementModalOpen(true); }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                >
-                    <Plus size={16}/> Post Announcement
-                </button>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>Date</th>
-                            <th className={tableHeaderClass}>Title</th>
-                            <th className={tableHeaderClass}>Author</th>
-                            <th className={tableHeaderClass}>Scope</th>
-                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredAnnouncements.map(ann => (
-                            <tr key={ann.id} className={tableRowClass}>
-                                <td className={tableCellClass}>{new Date(ann.timestamp).toLocaleDateString()}</td>
-                                <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{ann.title}</span></td>
-                                <td className={tableCellClass}>{ann.authorName}</td>
-                                <td className={tableCellClass}>
-                                    {ann.isGlobal ? (
-                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">Global</span>
-                                    ) : (
-                                        <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full">{guilds.find(g => g.id === ann.guildId)?.name || ann.guildId}</span>
-                                    )}
-                                </td>
-                                <td className={`${tableCellClass} text-right`}>
-                                    <div className="flex justify-end gap-2">
-                                        <button onClick={() => { setEditingAnnouncement(ann); setIsAnnouncementModalOpen(true); }} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors"><Edit size={16} /></button>
-                                        <button onClick={() => openDeleteModal("Delete Announcement?", "Are you sure?", () => handleDeleteAnnouncement(ann.id))} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors"><Trash2 size={16} /></button>
+                    
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {branchQueue.length === 0 ? (
+                            <p className="text-zinc-400 italic text-sm text-center py-4">Queue is empty.</p>
+                        ) : (
+                            branchQueue.map((entry, i) => (
+                                <div key={entry.uid} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-6 h-6 flex items-center justify-center bg-zinc-200 dark:bg-zinc-700 rounded-full text-xs font-bold">
+                                            {i + 1}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{entry.name}</div>
+                                            <div className="text-xs text-zinc-500">{entry.role}</div>
+                                        </div>
                                     </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredAnnouncements.length === 0 && (
-                            <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">No announcements found.</td></tr>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={() => handleDeclareBossWinner(entry)}
+                                            className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                                        >
+                                            <Trophy size={12} /> Win
+                                        </button>
+                                        <button 
+                                            onClick={() => handleRemoveFromQueue(entry.uid)}
+                                            className="p-1.5 text-red-400 hover:text-red-600 rounded transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
                         )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
+                    </div>
+                 </div>
 
-      {/* --- HERO'S REALM TAB --- */}
-      {activeTab === 'herosRealm' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className={cardClass}>
-                  <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                      <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                          <Settings size={20} className="text-zinc-500" /> Settings
-                      </h3>
+                 {/* Boss Pool (Admin Only) */}
+                 {isAdmin && (
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Boss Pool</h2>
+                            <button onClick={() => {
+                                setBossForm({ name: '', imageUrl: '' });
+                                setEditingBossOriginalName(null);
+                                setIsAddBossModalOpen(true);
+                            }} className="bg-rose-900 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-rose-950 shadow-lg shadow-rose-900/20">
+                                <Plus size={16} /> Add Boss
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {bossPool.map((boss, idx) => (
+                                <div 
+                                    key={idx} 
+                                    className="bg-zinc-50 dark:bg-zinc-800/30 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 group relative hover:border-rose-900/30 transition-colors"
+                                >
+                                    <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 relative">
+                                        {boss.imageUrl ? (
+                                            <img src={boss.imageUrl} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-zinc-300">
+                                                <Skull size={32} />
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    setBossForm(boss);
+                                                    setEditingBossOriginalName(boss.name);
+                                                    setIsAddBossModalOpen(true);
+                                                }}
+                                                className="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => setDeleteConf({
+                                                    isOpen: true,
+                                                    title: "Delete Boss?",
+                                                    message: `Remove ${boss.name}?`,
+                                                    action: async () => {
+                                                        const newPool = bossPool.filter(b => b.name !== boss.name);
+                                                        await db.collection("system").doc("breakingArmy").set({ bossPool: newPool }, { merge: true });
+                                                    }
+                                                })}
+                                                className="p-2 bg-red-600/80 hover:bg-red-600 rounded-full text-white backdrop-blur-sm"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-3">
+                                        <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate" title={boss.name}>{boss.name}</h4>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                 )}
+             </div>
+             
+             <AddBossModal 
+                isOpen={isAddBossModalOpen}
+                onClose={() => setIsAddBossModalOpen(false)}
+                data={bossForm}
+                onChange={setBossForm}
+                onSubmit={async () => {
+                    let updatedPool = [...bossPool];
+                    if (editingBossOriginalName) {
+                        const idx = updatedPool.findIndex(b => b.name === editingBossOriginalName);
+                        if (idx !== -1) updatedPool[idx] = bossForm;
+                    } else {
+                        updatedPool.push(bossForm);
+                    }
+                    await db.collection("system").doc("breakingArmy").set({ bossPool: updatedPool }, { merge: true });
+                    setIsAddBossModalOpen(false);
+                    showAlert("Boss Pool Updated", 'success');
+                }}
+             />
+          </div>
+        );
+
+      case 'announcements':
+          return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
+                  <div className="lg:col-span-1 space-y-4">
+                       <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm sticky top-4">
+                           <h3 className="font-bold mb-6 text-xl text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                               <Megaphone className="text-rose-900 dark:text-rose-500" />
+                               {editingAnnouncement ? 'Edit Post' : 'New Post'}
+                           </h3>
+                           
+                           <div className="space-y-4">
+                               <div>
+                                   <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label>
+                                   <input 
+                                      className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none" 
+                                      placeholder="Title" 
+                                      value={announcementForm.title} 
+                                      onChange={e => setAnnouncementForm({...announcementForm, title: e.target.value})}
+                                   />
+                               </div>
+                               <div>
+                                   <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Content</label>
+                                   <textarea 
+                                      className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white resize-none h-40 focus:ring-2 focus:ring-rose-500 outline-none" 
+                                      placeholder="Message..." 
+                                      value={announcementForm.content}
+                                      onChange={e => setAnnouncementForm({...announcementForm, content: e.target.value})}
+                                   />
+                               </div>
+                               {isAdmin && (
+                                   <div className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg">
+                                       <input 
+                                          type="checkbox" 
+                                          checked={announcementForm.isGlobal} 
+                                          onChange={e => setAnnouncementForm({...announcementForm, isGlobal: e.target.checked})}
+                                          className="w-4 h-4 text-rose-900 rounded focus:ring-rose-900"
+                                       />
+                                       <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Global Announcement</label>
+                                   </div>
+                               )}
+                               
+                               <div className="flex gap-2 pt-2">
+                                   <button 
+                                      onClick={async () => {
+                                          if (!announcementForm.title || !announcementForm.content) return showAlert("Missing fields", 'error');
+                                          const payload = {
+                                              title: announcementForm.title,
+                                              content: announcementForm.content,
+                                              isGlobal: announcementForm.isGlobal,
+                                              guildId: announcementForm.isGlobal ? 'global' : selectedBranchId,
+                                              authorId: currentUser.uid,
+                                              authorName: userProfile.displayName,
+                                              timestamp: new Date().toISOString()
+                                          };
+                                          
+                                          if (editingAnnouncement) {
+                                              await db.collection("announcements").doc(editingAnnouncement.id).update(payload);
+                                              setEditingAnnouncement(null);
+                                              showAlert("Updated", 'success');
+                                          } else {
+                                              await db.collection("announcements").add(payload);
+                                              showAlert("Posted", 'success');
+                                          }
+                                          setAnnouncementForm({ title: '', content: '', isGlobal: isAdmin });
+                                      }}
+                                      className="flex-1 bg-rose-900 text-white py-3 rounded-lg hover:bg-rose-950 font-bold shadow-lg shadow-rose-900/20 active:scale-95 transition-all"
+                                   >
+                                       {editingAnnouncement ? 'Save Changes' : 'Post Now'}
+                                   </button>
+                                   {editingAnnouncement && (
+                                       <button onClick={() => {
+                                           setEditingAnnouncement(null);
+                                           setAnnouncementForm({ title: '', content: '', isGlobal: isAdmin });
+                                       }} className="px-4 bg-zinc-200 text-zinc-800 rounded-lg hover:bg-zinc-300 font-bold">Cancel</button>
+                                   )}
+                               </div>
+                           </div>
+                       </div>
                   </div>
-                  <div className="p-6 space-y-6">
-                      <div>
-                        <label className={labelClass}>Target Branch</label>
-                        <select 
-                            value={selectedBranchId} 
-                            onChange={e => setSelectedBranchId(e.target.value)} 
-                            disabled={isOfficer} 
-                            className={`${inputClass} ${isOfficer ? 'opacity-70 cursor-not-allowed' : ''}`}
-                        >
-                            {guilds.filter(g => isOfficer ? g.id === userProfile.guildId : true).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                        </select>
-                      </div>
 
-                      <div>
-                          <label className={labelClass}>Active Bosses (Left & Right)</label>
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                              {[0, 1].map((idx) => (
-                                  <div key={idx} className="relative">
-                                      <select 
-                                          className={`${inputClass} text-xs`}
-                                          value={herosRealmConfig?.currentBosses?.[selectedBranchId]?.[idx] || ""}
-                                          onChange={(e) => handleUpdateHerosRealmBoss(idx, e.target.value)}
-                                      >
-                                          <option value="">Random / Pool</option>
-                                          {bossPool.map(b => (
-                                              <option key={b.name} value={b.name}>{b.name}</option>
-                                          ))}
-                                      </select>
+                  <div className="lg:col-span-2 space-y-4">
+                      <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4">Announcement History</h2>
+                      {announcements.map(ann => (
+                          <div key={ann.id} className="p-5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-rose-900/30 transition-colors group">
+                              <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                      <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                          {ann.title}
+                                          {ann.isGlobal && <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"><Globe size={10} /> GLOBAL</span>}
+                                      </h3>
+                                      <p className="text-xs text-zinc-500">
+                                          {new Date(ann.timestamp).toLocaleString()} • by {ann.authorName}
+                                      </p>
                                   </div>
-                              ))}
-                          </div>
-                          <p className="text-xs text-zinc-400">Select specific bosses to display on the dashboard.</p>
-                      </div>
-
-                      <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
-                          <label className={labelClass}>Current Official Schedule</label>
-                          <div className="p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-700">
-                              {herosRealmConfig?.schedules?.[selectedBranchId]?.length ? (
-                                  <div className="flex items-center justify-between">
-                                      <span className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                                          <Clock size={16} className="text-purple-600 dark:text-purple-400" />
-                                          {herosRealmConfig.schedules[selectedBranchId][0].day} @ {formatTime12Hour(herosRealmConfig.schedules[selectedBranchId][0].time)}
-                                      </span>
-                                      <button onClick={handleClearHerosRealmSchedule} className="text-xs text-red-500 hover:underline">Clear</button>
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button onClick={() => {
+                                          setEditingAnnouncement(ann);
+                                          setAnnouncementForm({ title: ann.title, content: ann.content, isGlobal: ann.isGlobal });
+                                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                                      }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
+                                      <button onClick={() => setDeleteConf({
+                                          isOpen: true, title: "Delete?", message: "Delete announcement?",
+                                          action: async () => await db.collection("announcements").doc(ann.id).delete()
+                                      })} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
                                   </div>
-                              ) : (
-                                  <p className="text-sm text-zinc-400 italic">No schedule set.</p>
-                              )}
+                              </div>
+                              <RichText text={ann.content} className="text-sm text-zinc-600 dark:text-zinc-400" />
                           </div>
-                          <p className="text-xs text-zinc-400 mt-2">
-                              Clearing the schedule will also remove all current member requests/votes.
-                          </p>
-                      </div>
+                      ))}
                   </div>
               </div>
+          );
 
-              <div className={`${cardClass} md:col-span-2`}>
-                  <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                      <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                          <Clock size={20} className="text-purple-500" /> Member Requests (Polls)
-                      </h3>
+      case 'herosRealm':
+          return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
+                   {/* Left: Polls grouped by Guild */}
+                   <div className="lg:col-span-2 space-y-6">
+                       <div className="flex justify-between items-center">
+                           <h3 className="font-bold text-xl text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                               <Clock className="text-purple-600" /> Poll Requests
+                           </h3>
+                           {isAdmin && (
+                               <button 
+                                   onClick={handleResetHerosRealm}
+                                   className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 transition-colors"
+                               >
+                                   <Trash2 size={14} /> Weekly Reset
+                               </button>
+                           )}
+                       </div>
+
+                       {guilds.map(guild => {
+                           const guildRequests = herosRealmRequests.filter(r => r.guildId === guild.id).sort((a,b) => b.votes.length - a.votes.length);
+                           if (guildRequests.length === 0) return null;
+
+                           return (
+                               <div key={guild.id} className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                                   <h4 className="font-bold text-zinc-900 dark:text-zinc-100 mb-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                                       {guild.name}
+                                   </h4>
+                                   <div className="space-y-3">
+                                       {guildRequests.map(req => (
+                                           <div key={req.id} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                               <div className="flex items-center gap-4">
+                                                   <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-bold px-3 py-1 rounded text-sm">
+                                                       {req.votes.length} Votes
+                                                   </div>
+                                                   <div>
+                                                       <p className="font-bold text-zinc-900 dark:text-zinc-100">{req.day} @ {formatTime(req.time)}</p>
+                                                       <p className="text-xs text-zinc-400">By {req.createdByName}</p>
+                                                   </div>
+                                               </div>
+                                               <div className="flex gap-2">
+                                                   {(isAdmin || (isOfficer && selectedBranchId === guild.id)) && (
+                                                       <button 
+                                                            onClick={() => handleApproveHerosRealm(req)}
+                                                            className="flex items-center gap-1 bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded text-xs font-bold transition-colors"
+                                                       >
+                                                           <Check size={14} /> Approve
+                                                       </button>
+                                                   )}
+                                                   <button onClick={() => db.collection("heros_realm_requests").doc(req.id).delete()} className="text-zinc-400 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                                               </div>
+                                           </div>
+                                       ))}
+                                   </div>
+                               </div>
+                           )
+                       })}
+                       {herosRealmRequests.length === 0 && <p className="text-zinc-500 italic text-center py-8">No active polls.</p>}
+                   </div>
+                   
+                   {/* Right: Current Schedule Config */}
+                   <div className="lg:col-span-1">
+                        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm sticky top-4">
+                             <h3 className="font-bold text-xl text-zinc-900 dark:text-zinc-100 mb-4">Active Schedules</h3>
+                             <p className="text-xs text-zinc-500 mb-4">Currently approved schedules for each branch.</p>
+                             
+                             <div className="space-y-4">
+                                 {guilds.map(g => {
+                                     const schedule = herosRealmConfig?.schedules?.[g.id]?.[0];
+                                     return (
+                                         <div key={g.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                                             <div className="font-bold text-xs text-zinc-500 uppercase mb-1">{g.name}</div>
+                                             {schedule ? (
+                                                 <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold">
+                                                     <Clock size={16} /> {schedule.day} @ {formatTime(schedule.time)}
+                                                 </div>
+                                             ) : (
+                                                 <span className="text-xs text-zinc-400 italic">No schedule set</span>
+                                             )}
+                                         </div>
+                                     );
+                                 })}
+                             </div>
+                        </div>
+                   </div>
+              </div>
+          );
+
+      case 'leaderboard':
+      case 'winnerLogs':
+          const isLogs = activeTab === 'winnerLogs';
+          // Use two distinct state variables to avoid mixing data
+          const data = isLogs ? winnerLogs : leaderboard;
+          
+          return (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="flex justify-between items-center">
+                      <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{isLogs ? 'Winner Logs' : 'Speedrun Leaderboard'}</h2>
+                      <button 
+                        onClick={() => {
+                            setEditingLeaderboardEntry({
+                                id: '',
+                                rank: 0,
+                                playerName: '',
+                                playerUid: '',
+                                branch: '',
+                                boss: '',
+                                time: '',
+                                date: new Date().toISOString(),
+                                status: 'verified',
+                                prizeGiven: false
+                            });
+                            setLeaderboardModalMode(isLogs ? 'winnerLog' : 'leaderboard');
+                            setIsLeaderboardModalOpen(true);
+                        }}
+                        className="bg-rose-900 text-white px-4 py-2 rounded-lg hover:bg-rose-950 flex items-center gap-2 shadow-lg shadow-rose-900/20"
+                      >
+                          <Plus size={18} /> Add Entry
+                      </button>
                   </div>
-                  <div className="overflow-x-auto">
-                      <table className="w-full">
-                          <thead>
+                  
+                  <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
                               <tr>
-                                  <th className={tableHeaderClass}>Proposed Time</th>
-                                  <th className={tableHeaderClass}>Requested By</th>
-                                  <th className={tableHeaderClass}>Votes</th>
-                                  <th className={`${tableHeaderClass} text-right`}>Actions</th>
+                                  <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Date</th>
+                                  <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Player</th>
+                                  <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">{isLogs ? 'Event / Boss' : 'Boss'}</th>
+                                  {!isLogs && <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Time</th>}
+                                  <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Branch</th>
+                                  {isLogs && <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Prize Status</th>}
+                                  <th className="px-6 py-4 text-right font-bold text-zinc-500 uppercase text-xs">Actions</th>
                               </tr>
                           </thead>
-                          <tbody>
-                              {filteredHerosRealmRequests.map(req => (
-                                  <tr key={req.id} className={tableRowClass}>
-                                      <td className={tableCellClass}>
-                                          <span className="font-bold text-zinc-900 dark:text-zinc-100">{req.day}</span>
-                                          <span className="text-zinc-500 dark:text-zinc-400 ml-2">@ {formatTime12Hour(req.time)}</span>
-                                      </td>
-                                      <td className={tableCellClass}>{req.createdByName}</td>
-                                      <td className={tableCellClass}>
-                                          <span className="inline-flex items-center gap-1 font-bold text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/20 px-2 py-0.5 rounded-full text-xs">
-                                              {req.votes.length} Votes
-                                          </span>
-                                      </td>
-                                      <td className={`${tableCellClass} text-right`}>
-                                          <div className="flex justify-end gap-2">
+                          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                              {data.map((entry: any) => (
+                                  <tr key={entry.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                                      <td className="px-6 py-4 text-zinc-500">{new Date(entry.date).toLocaleDateString()}</td>
+                                      <td className="px-6 py-4 font-medium text-zinc-900 dark:text-zinc-100">{entry.playerName}</td>
+                                      <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{entry.boss}</td>
+                                      {!isLogs && <td className="px-6 py-4 font-mono text-rose-600 dark:text-rose-400 font-bold">{entry.time}</td>}
+                                      <td className="px-6 py-4 text-zinc-500">{entry.branch}</td>
+                                      {isLogs && (
+                                          <td className="px-6 py-4">
                                               <button 
-                                                onClick={() => handleSetHerosRealmSchedule(req)}
-                                                className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 rounded transition-colors"
-                                                title="Approve & Set as Schedule"
+                                                onClick={async () => {
+                                                    await db.collection("winner_logs").doc(entry.id).update({ prizeGiven: !entry.prizeGiven });
+                                                }}
+                                                className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                                                    entry.prizeGiven 
+                                                    ? 'bg-green-100 border-green-200 text-green-700 hover:bg-green-200' 
+                                                    : 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:bg-zinc-200'
+                                                }`}
                                               >
-                                                  <CheckCircle size={16} />
+                                                  {entry.prizeGiven ? 'Received' : 'Pending'}
                                               </button>
-                                              <button 
-                                                onClick={() => handleDeleteHerosRealmRequest(req.id)}
-                                                className="p-1.5 text-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 rounded transition-colors"
-                                                title="Delete Request"
-                                              >
-                                                  <Trash2 size={16} />
-                                              </button>
-                                          </div>
+                                          </td>
+                                      )}
+                                      <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                          <button 
+                                            onClick={() => {
+                                                setEditingLeaderboardEntry(entry);
+                                                setLeaderboardModalMode(isLogs ? 'winnerLog' : 'leaderboard');
+                                                setIsLeaderboardModalOpen(true);
+                                            }}
+                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                                          >
+                                              <Edit size={16} />
+                                          </button>
+                                          <button 
+                                            onClick={() => setDeleteConf({
+                                                isOpen: true,
+                                                title: "Delete Entry?",
+                                                message: "This cannot be undone.",
+                                                action: async () => {
+                                                    const collection = isLogs ? "winner_logs" : "leaderboard";
+                                                    await db.collection(collection).doc(entry.id).delete();
+                                                }
+                                            })}
+                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                                          >
+                                              <Trash2 size={16} />
+                                          </button>
                                       </td>
                                   </tr>
                               ))}
-                              {filteredHerosRealmRequests.length === 0 && (
-                                  <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">No requests found.</td></tr>
-                              )}
+                          </tbody>
+                      </table>
+                  </div>
+
+                  <EditLeaderboardModal 
+                    isOpen={isLeaderboardModalOpen}
+                    onClose={() => setIsLeaderboardModalOpen(false)}
+                    entry={editingLeaderboardEntry}
+                    setEntry={setEditingLeaderboardEntry}
+                    onUpdate={async (e) => {
+                        e.preventDefault();
+                        if (!editingLeaderboardEntry) return;
+                        const collection = leaderboardModalMode === 'winnerLog' ? "winner_logs" : "leaderboard";
+                        
+                        // IMPORTANT: ID Logic Fix
+                        if (editingLeaderboardEntry.id) {
+                            // If ID exists, UPDATE
+                            await db.collection(collection).doc(editingLeaderboardEntry.id).update(editingLeaderboardEntry);
+                            showAlert("Entry Updated", 'success');
+                        } else {
+                            // If ID is empty/new, ADD
+                            const { id, ...data } = editingLeaderboardEntry; // remove empty string ID
+                            await db.collection(collection).add(data);
+                            showAlert("Entry Created", 'success');
+                        }
+                        setIsLeaderboardModalOpen(false);
+                    }}
+                    bossPool={bossPool}
+                    guilds={guilds}
+                    allUsers={allUsers}
+                    mode={leaderboardModalMode}
+                  />
+              </div>
+          );
+
+      case 'members':
+        const filteredMembers = allUsers.filter(u => {
+             const matchBranch = memberListFilter === 'All' || u.guildId === memberListFilter;
+             const matchSearch = u.displayName.toLowerCase().includes(userSearch.toLowerCase());
+             return matchBranch && matchSearch;
+        });
+
+        return (
+            <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Member Roster</h2>
+                    
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div className="relative flex-1 md:flex-none">
+                            <input 
+                                type="text"
+                                placeholder="Search members..."
+                                className="pl-9 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 w-full"
+                                value={userSearch}
+                                onChange={e => setUserSearch(e.target.value)}
+                            />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                        </div>
+                        
+                        {isAdmin && (
+                            <div className="relative w-full md:w-auto">
+                                <select
+                                    className="w-full md:w-48 pl-3 pr-8 py-2 appearance-none border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 text-zinc-700 dark:text-zinc-300"
+                                    value={memberListFilter}
+                                    onChange={e => setMemberListFilter(e.target.value)}
+                                >
+                                    <option value="All">All Branches</option>
+                                    {guilds.map(g => (
+                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>
+                            </div>
+                        )}
+                        {isOfficer && (
+                             <div className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-500">
+                                 {guilds.find(g => g.id === selectedBranchId)?.name}
+                             </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                            <tr>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Name</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Role</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Branch</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">System Role</th>
+                                <th className="px-6 py-4 text-right font-bold text-zinc-500 uppercase text-xs">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {filteredMembers.map(member => (
+                                <tr key={member.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-zinc-900 dark:text-zinc-100">
+                                        <div className="flex items-center gap-3">
+                                            <img src={member.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full bg-zinc-200" />
+                                            <div>
+                                                <div>{member.displayName}</div>
+                                                <div className="text-[10px] text-zinc-400">{member.inGameId}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{member.role}</td>
+                                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
+                                        {guilds.find(g => g.id === member.guildId)?.name || member.guildId}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                            member.systemRole === 'Admin' ? 'bg-red-100 text-red-700' :
+                                            member.systemRole === 'Officer' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-zinc-100 text-zinc-600'
+                                        }`}>
+                                            {member.systemRole}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {member.systemRole === 'Member' && (
+                                            <button 
+                                                onClick={() => setDeleteConf({
+                                                    isOpen: true,
+                                                    title: `Kick ${member.displayName}?`,
+                                                    message: "This will remove them from the guild branch. They will need to re-apply.",
+                                                    action: async () => {
+                                                        await db.collection("users").doc(member.uid).update({
+                                                            guildId: '',
+                                                            systemRole: 'Member'
+                                                        });
+                                                        showAlert(`${member.displayName} kicked from guild.`, 'info');
+                                                    }
+                                                })}
+                                                className="bg-red-50 text-red-600 px-3 py-1 rounded text-xs font-bold hover:bg-red-100 border border-red-200 transition-colors"
+                                            >
+                                                Kick Member
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredMembers.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">No members found.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+
+      case 'users':
+          // Only Admin can see this tab content
+          if (!isAdmin) return null;
+          return (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* ... Existing User Role Management ... */}
+                  <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">System Role Management</h2>
+                  {/* ... (Kept simple for brevity, logic identical to previous version just wrapped in div) ... */}
+                  <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                              <tr>
+                                  <th className="px-6 py-3">User</th>
+                                  <th className="px-6 py-3">System Role</th>
+                                  <th className="px-6 py-3 text-right">Action</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                              {allUsers.map(u => (
+                                  <tr key={u.uid}>
+                                      <td className="px-6 py-3 font-medium">{u.displayName}</td>
+                                      <td className="px-6 py-3">{u.systemRole}</td>
+                                      <td className="px-6 py-3 text-right">
+                                          {u.systemRole !== 'Admin' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Admin'})} className="text-blue-600 mr-2">Promote Admin</button>}
+                                          {u.systemRole !== 'Officer' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Officer'})} className="text-yellow-600 mr-2">Promote Officer</button>}
+                                          {u.systemRole !== 'Member' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Member'})} className="text-zinc-500">Demote</button>}
+                                      </td>
+                                  </tr>
+                              ))}
                           </tbody>
                       </table>
                   </div>
               </div>
-          </div>
-      )}
+          )
 
-      {/* --- BREAKING ARMY TAB --- */}
-      {activeTab === 'breakingArmy' && (
-        <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* CONFIGURATION CARD */}
-                <div className={`${cardClass} md:col-span-1 lg:col-span-1 min-w-[300px]`}>
-                    <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                            <Settings size={20} className="text-zinc-500" /> Control Center
-                        </h3>
-                    </div>
-                    <div className="p-6 space-y-6">
-                        <div>
-                            <label className={labelClass}>Target Branch</label>
-                            <select 
-                                value={selectedBranchId} 
-                                onChange={e => setSelectedBranchId(e.target.value)} 
-                                disabled={isOfficer} 
-                                className={`${inputClass} ${isOfficer ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                {guilds.filter(g => isOfficer ? g.id === userProfile.guildId : true).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                            </select>
-                        </div>
-                        {/* ... Existing Breaking Army Config UI ... */}
-                        <div>
-                            <label className={labelClass}>Active Boss</label>
-                            <div className="relative">
-                                {bossPool.find(b => b.name === currentBossMap[selectedBranchId])?.imageUrl && (
-                                    <img src={bossPool.find(b => b.name === currentBossMap[selectedBranchId])!.imageUrl} className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md object-cover border border-zinc-300 dark:border-zinc-600" />
-                                )}
-                                <select value={currentBossMap[selectedBranchId] || ''} onChange={handleUpdateCurrentBoss} className={`${inputClass} ${bossPool.find(b => b.name === currentBossMap[selectedBranchId])?.imageUrl ? 'pl-12' : ''}`}>
-                                    <option value="">Select Boss</option>
-                                    {bossPool.map(b=><option key={b.name} value={b.name}>{b.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <label className={labelClass}>Weekly Schedule</label>
-                                <span className="text-xs text-zinc-400">{(schedulesMap[selectedBranchId] || []).length}/2 Slots</span>
-                            </div>
-                            <div className="space-y-2 mb-3">
-                                {schedulesMap[selectedBranchId]?.map((s,i) => (
-                                    <div key={i} className="flex justify-between items-center p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-700/50">
-                                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                                            <Clock size={14} className="text-zinc-400" /> {s.day} @ {formatTime12Hour(s.time)}
-                                        </span>
-                                        <button type="button" onClick={()=>openDeleteModal("Remove Schedule?","Are you sure?",()=>handleRemoveSchedule(i))} className="text-zinc-400 hover:text-red-500 transition-colors"><X size={16} /></button>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <select value={newSchedule.day} onChange={e=>setNewSchedule({...newSchedule, day: e.target.value})} className={inputClass}>
-                                    <option>Sunday</option><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option>
-                                </select>
-                                <div className="flex gap-2">
-                                    <input type="time" value={newSchedule.time} onChange={e=>setNewSchedule({...newSchedule, time: e.target.value})} className={`${inputClass} flex-1`} />
-                                    <button type="button" onClick={handleAddSchedule} disabled={(schedulesMap[selectedBranchId] || []).length >= 2} className="px-4 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors disabled:opacity-50"><Plus size={18} /></button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className={labelClass}>Actions</label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button type="button" onClick={()=>openDeleteModal("Clear Queues?", `Clear all queues for ${guilds.find(g=>g.id===selectedBranchId)?.name}?`, handleResetQueue)} className="px-3 py-2 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2">
-                                    <Trash2 size={14} /> Clear Queue
-                                </button>
-                                <button type="button" onClick={()=>openDeleteModal("Reset Winners?", `Reset all winners/cooldowns for ${guilds.find(g=>g.id===selectedBranchId)?.name}?`, handleResetCooldowns)} className="px-3 py-2 bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 rounded-lg text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2">
-                                    <RefreshCw size={14} /> Reset Winners
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* QUEUE & WINNERS */}
-                <div className="md:col-span-2 flex flex-col gap-6">
-                    <div className={`${cardClass} flex-1`}>
-                        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                                <ListOrdered size={20} className="text-zinc-500" /> Queue Manager
-                            </h3>
-                            <span className="text-xs font-bold px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-500">{guilds.find(g=>g.id===selectedBranchId)?.name}</span>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                           <table className="w-full">
-                               <thead>
-                                   <tr>
-                                       <th className={tableHeaderClass}>#</th>
-                                       <th className={tableHeaderClass}>Player</th>
-                                       <th className={tableHeaderClass}>Role</th>
-                                       <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                                   </tr>
-                               </thead>
-                               <tbody>
-                                   {queue.filter(q=>q.guildId===selectedBranchId).map((q, i)=>(
-                                       <tr key={q.uid} className={tableRowClass}>
-                                           <td className={tableCellClass}><span className="font-mono text-zinc-400">{i+1}</span></td>
-                                           <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{q.name}</span></td>
-                                           <td className={tableCellClass}><span className="text-xs px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">{q.role}</span></td>
-                                           <td className={`${tableCellClass} text-right`}>
-                                               <div className="flex justify-end gap-2">
-                                                   <button type="button" onClick={()=>{setSelectedWinner(q);setIsWinnerModalOpen(true)}} className="p-1.5 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 hover:bg-yellow-200 dark:hover:bg-yellow-900/40 rounded transition-colors" title="Declare Winner">
-                                                       <Crown size={16}/>
-                                                   </button>
-                                                   <button type="button" onClick={()=>openDeleteModal("Remove Player?", `Remove ${q.name} from the queue?`, () => handleRemoveFromQueue(q.uid))} className="p-1.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Remove from Queue">
-                                                       <Trash2 size={16}/>
-                                                   </button>
-                                               </div>
-                                           </td>
-                                       </tr>
-                                   ))}
-                                   {queue.filter(q=>q.guildId===selectedBranchId).length === 0 && (
-                                       <tr><td colSpan={4} className="p-8 text-center text-zinc-400 text-sm">Queue is empty.</td></tr>
-                                   )}
-                               </tbody>
-                           </table>
-                        </div>
-                    </div>
-                    
-                    <div className={`${cardClass} flex-1`}>
-                        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-                             <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                                <Clock size={20} className="text-yellow-500" /> Recent Winners (Cooldowns)
-                            </h3>
-                        </div>
-                        <div className="max-h-64 overflow-y-auto custom-scrollbar">
-                           <table className="w-full">
-                               <thead>
-                                   <tr>
-                                       <th className={tableHeaderClass}>Player</th>
-                                       <th className={tableHeaderClass}>Win Date</th>
-                                       <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                                   </tr>
-                               </thead>
-                               <tbody>
-                                   {recentWinners.filter(w=>w.branchId===selectedBranchId).map(w => {
-                                       const user = allUsers.find(u => u.uid === w.uid);
-                                       return (
-                                           <tr key={`${w.uid}-${w.timestamp}`} className={tableRowClass}>
-                                               <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{user?.displayName || 'Unknown'}</span></td>
-                                               <td className={tableCellClass}>{new Date(w.timestamp).toLocaleDateString()}</td>
-                                               <td className={`${tableCellClass} text-right`}>
-                                                   <button type="button" onClick={()=>openDeleteModal("Reset Cooldown?", `Remove cooldown for ${user?.displayName}?`, () => handleRemoveWinner(w))} className="text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
-                                               </td>
-                                           </tr>
-                                       );
-                                   })}
-                                   {recentWinners.filter(w=>w.branchId===selectedBranchId).length === 0 && (
-                                       <tr><td colSpan={3} className="p-8 text-center text-zinc-400 text-sm">No active cooldowns.</td></tr>
-                                   )}
-                               </tbody>
-                           </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* BOSS POOL GRID */}
-            {isAdmin && (
-                <div className={cardClass}>
-                    <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                            <Skull size={20} className="text-zinc-500" /> Boss Pool
-                        </h3>
-                        <form onSubmit={handleSaveBoss} className="flex gap-2 w-full md:w-auto">
-                            <input required placeholder="Name" value={bossForm.name} onChange={e=>setBossForm({...bossForm, name: e.target.value})} className={`${inputClass} w-full md:w-48`} />
-                            <input placeholder="Image URL" value={bossForm.imageUrl} onChange={e=>setBossForm({...bossForm, imageUrl: e.target.value})} className={`${inputClass} w-full md:w-48`} />
-                            <button type="submit" className="bg-rose-900 hover:bg-rose-950 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap">{editingBossOriginalName ? 'Update' : 'Add'}</button>
-                        </form>
-                    </div>
-                    <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        {bossPool.map(boss => (
-                            <div key={boss.name} className="relative group bg-zinc-50 dark:bg-zinc-800 rounded-lg p-3 text-center border border-zinc-200 dark:border-zinc-700">
-                                <div className="w-full aspect-square rounded bg-zinc-200 dark:bg-zinc-700 mb-2 overflow-hidden relative">
-                                    {boss.imageUrl ? <img src={boss.imageUrl} className="w-full h-full object-cover" /> : <Skull className="absolute inset-0 m-auto text-zinc-400" />}
-                                </div>
-                                <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">{boss.name}</p>
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1">
-                                    <button onClick={()=>{setBossForm(boss); setEditingBossOriginalName(boss.name)}} className="p-1 bg-blue-500 text-white rounded shadow"><Edit size={10} /></button>
-                                    <button onClick={(e)=>handleDeleteBoss(e, boss.name)} className="p-1 bg-red-500 text-white rounded shadow"><Trash2 size={10} /></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-      )}
-
-      {/* --- LEADERBOARD TAB --- */}
-      {activeTab === 'leaderboard' && (
-        <div className={cardClass}>
-            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Trophy size={20} className="text-yellow-500" /> Leaderboard Records
-                </h2>
-                <button 
-                    onClick={() => {
-                        setEditingLeaderboardEntry({id: '', rank: 0, playerName: '', playerUid: '', branch: '', boss: '', time: '', date: new Date().toISOString(), status: 'verified'});
-                        setLeaderboardModalMode('leaderboard');
-                        setIsLeaderboardModalOpen(true);
-                    }}
-                    className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-zinc-200 dark:border-zinc-700"
-                >
-                    <Plus size={16}/> Add Record
-                </button>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>Rank</th>
-                            <th className={tableHeaderClass}>Player</th>
-                            <th className={tableHeaderClass}>Boss</th>
-                            <th className={tableHeaderClass}>Time</th>
-                            <th className={tableHeaderClass}>Branch</th>
-                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {leaderboard.map((entry, idx) => (
-                            <tr key={entry.id} className={tableRowClass}>
-                                <td className={tableCellClass}><span className="font-mono font-bold text-zinc-500">#{idx + 1}</span></td>
-                                <td className={tableCellClass}><span className="font-medium text-zinc-900 dark:text-zinc-100">{entry.playerName}</span></td>
-                                <td className={tableCellClass}>{entry.boss}</td>
-                                <td className={tableCellClass}><span className="font-mono text-rose-900 dark:text-rose-400 font-bold">{entry.time}</span></td>
-                                <td className={tableCellClass}><span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">{entry.branch}</span></td>
-                                <td className={`${tableCellClass} text-right`}>
-                                    <div className="flex justify-end gap-2">
-                                        <button onClick={() => { setEditingLeaderboardEntry(entry); setLeaderboardModalMode('leaderboard'); setIsLeaderboardModalOpen(true); }} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors"><Edit size={16} /></button>
-                                        <button onClick={(e) => handleDeleteLeaderboardEntry(e, entry.id)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors"><Trash2 size={16} /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
-
-      {/* --- WINNER LOGS TAB --- */}
-      {activeTab === 'winnerLogs' && (
-        <div className={cardClass}>
-             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Trophy size={20} className="text-orange-500" /> Winner Logs & Prizes
-                </h2>
-                <button 
-                    onClick={() => {
-                        setEditingLeaderboardEntry({id: '', rank: 1, playerName: '', playerUid: '', branch: '', boss: '', time: '', date: new Date().toISOString(), status: 'verified'});
-                        setLeaderboardModalMode('winnerLog');
-                        setIsLeaderboardModalOpen(true);
-                    }}
-                    className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-zinc-200 dark:border-zinc-700"
-                >
-                    <Plus size={16}/> Add Winner Log
-                </button>
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>Date</th>
-                            <th className={tableHeaderClass}>Winner</th>
-                            <th className={tableHeaderClass}>Event/Boss</th>
-                            <th className={tableHeaderClass}>Branch</th>
-                            <th className={tableHeaderClass}>Prize Status</th>
-                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {winnerLogs.map(log => (
-                            <tr key={log.id} className={tableRowClass}>
-                                <td className={tableCellClass}>{new Date(log.date).toLocaleDateString()}</td>
-                                <td className={tableCellClass}><span className="font-bold text-zinc-900 dark:text-zinc-100">{log.playerName}</span></td>
-                                <td className={tableCellClass}>{log.boss}</td>
-                                <td className={tableCellClass}>{log.branch}</td>
-                                <td className={tableCellClass}>
-                                    <button 
-                                        onClick={() => handleToggleWinnerLogPrize(log.id, !!log.prizeGiven)}
-                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border ${
-                                            log.prizeGiven 
-                                            ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-900' 
-                                            : 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-900'
-                                        }`}
-                                    >
-                                        {log.prizeGiven ? 'Prize Given' : 'Pending Prize'}
-                                    </button>
-                                </td>
-                                <td className={`${tableCellClass} text-right`}>
-                                     <button onClick={(e) => handleDeleteWinnerLog(e, log.id)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors"><Trash2 size={16} /></button>
-                                </td>
-                            </tr>
-                        ))}
-                         {winnerLogs.length === 0 && (
-                            <tr><td colSpan={6} className="p-8 text-center text-zinc-400 text-sm">No winner logs found.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
-
-      {/* --- USERS TAB --- */}
-      {activeTab === 'users' && isAdmin && (
-        <div className={cardClass}>
-           <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <User size={20} className="text-zinc-500" /> User Database
-                </h2>
-                <input 
-                    type="text" 
-                    placeholder="Search Users..." 
-                    className={`${inputClass} max-w-xs`}
-                    value={userSearch}
-                    onChange={e => setUserSearch(e.target.value)}
-                />
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>User</th>
-                            <th className={tableHeaderClass}>Guild Branch</th>
-                            <th className={tableHeaderClass}>Role</th>
-                            <th className={tableHeaderClass}>System Role</th>
-                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredUsers.map(u => (
-                            <tr key={u.uid} className={tableRowClass}>
-                                <td className={tableCellClass}>
-                                    <div className="flex items-center gap-3">
-                                        <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700" />
-                                        <div>
-                                            <p className="font-bold text-zinc-900 dark:text-zinc-100">{u.displayName}</p>
-                                            <p className="text-xs text-zinc-500">{u.inGameId}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className={tableCellClass}>{guilds.find(g => g.id === u.guildId)?.name || 'None'}</td>
-                                <td className={tableCellClass}>{u.role}</td>
-                                <td className={tableCellClass}>
-                                    <select 
-                                        value={u.systemRole} 
-                                        onChange={(e) => handleRoleChange(u.uid, e.target.value as any)}
-                                        className="bg-transparent border-none text-sm font-medium text-zinc-700 dark:text-zinc-300 focus:ring-0 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded px-2"
-                                        disabled={u.uid === currentUser?.uid}
-                                    >
-                                        <option value="Member">Member</option>
-                                        <option value="Officer">Officer</option>
-                                        <option value="Admin">Admin</option>
-                                    </select>
-                                </td>
-                                <td className={`${tableCellClass} text-right`}>
-                                     <button onClick={(e) => openDeleteModal("Kick User?", `Are you sure you want to remove ${u.displayName} from the guild?`, () => handleKickUser(e, u.uid))} className="text-zinc-400 hover:text-red-500 transition-colors" disabled={u.uid === currentUser?.uid}><Trash2 size={16} /></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      )}
-
-      {/* --- MEMBERS TAB --- */}
-      {activeTab === 'members' && (
-          <div className={cardClass}>
-              <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                      <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                          <User size={20} className="text-zinc-500" /> Members Management
-                      </h2>
+      case 'leaves':
+        const filteredLeaves = leaves.filter(l => leaveBranchFilter === 'All' || l.guildId === leaveBranchFilter);
+        return (
+            <div className="space-y-6 animate-in fade-in duration-300">
+                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Leave Requests</h2>
                       {isAdmin && (
-                        <select 
-                            value={selectedBranchId} 
-                            onChange={e => setSelectedBranchId(e.target.value)} 
-                            className={`${inputClass} py-1 text-xs w-auto`}
-                        >
-                            {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                        </select>
+                          <div className="relative w-full md:w-auto">
+                             <select 
+                                value={leaveBranchFilter}
+                                onChange={e => setLeaveBranchFilter(e.target.value)}
+                                className="w-full md:w-48 pl-3 pr-8 py-2 appearance-none border rounded-lg bg-white dark:bg-zinc-800 dark:border-zinc-700 dark:text-white text-sm focus:ring-2 focus:ring-rose-500"
+                             >
+                                 <option value="All">All Branches</option>
+                                 {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                             </select>
+                             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">▼</div>
+                          </div>
                       )}
-                  </div>
-                  <input 
-                      type="text" 
-                      placeholder="Search..." 
-                      className={`${inputClass} max-w-xs`}
-                      value={userSearch}
-                      onChange={e => setUserSearch(e.target.value)}
-                  />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>User</th>
-                            <th className={tableHeaderClass}>System Role</th>
-                            <th className={`${tableHeaderClass} text-right`}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredBranchMembers.length === 0 ? (
-                            <tr><td colSpan={3} className="p-8 text-center text-zinc-400 text-sm">No members found in this branch.</td></tr>
-                        ) : (
-                            filteredBranchMembers.map(u => {
-                                const canKick = isAdmin ? u.systemRole !== 'Admin' : (isOfficer ? u.systemRole === 'Member' : false);
-                                return (
-                                    <tr key={u.uid} className={tableRowClass}>
-                                        <td className={tableCellClass}>
-                                            <div className="flex items-center gap-3">
-                                                <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700" />
-                                                <div>
-                                                    <p className="font-bold text-zinc-900 dark:text-zinc-100">{u.displayName}</p>
-                                                    <p className="text-xs text-zinc-500">{u.inGameId}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className={tableCellClass}>
-                                            <span className={`text-xs px-2 py-1 rounded font-bold ${
-                                                u.systemRole === 'Admin' ? 'bg-red-100 text-red-700' :
-                                                u.systemRole === 'Officer' ? 'bg-yellow-100 text-yellow-700' :
-                                                'bg-zinc-100 text-zinc-600'
-                                            }`}>{u.systemRole}</span>
-                                        </td>
-                                        <td className={`${tableCellClass} text-right`}>
-                                            <button 
-                                                onClick={(e) => openDeleteModal("Kick Member?", `Remove ${u.displayName} from the guild?`, () => handleKickUser(e, u.uid))}
-                                                className={`text-zinc-400 hover:text-red-500 transition-colors ${!canKick ? 'opacity-30 cursor-not-allowed' : ''}`}
-                                                disabled={!canKick}
-                                                title={!canKick ? "Cannot kick higher or equal role" : "Kick Member"}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )
-                            })
-                        )}
-                    </tbody>
-                </table>
-            </div>
-          </div>
-      )}
+                 </div>
 
-      {/* --- LEAVES TAB --- */}
-      {activeTab === 'leaves' && (
-        <div className={cardClass}>
-           <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center gap-4">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Plane size={20} className="text-zinc-500" /> Leave Requests
-                </h2>
-                {isAdmin && (
-                    <select value={leaveBranchFilter} onChange={e => setLeaveBranchFilter(e.target.value)} className={`${inputClass} max-w-xs`}>
-                        <option value="All">All Branches</option>
-                        {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
-                )}
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr>
-                            <th className={tableHeaderClass}>Member</th>
-                            <th className={tableHeaderClass}>Guild</th>
-                            <th className={tableHeaderClass}>Dates</th>
-                            <th className={tableHeaderClass}>Reason</th>
-                            <th className={tableHeaderClass}>Filed On</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredLeaves.map(l => (
-                            <tr key={l.id} className={tableRowClass}>
-                                <td className={tableCellClass}>
-                                    <div className="font-bold text-zinc-900 dark:text-zinc-100">{l.displayName}</div>
-                                    <div className="text-xs text-zinc-500">{l.inGameId}</div>
-                                </td>
-                                <td className={tableCellClass}>{l.guildName}</td>
-                                <td className={tableCellClass}>
-                                    <div className="text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded inline-block text-zinc-600 dark:text-zinc-400">
-                                        {new Date(l.startDate).toLocaleDateString()} → {new Date(l.endDate).toLocaleDateString()}
-                                    </div>
-                                </td>
-                                <td className={tableCellClass}><span className="text-zinc-600 dark:text-zinc-400 italic">{l.reason || 'None provided'}</span></td>
-                                <td className={tableCellClass}><span className="text-xs text-zinc-400">{new Date(l.timestamp).toLocaleDateString()}</span></td>
+                 <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                            <tr>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Player</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Branch</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Dates</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs">Reason</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs text-right">Filed At</th>
+                                <th className="px-6 py-4 font-bold text-zinc-500 uppercase text-xs text-right">Actions</th>
                             </tr>
-                        ))}
-                        {filteredLeaves.length === 0 && (
-                            <tr><td colSpan={5} className="p-8 text-center text-zinc-400 text-sm">No leave requests found.</td></tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {filteredLeaves.map(leave => (
+                                <tr key={leave.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-zinc-900 dark:text-zinc-100">
+                                        {leave.displayName}
+                                        <div className="text-[10px] text-zinc-400">{leave.inGameId}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-zinc-500">{leave.guildName}</td>
+                                    <td className="px-6 py-4 text-zinc-700 dark:text-zinc-300">
+                                        {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 text-zinc-500 italic max-w-xs truncate">{leave.reason || 'None provided'}</td>
+                                    <td className="px-6 py-4 text-right text-zinc-400 text-xs">
+                                        {new Date(leave.timestamp).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button 
+                                            onClick={() => setDeleteConf({
+                                                isOpen: true,
+                                                title: "Delete Request?",
+                                                message: "Remove this leave request?",
+                                                action: async () => await db.collection("leaves").doc(leave.id).delete()
+                                            })}
+                                            className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded transition-colors"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredLeaves.length === 0 && (
+                                <tr><td colSpan={6} className="px-6 py-8 text-center text-zinc-500">No leave requests found.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                 </div>
             </div>
-        </div>
-      )}
+        );
 
-      {/* Modals */}
-      <CreateGuildModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateGuild} data={newGuildData} onChange={setNewGuildData} />
-      <CreateAnnouncementModal isOpen={isAnnouncementModalOpen} onClose={() => setIsAnnouncementModalOpen(false)} onSubmit={handleSaveAnnouncement} userProfile={userProfile} forceGlobal={false} initialData={editingAnnouncement} />
-      <DeclareWinnerModal isOpen={isWinnerModalOpen} onClose={()=>setIsWinnerModalOpen(false)} winnerName={selectedWinner?.name || ''} time={winnerTime} onTimeChange={setWinnerTime} onConfirm={handleConfirmWinner} />
-      {editingLeaderboardEntry && <EditLeaderboardModal isOpen={isLeaderboardModalOpen} onClose={()=>setIsLeaderboardModalOpen(false)} entry={editingLeaderboardEntry} setEntry={setEditingLeaderboardEntry} onUpdate={handleUpdateLeaderboardEntry} bossPool={bossPool} guilds={guilds} allUsers={allUsers} mode={leaderboardModalMode} />}
-      <ConfirmationModal isOpen={deleteConf.isOpen} onClose={()=>setDeleteConf({...deleteConf, isOpen: false})} onConfirm={deleteConf.action} title={deleteConf.title} message={deleteConf.message} />
+      default:
+        return <div className="p-8 text-center text-zinc-500">Select a tab to manage settings.</div>;
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Admin Dashboard</h1>
+      </div>
+
+      <div className="flex flex-col gap-6">
+        {/* Horizontal Scrollable Tabs */}
+        <div className="w-full overflow-x-auto custom-scrollbar pb-2">
+          <div className="flex gap-2">
+            {tabOrder.map((tabId, index) => {
+                const labels: Record<string, string> = {
+                    guilds: 'Guild Branches',
+                    events: 'Events',
+                    announcements: 'Announcements',
+                    breakingArmy: 'Breaking Army',
+                    herosRealm: "Hero's Realm",
+                    leaderboard: 'Leaderboard',
+                    winnerLogs: 'Winner Logs',
+                    users: 'System Roles',
+                    members: 'Members',
+                    leaves: 'Leave Requests'
+                };
+                
+                const icons: Record<string, React.ReactNode> = {
+                    guilds: <Database size={16} />,
+                    events: <Calendar size={16} />,
+                    announcements: <Megaphone size={16} />,
+                    breakingArmy: <Skull size={16} />,
+                    herosRealm: <Clock size={16} />,
+                    leaderboard: <Trophy size={16} />,
+                    winnerLogs: <Crown size={16} />,
+                    users: <ShieldAlert size={16} />,
+                    members: <User size={16} />,
+                    leaves: <Plane size={16} />
+                };
+
+                if (!isAdmin && !['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members'].includes(tabId)) {
+                    return null;
+                }
+
+                return (
+                  <div 
+                    key={tabId} 
+                    draggable={isAdmin}
+                    onDragStart={() => setDraggedTabIndex(index)}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => {
+                        if (draggedTabIndex === null) return;
+                        const newOrder = [...tabOrder];
+                        const [removed] = newOrder.splice(draggedTabIndex, 1);
+                        newOrder.splice(index, 0, removed);
+                        setTabOrder(newOrder);
+                        setDraggedTabIndex(null);
+                    }}
+                    className={`flex-shrink-0 cursor-pointer px-4 py-2.5 rounded-lg border text-sm font-bold flex items-center gap-2 transition-all select-none
+                       ${activeTab === tabId 
+                         ? 'bg-rose-900 text-white border-rose-900 shadow-md shadow-rose-900/10' 
+                         : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                       }
+                    `}
+                    onClick={() => setActiveTab(tabId)}
+                  >
+                     {isAdmin && (
+                         <span className="text-current opacity-30 cursor-grab active:cursor-grabbing mr-1"><GripVertical size={12} /></span>
+                     )}
+                     {icons[tabId]}
+                     <span className="whitespace-nowrap">{labels[tabId] || tabId}</span>
+                  </div>
+                );
+            })}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="w-full min-w-0">
+           {renderContent()}
+        </div>
+      </div>
+
+      <ConfirmationModal 
+        isOpen={deleteConf.isOpen}
+        onClose={() => setDeleteConf({...deleteConf, isOpen: false})}
+        onConfirm={deleteConf.action}
+        title={deleteConf.title}
+        message={deleteConf.message}
+      />
     </div>
   );
 };

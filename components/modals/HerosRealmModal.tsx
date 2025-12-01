@@ -15,7 +15,9 @@ interface HerosRealmModalProps {
 
 export const HerosRealmModal: React.FC<HerosRealmModalProps> = ({ isOpen, onClose, guildId, currentUser }) => {
   const [requests, setRequests] = useState<HerosRealmRequest[]>([]);
-  const [newRequest, setNewRequest] = useState({ day: 'Wednesday', time: '20:00' });
+  // Use separate state for time parts
+  const [newRequestDay, setNewRequestDay] = useState('Wednesday');
+  const [newRequestTime, setNewRequestTime] = useState({ hour: '8', minute: '00', ampm: 'PM' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,29 +54,40 @@ export const HerosRealmModal: React.FC<HerosRealmModalProps> = ({ isOpen, onClos
       await db.collection("heros_realm_requests").doc(id).delete();
   }
 
+  const convertTo24Hour = (hour: string, minute: string, ampm: string) => {
+      let h = parseInt(hour, 10);
+      if (ampm === 'PM' && h < 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      return `${h.toString().padStart(2, '0')}:${minute}`;
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!currentUser) return;
       
       setIsSubmitting(true);
       try {
+          const time24 = convertTo24Hour(newRequestTime.hour, newRequestTime.minute, newRequestTime.ampm);
+
           // Check for duplicate day/time in this guild
-          const existing = requests.find(r => r.day === newRequest.day && r.time === newRequest.time);
+          const existing = requests.find(r => r.day === newRequestDay && r.time === time24);
           if (existing) {
               // Just vote for it if it exists
                await handleVote(existing);
           } else {
               await db.collection("heros_realm_requests").add({
                   guildId,
-                  day: newRequest.day,
-                  time: newRequest.time,
+                  day: newRequestDay,
+                  time: time24,
                   createdByUid: currentUser.uid,
                   createdByName: currentUser.displayName,
                   votes: [currentUser.uid], // Auto-vote for own request
                   timestamp: new Date().toISOString()
               });
           }
-          setNewRequest({ day: 'Wednesday', time: '20:00' });
+          // Reset
+          setNewRequestDay('Wednesday');
+          setNewRequestTime({ hour: '8', minute: '00', ampm: 'PM' });
       } catch (err) {
           console.error("Error creating request", err);
       } finally {
@@ -106,22 +119,48 @@ export const HerosRealmModal: React.FC<HerosRealmModalProps> = ({ isOpen, onClos
         {/* Create Request Form */}
         <form onSubmit={handleCreate} className="mb-6 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700">
             <h4 className="text-xs font-bold text-zinc-500 uppercase mb-3">Request New Time</h4>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
                 <select 
-                    value={newRequest.day} 
-                    onChange={e => setNewRequest({...newRequest, day: e.target.value})}
+                    value={newRequestDay} 
+                    onChange={e => setNewRequestDay(e.target.value)}
                     className="flex-1 px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
-                        <option key={d} value={d}>{d}</option>
+                        <option key={d} value={d} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{d}</option>
                     ))}
                 </select>
-                <input 
-                    type="time" 
-                    value={newRequest.time}
-                    onChange={e => setNewRequest({...newRequest, time: e.target.value})}
-                    className="w-32 px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
+                
+                {/* Time Selection */}
+                <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-1">
+                     <select 
+                        value={newRequestTime.hour}
+                        onChange={e => setNewRequestTime({...newRequestTime, hour: e.target.value})}
+                        className="bg-transparent text-sm p-1 focus:outline-none text-zinc-900 dark:text-white"
+                     >
+                         {Array.from({length: 12}, (_, i) => i + 1).map(h => (
+                             <option key={h} value={h} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{h}</option>
+                         ))}
+                     </select>
+                     <span className="text-zinc-500 dark:text-zinc-400">:</span>
+                     <select 
+                        value={newRequestTime.minute}
+                        onChange={e => setNewRequestTime({...newRequestTime, minute: e.target.value})}
+                        className="bg-transparent text-sm p-1 focus:outline-none text-zinc-900 dark:text-white"
+                     >
+                         {['00', '15', '30', '45'].map(m => (
+                             <option key={m} value={m} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{m}</option>
+                         ))}
+                     </select>
+                     <select 
+                        value={newRequestTime.ampm}
+                        onChange={e => setNewRequestTime({...newRequestTime, ampm: e.target.value})}
+                        className="bg-transparent text-sm p-1 focus:outline-none text-zinc-900 dark:text-white"
+                     >
+                         <option value="AM" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">AM</option>
+                         <option value="PM" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">PM</option>
+                     </select>
+                </div>
+
                 <button 
                     type="submit" 
                     disabled={isSubmitting}

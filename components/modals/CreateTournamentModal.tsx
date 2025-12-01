@@ -1,26 +1,29 @@
 
 import React, { useState } from 'react';
 import { BaseModal } from './BaseModal';
-import { Guild, ArenaParticipant, UserProfile } from '../../types';
-import { Swords, Users, Trophy } from 'lucide-react';
+import { Guild, ArenaParticipant, UserProfile, RoleType } from '../../types';
+import { Swords, Trophy, Users, Crown } from 'lucide-react';
 import { db } from '../../services/firebase';
-import { SearchableUserSelect } from '../SearchableUserSelect';
 
 interface CreateTournamentModalProps {
   isOpen: boolean;
   onClose: () => void;
   guilds: Guild[];
-  onConfirm: (title: string, participants: ArenaParticipant[]) => void;
+  onConfirm: (title: string, participants: ArenaParticipant[], hasGrandFinale: boolean) => void;
 }
 
 export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ isOpen, onClose, guilds, onConfirm }) => {
   const [title, setTitle] = useState('');
   const [selectedGuilds, setSelectedGuilds] = useState<string[]>([]);
-  const [manualParticipants, setManualParticipants] = useState<ArenaParticipant[]>([]);
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  
+  // Import Options
+  const [importWinners, setImportWinners] = useState(true); // Top 3
+  const [importLosers, setImportLosers] = useState(false); // Everyone else
+  const [hasGrandFinale, setHasGrandFinale] = useState(true); // Exaggerated Top 1 Banner
 
-  // Load users for manual selection
+  // Load users to get roles
   React.useEffect(() => {
       if(isOpen) {
           db.collection("users").get().then(snap => {
@@ -35,82 +38,60 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
     );
   };
 
-  const handleManualAdd = (user: UserProfile) => {
-      if (manualParticipants.some(p => p.uid === user.uid)) return;
-      
-      const part: ArenaParticipant = {
-          uid: user.uid,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          guildId: user.guildId,
-          activityPoints: 0,
-          status: 'approved'
-      };
-      setManualParticipants([...manualParticipants, part]);
-  };
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title) return;
+    if (!importWinners && !importLosers) return; // Must select something
     setLoading(true);
 
     try {
-      const allParticipants: ArenaParticipant[] = [...manualParticipants];
+      const allParticipants: ArenaParticipant[] = [];
 
-      // Fetch Top 3 from selected guilds
       for (const guildId of selectedGuilds) {
           const guild = guilds.find(g => g.id === guildId);
           
-          // Strategy 1: Check if guild has persisted winners (New System)
-          if (guild?.lastArenaWinners && guild.lastArenaWinners.length > 0) {
-              guild.lastArenaWinners.forEach(w => {
-                  allParticipants.push({
-                      uid: w.uid,
-                      displayName: w.displayName,
-                      photoURL: w.photoURL,
-                      guildId: guildId,
-                      activityPoints: 0,
-                      status: 'approved'
-                  });
-              });
-              continue; // Skip match scanning for this guild
-          }
-
-          // Strategy 2: Fallback to scanning matches (Legacy System)
-          const matchesSnap = await db.collection("arena_matches")
+          // Get all approved participants from this guild's arena
+          const partsSnap = await db.collection("arena_participants")
             .where("guildId", "==", guildId)
+            .where("status", "==", "approved")
             .get();
+            
+          const guildParticipants = partsSnap.docs.map(d => d.data() as ArenaParticipant);
           
-          const matches = matchesSnap.docs.map(d => d.data());
-          if (matches.length === 0) continue;
+          // Identify Winners (Top 3)
+          let winnerUids: string[] = [];
+          if (guild?.lastArenaWinners) {
+              winnerUids = guild.lastArenaWinners.map(w => w.uid);
+          }
 
-          const maxRound = Math.max(...matches.map(m => m.round));
-          
-          // Final Match (Winner = 1st, Loser = 2nd)
-          const finalMatch = matches.find(m => m.round === maxRound && !m.isThirdPlace);
-          // 3rd Place Match
-          const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
-
-          if (finalMatch?.winner) {
-              allParticipants.push({...finalMatch.winner, activityPoints: 0, status: 'approved'});
+          guildParticipants.forEach(p => {
+              const isWinner = winnerUids.includes(p.uid);
+              const userProfile = allUsers.find(u => u.uid === p.uid);
               
-              // Get Loser (2nd Place) - Added optional chaining for safety
-              const loser = finalMatch.player1?.uid === finalMatch.winner.uid ? finalMatch.player2 : finalMatch.player1;
-              if (loser) allParticipants.push({...loser, activityPoints: 0, status: 'approved'});
-          }
+              const newParticipant: ArenaParticipant = {
+                  ...p,
+                  guildId: guildId, // Will be overwritten by tourney ID
+                  originalGuildId: guildId,
+                  activityPoints: 0,
+                  role: userProfile?.role || p.role || RoleType.DPS
+              };
 
-          if (thirdPlaceMatch?.winner) {
-              allParticipants.push({...thirdPlaceMatch.winner, activityPoints: 0, status: 'approved'});
-          }
+              if (isWinner && importWinners) {
+                  allParticipants.push(newParticipant);
+              } else if (!isWinner && importLosers) {
+                  allParticipants.push(newParticipant);
+              }
+          });
       }
 
       // De-duplicate by UID
       const uniqueParticipants = Array.from(new Map(allParticipants.map(item => [item.uid, item])).values());
 
-      onConfirm(title, uniqueParticipants);
+      onConfirm(title, uniqueParticipants, hasGrandFinale);
       setTitle('');
       setSelectedGuilds([]);
-      setManualParticipants([]);
+      setImportWinners(true);
+      setImportLosers(false);
       onClose();
     } catch (err) {
         console.error(err);
@@ -142,12 +123,9 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
             />
           </div>
 
-          <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
-              <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 flex items-center gap-2">
-                  <Trophy size={16} className="text-yellow-500" /> Import Winners
-              </h4>
-              <p className="text-xs text-zinc-500 mb-3">Select branches to auto-import their Top 3 players (1st, 2nd, 3rd).</p>
-              <div className="grid grid-cols-2 gap-2">
+          <div>
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Select Guilds</label>
+              <div className="grid grid-cols-2 gap-2 mb-4">
                   {guilds.map(g => (
                       <button
                         key={g.id}
@@ -165,36 +143,62 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
               </div>
           </div>
 
-          <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Add Manual Participants</label>
-              <div className="mb-2">
-                <SearchableUserSelect 
-                    users={allUsers}
-                    selectedUid=""
-                    onSelect={handleManualAdd}
-                    placeholder="Search user to add..."
-                />
+          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Import Settings</label>
+              
+              <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    id="importWinners"
+                    checked={importWinners}
+                    onChange={e => setImportWinners(e.target.checked)}
+                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                  />
+                  <label htmlFor="importWinners" className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 cursor-pointer select-none">
+                      <Trophy size={14} className="text-yellow-500" />
+                      Import Top 3 Winners
+                  </label>
               </div>
-              <div className="flex flex-wrap gap-2">
-                  {manualParticipants.map(p => (
-                      <span key={p.uid} className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full text-xs text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                          {p.displayName}
-                          <button 
-                            type="button" 
-                            onClick={() => setManualParticipants(prev => prev.filter(x => x.uid !== p.uid))}
-                            className="hover:text-red-500"
-                          >
-                              &times;
-                          </button>
+
+              <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    id="importLosers"
+                    checked={importLosers}
+                    onChange={e => setImportLosers(e.target.checked)}
+                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                  />
+                  <label htmlFor="importLosers" className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 cursor-pointer select-none">
+                      <Users size={14} className="text-zinc-400" />
+                      Import Non-Winners (Losers)
+                  </label>
+              </div>
+          </div>
+
+          <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 p-4 rounded-xl border border-yellow-500/20">
+              <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    id="grandFinale"
+                    checked={hasGrandFinale}
+                    onChange={e => setHasGrandFinale(e.target.checked)}
+                    className="w-5 h-5 text-yellow-600 rounded focus:ring-yellow-500"
+                  />
+                  <label htmlFor="grandFinale" className="flex-1 cursor-pointer select-none">
+                      <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                          <Crown size={16} className="text-yellow-500" /> Grand Finale Mode
                       </span>
-                  ))}
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Enables the special "Champion" celebration overlay for the #1 winner. Uncheck to use standard Top 3 banner.
+                      </span>
+                  </label>
               </div>
           </div>
 
           <button 
             type="submit" 
-            disabled={loading}
-            className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-900/20 disabled:opacity-50"
+            disabled={loading || selectedGuilds.length === 0 || (!importWinners && !importLosers)}
+            className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating...' : 'Create Tournament'}
           </button>

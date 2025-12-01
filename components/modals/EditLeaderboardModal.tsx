@@ -39,10 +39,14 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
   };
 
   const handleUserSelect = (user: UserProfile) => {
+      // Find user's guild name
+      const userGuildName = guilds.find(g => g.id === user.guildId)?.name || '';
+      
       setEntry({
           ...entry,
           playerName: user.displayName,
-          playerUid: user.uid
+          playerUid: user.uid,
+          branch: userGuildName || entry.branch // Auto-fill branch
       });
   };
 
@@ -61,6 +65,7 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
                         users={allUsers}
                         selectedUid={entry.playerUid}
                         onSelect={handleUserSelect}
+                        placeholder="Search player..."
                     />
                 </div>
                 
@@ -119,22 +124,17 @@ export const EditLeaderboardModal: React.FC<EditLeaderboardModalProps> = ({
                     </div>
                 </div>
 
-                {!isWinnerLog && (
-                    <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Guild Branch</label>
-                        <select 
-                            required
-                            value={entry.branch} 
-                            onChange={e => setEntry({...entry, branch: e.target.value})} 
-                            className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                        >
-                            <option value="">Select Branch</option>
-                            {guilds.map(g => (
-                                <option key={g.id} value={g.name}>{g.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase mb-1 block">Guild Branch</label>
+                     <input 
+                        required
+                        type="text" 
+                        value={entry.branch} 
+                        onChange={e => setEntry({...entry, branch: e.target.value})} 
+                        className="w-full p-2 border rounded bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500" 
+                        placeholder="Auto-filled from user"
+                    />
+                </div>
 
                 <button type="submit" className="w-full bg-rose-900 text-white p-2 rounded hover:bg-rose-950 transition-colors mt-2 font-medium">
                     Save Record

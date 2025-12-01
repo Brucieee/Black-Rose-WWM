@@ -1,4 +1,6 @@
 
+
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -171,6 +173,8 @@ export interface ArenaParticipant {
   guildId: string;
   activityPoints: number;
   status: 'pending' | 'approved' | 'denied';
+  role?: RoleType; 
+  originalGuildId?: string;
 }
 
 export interface CustomTournament {
@@ -178,6 +182,7 @@ export interface CustomTournament {
   title: string;
   createdAt: string;
   createdBy: string;
+  hasGrandFinale?: boolean;
 }
 
 export interface ArenaMatch {

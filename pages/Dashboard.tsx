@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
@@ -278,10 +279,9 @@ const Dashboard: React.FC = () => {
                                 {currentBoss?.name || "No Active Boss"}
                             </h2>
                             {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
-                                <div className="inline-flex items-center gap-2 text-xs text-zinc-400 leading-tight">
-                                    <Clock size={12} className="flex-shrink-0" />
-                                    {/* Added whitespace-nowrap to prevent line break */}
-                                    <span className="whitespace-nowrap">Next: {breakingArmyConfig.schedules[userGuildId][0]?.day} @ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
+                                <div className="mt-1 flex flex-col">
+                                    <span className="text-xs text-zinc-400">Next: {breakingArmyConfig.schedules[userGuildId][0]?.day}</span>
+                                    <span className="text-sm font-bold text-white">@ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
                                 </div>
                             )}
                         </div>
@@ -397,16 +397,14 @@ const Dashboard: React.FC = () => {
                         <p className="text-zinc-500 text-center py-4">No upcoming events.</p>
                     ) : (
                         events.map(event => (
-                            <div key={event.id} className="flex gap-4 items-start p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                                <div className="flex-shrink-0">
+                            <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
+                                <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                     {event.imageUrl ? (
-                                        <div className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
-                                            <img src={event.imageUrl} alt="Event" className="w-full h-full object-cover" />
-                                        </div>
+                                        <img src={event.imageUrl} alt="Event" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="bg-zinc-100 dark:bg-zinc-800 p-2.5 rounded-lg text-center w-16 h-16 flex flex-col items-center justify-center border border-zinc-200 dark:border-zinc-700">
+                                        <div className="text-center p-2">
                                             <span className="block text-[10px] font-bold text-rose-900 dark:text-rose-500 uppercase leading-none mb-1">{new Date(event.date).toLocaleDateString(undefined, {month: 'short'})}</span>
-                                            <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{new Date(event.date).getDate()}</span>
+                                            <span className="block text-2xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{new Date(event.date).getDate()}</span>
                                         </div>
                                     )}
                                 </div>
