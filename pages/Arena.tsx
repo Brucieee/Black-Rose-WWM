@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import * as ReactRouterDOM from 'react-router-dom';
 import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament } from '../types';
 import { db } from '../services/firebase';
@@ -14,9 +15,12 @@ import { CreateTournamentModal } from '../components/modals/CreateTournamentModa
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import firebase from 'firebase/compat/app';
 
+const { useNavigate } = ReactRouterDOM as any;
+
 const Arena: React.FC = () => {
   const { currentUser } = useAuth();
   const { showAlert } = useAlert();
+  const navigate = useNavigate();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [customTournaments, setCustomTournaments] = useState<CustomTournament[]>([]);
   
@@ -72,7 +76,8 @@ const Arena: React.FC = () => {
   const pendingParticipants = participants.filter(p => p.status === 'pending');
 
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
-  const arenaChampion = selectedGuild?.lastArenaChampion;
+  // Use lastArenaWinners if available, otherwise fallback to lastArenaChampion for legacy support
+  const arenaWinners = selectedGuild?.lastArenaWinners || (selectedGuild?.lastArenaChampion ? [{...selectedGuild.lastArenaChampion, rank: 1}] : []);
 
   const assignedParticipantUids = React.useMemo(() => {
     const uids = new Set<string>();
@@ -93,7 +98,7 @@ const Arena: React.FC = () => {
     ? (myActiveMatch.player1?.uid === currentUser?.uid ? myActiveMatch.player2 : myActiveMatch.player1)
     : null;
 
-  // Calculate Tournament Winners (Top 3)
+  // Calculate Tournament Winners (Top 3) - LIVE Calculation from Bracket State for display when tournament just finishes
   const getTournamentWinners = () => {
       if (matches.length === 0) return { first: null, second: null, third: null };
       
@@ -111,8 +116,9 @@ const Arena: React.FC = () => {
       return { first, second, third };
   };
 
-  const { first, second, third } = getTournamentWinners();
-  const isTournamentDone = !!first;
+  const { first: liveFirst, second: liveSecond, third: liveThird } = getTournamentWinners();
+  // Is the current live bracket finished?
+  const isTournamentDone = !!liveFirst;
 
   useEffect(() => {
     // Fetch Guilds
@@ -165,6 +171,46 @@ const Arena: React.FC = () => {
 
     return () => { unsubParticipants(); unsubMatches(); };
   }, [selectedId]);
+
+  // --- Helper to Save Winners to Guild History ---
+  const saveGuildWinners = async () => {
+      if (isCustomMode) return;
+      
+      // We need to query the DB directly to ensure we get the latest state including the write we just made
+      const matchesSnap = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
+      const dbMatches = matchesSnap.docs.map(d => d.data() as ArenaMatch);
+      
+      const regularMatches = dbMatches.filter(m => !m.isThirdPlace);
+      if (regularMatches.length === 0) return;
+
+      const maxRound = Math.max(...regularMatches.map(m => m.round));
+      const finalMatch = regularMatches.find(m => m.round === maxRound);
+      const thirdPlaceMatch = dbMatches.find(m => m.isThirdPlace);
+
+      // Only proceed if we have a Champion
+      if (!finalMatch || !finalMatch.winner) return;
+
+      const first = finalMatch.winner;
+      const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
+      const third = thirdPlaceMatch?.winner || null;
+
+      const winners = [
+          { rank: 1, uid: first.uid, displayName: first.displayName, photoURL: first.photoURL, wonAt: new Date().toISOString() }
+      ];
+
+      if (second) {
+          winners.push({ rank: 2, uid: second.uid, displayName: second.displayName, photoURL: second.photoURL, wonAt: new Date().toISOString() });
+      }
+      if (third) {
+          winners.push({ rank: 3, uid: third.uid, displayName: third.displayName, photoURL: third.photoURL, wonAt: new Date().toISOString() });
+      }
+
+      await db.collection("guilds").doc(selectedId).update({
+          lastArenaWinners: winners,
+          // Update legacy field for compatibility if needed
+          lastArenaChampion: winners[0] 
+      });
+  };
 
   // --- Pan/Zoom Handlers ---
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -317,6 +363,19 @@ const Arena: React.FC = () => {
     batch.commit().then(() => showAlert("Shuffled into Round 1.", 'success'));
   };
 
+  const handleJoinClick = () => {
+      if (!currentUser) {
+          showAlert("Please sign in first.", 'error');
+          return;
+      }
+      if (!userProfile) {
+          showAlert("Please create a profile first.", 'error');
+          navigate('/register');
+          return;
+      }
+      setIsJoinModalOpen(true);
+  };
+
   const handleJoinSubmit = async (points: number) => {
     if (!userProfile) return;
     if (userProfile.guildId !== selectedId) {
@@ -464,7 +523,10 @@ const Arena: React.FC = () => {
   };
   
   const handleRemoveChampion = async () => {
-     await db.collection("guilds").doc(selectedId).update({ lastArenaChampion: firebase.firestore.FieldValue.delete() });
+     await db.collection("guilds").doc(selectedId).update({ 
+         lastArenaChampion: firebase.firestore.FieldValue.delete(),
+         lastArenaWinners: firebase.firestore.FieldValue.delete() 
+     });
   };
 
   const handleApprove = async (uid: string) => db.collection("arena_participants").doc(uid).update({ status: 'approved' });
@@ -523,22 +585,17 @@ const Arena: React.FC = () => {
              isChampion = true;
         }
 
-        if (isChampion && !isCustomMode) {
-            const guildRef = db.collection("guilds").doc(selectedId);
-            batch.update(guildRef, {
-                lastArenaChampion: {
-                    uid: winner.uid,
-                    displayName: winner.displayName,
-                    photoURL: winner.photoURL,
-                    wonAt: new Date().toISOString()
-                }
-            });
-        }
-
         await batch.commit();
 
         if (isChampion) {
             showAlert(`${winner.displayName} is the champion!`, 'success', 'Tournament Winner!');
+        }
+
+        // Trigger persistence of winners if we just decided the Champion or if we updated the 3rd place match
+        // Only for Guild Tournaments
+        if (!isCustomMode && (isChampion || match.isThirdPlace)) {
+            // Wait slightly for Firestore to propagate
+            setTimeout(() => saveGuildWinners(), 500); 
         }
 
     } catch (err: any) {
@@ -661,6 +718,13 @@ const Arena: React.FC = () => {
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
 
+  // --- RENDER WINNERS (Top 3) ---
+  const firstPlace = arenaWinners.find(w => w.rank === 1) || (isTournamentDone ? liveFirst : null);
+  const secondPlace = arenaWinners.find(w => w.rank === 2) || (isTournamentDone ? liveSecond : null);
+  const thirdPlace = arenaWinners.find(w => w.rank === 3) || (isTournamentDone ? liveThird : null);
+
+  const hasWinners = !!firstPlace;
+
   return (
     <div className="p-8 max-w-[1920px] mx-auto h-[calc(100vh-64px)] flex flex-col">
       <div className="flex justify-between items-start mb-6">
@@ -749,8 +813,8 @@ const Arena: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Tournament Results Banner (Replaces Reigning Champion if done) --- */}
-      {isTournamentDone ? (
+      {/* --- REIGNING CHAMPIONS BANNER (Shows persisted data or live results) --- */}
+      {hasWinners && !isCustomMode && (
           <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-zinc-900 to-black p-[2px] shadow-lg border border-zinc-800">
               <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-center relative overflow-hidden min-h-[160px]">
                   
@@ -761,98 +825,80 @@ const Arena: React.FC = () => {
 
                   <div className="relative z-10 flex items-end gap-8 md:gap-16">
                       
-                      {/* 2nd Place (Only for Main Guilds) */}
-                      {!isCustomMode && second && (
-                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(second.uid)}>
+                      {/* 2nd Place */}
+                      {secondPlace && (
+                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(secondPlace.uid)}>
                               <div className="relative mb-2">
-                                  <img src={second.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-zinc-400 object-cover shadow-lg" />
+                                  <img src={secondPlace.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-zinc-400 object-cover shadow-lg" />
                                   <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-400 text-black text-[10px] font-bold px-2 py-0.5 rounded-full border border-white">#2</div>
                               </div>
-                              <h3 className="font-bold text-zinc-300 text-sm">{second.displayName}</h3>
+                              <h3 className="font-bold text-zinc-300 text-sm">{secondPlace.displayName}</h3>
                               <p className="text-xs text-zinc-500 font-medium">Silver</p>
                           </div>
                       )}
 
                       {/* 1st Place (Champion) */}
-                      {first && (
-                          <div className="flex flex-col items-center -mt-8 group cursor-pointer" onClick={() => handleViewProfile(first.uid)}>
+                      {firstPlace && (
+                          <div className="flex flex-col items-center -mt-8 group cursor-pointer" onClick={() => handleViewProfile(firstPlace.uid)}>
                               <Trophy className="text-yellow-500 mb-2 drop-shadow-glow animate-bounce-slow" size={32} />
                               <div className="relative mb-3">
                                   <div className="absolute -inset-2 bg-yellow-500/30 rounded-full blur-md animate-pulse"></div>
-                                  <img src={first.photoURL || 'https://via.placeholder.com/150'} className="relative w-24 h-24 rounded-full border-4 border-yellow-500 object-cover shadow-2xl" />
+                                  <img src={firstPlace.photoURL || 'https://via.placeholder.com/150'} className="relative w-24 h-24 rounded-full border-4 border-yellow-500 object-cover shadow-2xl" />
                                   <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-xs font-black px-3 py-1 rounded-full border-2 border-white shadow-sm">
                                       CHAMPION
                                   </div>
                               </div>
-                              <h2 className="font-black text-white text-xl uppercase tracking-wide text-center">{first.displayName}</h2>
+                              <h2 className="font-black text-white text-xl uppercase tracking-wide text-center">{firstPlace.displayName}</h2>
                               <p className="text-xs text-yellow-500/80 font-bold uppercase tracking-widest mt-1">
-                                  {isCustomMode ? 'Tournament Winner' : 'Grand Champion'}
+                                  Grand Champion
                               </p>
                           </div>
                       )}
 
-                      {/* 3rd Place (Only for Main Guilds) */}
-                      {!isCustomMode && third && (
-                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(third.uid)}>
+                      {/* 3rd Place */}
+                      {thirdPlace && (
+                          <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(thirdPlace.uid)}>
                               <div className="relative mb-2">
-                                  <img src={third.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-orange-700 object-cover shadow-lg" />
+                                  <img src={thirdPlace.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 rounded-full border-4 border-orange-700 object-cover shadow-lg" />
                                   <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-orange-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white">#3</div>
                               </div>
-                              <h3 className="font-bold text-zinc-300 text-sm">{third.displayName}</h3>
+                              <h3 className="font-bold text-zinc-300 text-sm">{thirdPlace.displayName}</h3>
                               <p className="text-xs text-zinc-500 font-medium">Bronze</p>
                           </div>
                       )}
                   </div>
-              </div>
-          </div>
-      ) : (
-          /* --- Fallback: Reigning Champion Banner (Only for Guilds if tourney not just finished) --- */
-          !isCustomMode && arenaChampion && (
-            <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 p-[2px] shadow-lg shadow-yellow-500/10">
-                <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-between relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                    
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
-                        <div className="relative group cursor-pointer" onClick={() => handleViewProfile(arenaChampion.uid)}>
-                            <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full opacity-75 group-hover:opacity-100 blur transition duration-500"></div>
-                            <img 
-                                src={arenaChampion.photoURL || 'https://via.placeholder.com/150'} 
-                                className="relative w-20 h-20 rounded-full object-cover border-4 border-zinc-900"
-                                alt="Champion"
-                            />
-                            <div className="absolute -bottom-2 -right-1 bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full border-2 border-zinc-900">
-                                #1
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="text-yellow-500 font-bold tracking-[0.2em] text-xs mb-1 uppercase flex items-center gap-2">
-                                <Trophy size={14} /> Reigning Champion
-                            </h3>
-                            <h2 className="text-3xl font-black text-white uppercase tracking-tight">
-                                {arenaChampion.displayName}
-                            </h2>
-                            <p className="text-zinc-400 text-sm mt-1">
-                                Current Title Holder for {selectedGuild?.name}
-                            </p>
-                        </div>
-                    </div>
 
-                    <div className="hidden md:block">
-                        <Sparkles className="text-yellow-500/20" size={100} strokeWidth={1} />
-                    </div>
-                    
-                    {canManage && (
+                  {canManage && (
                         <button 
                             onClick={handleRemoveChampion}
                             className="absolute top-4 right-4 bg-black/30 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm transition-colors z-20"
-                            title="Remove Champion"
+                            title="Remove Champions"
                         >
                             <Trash2 size={16} />
                         </button>
-                    )}
-                </div>
-            </div>
-          )
+                  )}
+              </div>
+          </div>
+      )}
+
+      {/* --- CUSTOM TOURNAMENT WINNER BANNER (Only 1st place) --- */}
+      {isCustomMode && liveFirst && (
+          <div className="mb-6 relative overflow-hidden rounded-xl bg-gradient-to-r from-purple-900 to-black p-[2px] shadow-lg border border-purple-800">
+              <div className="bg-zinc-950 p-6 rounded-[10px] flex items-center justify-center relative overflow-hidden min-h-[140px]">
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-500/20 via-zinc-950 to-zinc-950"></div>
+                  
+                  <div className="relative z-10 flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(liveFirst.uid)}>
+                      <Trophy className="text-purple-400 mb-2" size={32} />
+                      <div className="relative mb-3">
+                          <img src={liveFirst.photoURL || 'https://via.placeholder.com/150'} className="relative w-20 h-20 rounded-full border-4 border-purple-500 object-cover shadow-2xl" />
+                          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-black px-3 py-1 rounded-full border-2 border-white shadow-sm">
+                              WINNER
+                          </div>
+                      </div>
+                      <h2 className="font-black text-white text-xl uppercase tracking-wide text-center">{liveFirst.displayName}</h2>
+                  </div>
+              </div>
+          </div>
       )}
 
       {/* --- Current Matchup Banner --- */}
@@ -1010,7 +1056,18 @@ const Arena: React.FC = () => {
                     <>
                         {!currentUserParticipant ? (
                             <button 
-                                onClick={() => setIsJoinModalOpen(true)}
+                                onClick={() => {
+                                    if (!currentUser) {
+                                        showAlert("Please sign in first.", 'error');
+                                        return;
+                                    }
+                                    if (!userProfile) {
+                                        showAlert("Please create a profile first.", 'error');
+                                        navigate('/register');
+                                        return;
+                                    }
+                                    setIsJoinModalOpen(true);
+                                }}
                                 className="w-full py-3 bg-rose-900 text-white rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2"
                             >
                                 <Shield size={18} /> Join Tournament

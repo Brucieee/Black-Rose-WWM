@@ -59,7 +59,24 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
 
       // Fetch Top 3 from selected guilds
       for (const guildId of selectedGuilds) {
-          // 1. Get Matches
+          const guild = guilds.find(g => g.id === guildId);
+          
+          // Strategy 1: Check if guild has persisted winners (New System)
+          if (guild?.lastArenaWinners && guild.lastArenaWinners.length > 0) {
+              guild.lastArenaWinners.forEach(w => {
+                  allParticipants.push({
+                      uid: w.uid,
+                      displayName: w.displayName,
+                      photoURL: w.photoURL,
+                      guildId: guildId,
+                      activityPoints: 0,
+                      status: 'approved'
+                  });
+              });
+              continue; // Skip match scanning for this guild
+          }
+
+          // Strategy 2: Fallback to scanning matches (Legacy System)
           const matchesSnap = await db.collection("arena_matches")
             .where("guildId", "==", guildId)
             .get();
@@ -77,8 +94,8 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
           if (finalMatch?.winner) {
               allParticipants.push({...finalMatch.winner, activityPoints: 0, status: 'approved'});
               
-              // Get Loser (2nd Place)
-              const loser = finalMatch.player1.uid === finalMatch.winner.uid ? finalMatch.player2 : finalMatch.player1;
+              // Get Loser (2nd Place) - Added optional chaining for safety
+              const loser = finalMatch.player1?.uid === finalMatch.winner.uid ? finalMatch.player2 : finalMatch.player1;
               if (loser) allParticipants.push({...loser, activityPoints: 0, status: 'approved'});
           }
 

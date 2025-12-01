@@ -1,9 +1,4 @@
 
-
-
-
-
-
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -60,6 +55,13 @@ export interface Guild {
       photoURL?: string;
       wonAt: string;
   };
+  lastArenaWinners?: {
+      rank: number;
+      uid: string;
+      displayName: string;
+      photoURL?: string;
+      wonAt: string;
+  }[];
 }
 
 export interface GuildEvent {
