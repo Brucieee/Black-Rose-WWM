@@ -22,11 +22,24 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isValidDate = (dateStr: string) => {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return false;
+      const year = d.getFullYear();
+      // Basic check for 4-digit year format validity range
+      return year >= 2024 && year <= 2030; 
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate) {
       showAlert("Please select both start and end dates.", 'error');
       return;
+    }
+
+    if (!isValidDate(startDate) || !isValidDate(endDate)) {
+        showAlert("Invalid date. Please use a valid 4-digit year (e.g. 2025).", 'error');
+        return;
     }
 
     if (new Date(endDate) < new Date(startDate)) {
@@ -80,11 +93,12 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
               <input 
                 type="date" 
                 required
-                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                onClick={(e) => e.currentTarget.showPicker()}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none cursor-pointer"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
               />
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
             </div>
           </div>
 
@@ -94,11 +108,12 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
               <input 
                 type="date" 
                 required
-                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                onClick={(e) => e.currentTarget.showPicker()}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none cursor-pointer"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
               />
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
             </div>
           </div>
 
@@ -111,7 +126,7 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
                 onChange={e => setReason(e.target.value)}
                 placeholder="Going on vacation..."
               />
-              <FileText className="absolute left-3 top-3 w-4 h-4 text-zinc-400" />
+              <FileText className="absolute left-3 top-3 w-4 h-4 text-zinc-500 pointer-events-none" />
             </div>
           </div>
 

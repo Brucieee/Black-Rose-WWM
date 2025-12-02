@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
-import { Check, Sword, Shield, Cross, Zap, Edit2, AlertTriangle, Building2 } from 'lucide-react';
+import { Check, Sword, Shield, Cross, Zap, Edit2, AlertTriangle, Building2, Facebook, Mail, Lock, User, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -46,7 +46,6 @@ const Register: React.FC = () => {
       const snapshot = await q.get();
       const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
       setGuilds(guildsData);
-      // Removed auto-select to force manual selection via modal
     };
     fetchGuilds();
   }, []);
@@ -77,14 +76,14 @@ const Register: React.FC = () => {
     e.preventDefault();
     try {
       if (isLoginMode) {
+        setIsRedirecting(true); // Set loading immediately to prevent flash
         await login(authEmail, authPass);
-        setIsRedirecting(true);
         navigate('/', { replace: true });
       } else {
         await signup(authEmail, authPass);
-        // Signup typically keeps you here to create profile
       }
     } catch (error: any) {
+      setIsRedirecting(false); // Reset on error
       const msg = getFirebaseErrorMessage(error.code);
       showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
     }
@@ -124,7 +123,7 @@ const Register: React.FC = () => {
   };
 
   const handleGuildClick = (guild: Guild) => {
-      if (formData.guildId === guild.id) return; // Already selected
+      if (formData.guildId === guild.id) return;
       setTempSelectedGuild(guild);
       setIsGuildModalOpen(true);
   };
@@ -158,7 +157,6 @@ const Register: React.FC = () => {
     }
 
     try {
-      // FIX: Use Firebase v8 compat syntax
       const userDocRef = db.collection("users").doc(currentUser.uid);
       await userDocRef.set({
         uid: currentUser.uid,
@@ -183,10 +181,10 @@ const Register: React.FC = () => {
   };
 
   const roleColors = {
-    [RoleType.DPS]: 'border-red-500 text-red-600 bg-red-50',
-    [RoleType.TANK]: 'border-yellow-600 text-yellow-700 bg-yellow-50',
-    [RoleType.HEALER]: 'border-green-500 text-green-600 bg-green-50',
-    [RoleType.HYBRID]: 'border-purple-500 text-purple-600 bg-purple-50'
+    [RoleType.DPS]: 'border-red-500 text-red-600 bg-red-50 dark:bg-red-900/20',
+    [RoleType.TANK]: 'border-yellow-600 text-yellow-700 bg-yellow-50 dark:bg-yellow-900/20',
+    [RoleType.HEALER]: 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20',
+    [RoleType.HYBRID]: 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-900/20'
   };
 
   const roleIcons = {
@@ -199,227 +197,300 @@ const Register: React.FC = () => {
   const availableWeapons = getAvailableWeapons(formData.role);
 
   if (isRedirecting) {
-    return <div className="p-8 text-center text-zinc-500">Redirecting...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="flex flex-col items-center gap-4">
+           <div className="w-16 h-16 border-4 border-rose-900 border-t-transparent rounded-full animate-spin"></div>
+           <p className="text-zinc-500 animate-pulse font-medium">Entering the Guild...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Join the Black Rose</h2>
-        <p className="text-zinc-500 dark:text-zinc-400 mt-2">Complete your profile to access the guild network.</p>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-rose-500/10 rounded-full blur-[100px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }}></div>
       </div>
 
-      {!currentUser ? (
-        <div className="max-w-md mx-auto bg-white dark:bg-zinc-900 p-8 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800">
-          {/* ... Login/Signup Form UI (Unchanged) ... */}
-          <div className="flex border-b border-zinc-200 dark:border-zinc-800 mb-6">
-            <button 
-              onClick={() => setIsLoginMode(true)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${isLoginMode ? 'border-rose-900 text-rose-900 dark:text-rose-500' : 'border-transparent text-zinc-500'}`}
-            >
-              Sign In
-            </button>
-            <button 
-              onClick={() => setIsLoginMode(false)}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${!isLoginMode ? 'border-rose-900 text-rose-900 dark:text-rose-500' : 'border-transparent text-zinc-500'}`}
-            >
-              Sign Up
-            </button>
-          </div>
-          
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-300 mb-1">Email</label>
-              <input 
-                type="email" 
-                required 
-                className="w-full px-4 py-2 border rounded-lg bg-white text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                value={authEmail}
-                onChange={e => setAuthEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-300 mb-1">Password</label>
-              <input 
-                type="password" 
-                required 
-                className="w-full px-4 py-2 border rounded-lg bg-white text-zinc-900 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
-                value={authPass}
-                onChange={e => setAuthPass(e.target.value)}
-              />
-            </div>
-            <button type="submit" className="w-full bg-rose-900 text-white py-2 rounded-lg font-medium hover:bg-rose-950 transition-colors">
-              {isLoginMode ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <div className="my-6 flex items-center">
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-            <span className="px-4 text-xs text-zinc-400 uppercase">Or continue with</span>
-            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-          </div>
-
-          <button 
-            onClick={async () => {
-                await signInWithGoogle();
-                navigate('/');
-            }} 
-            className="w-full flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
-            Google
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-8 bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Display Name</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all text-zinc-900"
-                  placeholder="Your In-Game Name"
-                  value={formData.displayName}
-                  onChange={e => setFormData({...formData, displayName: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">In-Game ID (10 Digits)</label>
-                <input 
-                  type="text" 
-                  required
-                  className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-900/20 focus:border-rose-900 transition-all font-mono text-zinc-900"
-                  placeholder="e.g. 4022284874"
-                  value={formData.inGameId}
-                  onChange={handleInGameIdChange}
-                />
-              </div>
-              
-              {/* Guild Selection Buttons */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Guild Branch</label>
-                {guilds.length === 0 ? (
-                    <div className="text-sm text-red-500 border border-red-200 bg-red-50 p-2 rounded">System Not Initialized. Contact Admin.</div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    {guilds.map(g => {
-                        const isSelected = formData.guildId === g.id;
-                        return (
-                            <button
-                                key={g.id}
-                                type="button"
-                                onClick={() => handleGuildClick(g)}
-                                className={`flex items-center justify-between p-3 rounded-lg border text-sm font-medium transition-all ${
-                                    isSelected
-                                    ? 'bg-rose-900 text-white border-rose-900 shadow-md ring-2 ring-rose-900/20'
-                                    : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-rose-900/50 hover:bg-zinc-50 dark:hover:bg-zinc-700'
-                                }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Building2 size={14} className={isSelected ? 'text-white' : 'text-zinc-400'} />
-                                    {g.name}
-                                </span>
-                                {isSelected && <Check size={14} className="text-white" />}
-                            </button>
-                        );
-                    })}
-                  </div>
-                )}
-                <p className="text-xs text-zinc-500 mt-2">
-                    <span className="text-rose-600 font-bold">*</span> Selection is locked upon confirmation.
-                </p>
-              </div>
+      <div className="w-full max-w-4xl relative z-10">
+        {!currentUser ? (
+          /* --- LOGIN / SIGNUP CARD --- */
+          <div className="max-w-md mx-auto w-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+            
+            {/* Logo Header */}
+            <div className="pt-8 pb-4 text-center">
+               <div className="w-32 h-32 mx-auto mb-4 relative transition-transform duration-700 hover:scale-105">
+                  <img src="https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/logo/br-black.png" alt="Logo" className="w-full h-full object-contain dark:hidden drop-shadow-lg" />
+                  <img src="https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/logo/br-white.png" alt="Logo" className="w-full h-full object-contain hidden dark:block drop-shadow-lg" />
+               </div>
+               <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">BLACK ROSE</h1>
+               <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium tracking-widest uppercase mt-1">Guild</p>
             </div>
 
-            <div className="flex flex-col items-center justify-center">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">Choose Avatar</label>
-              <div className="flex flex-col items-center gap-3">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsAvatarModalOpen(true)}
-                    className="group relative w-32 h-32 rounded-full border-4 border-rose-900 overflow-hidden bg-zinc-100 dark:bg-zinc-800 hover:ring-4 hover:ring-rose-900/20 transition-all"
-                  >
-                      <img src={selectedAvatar} alt="Selected" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white text-xs font-bold flex items-center gap-1"><Edit2 size={12} /> Change</span>
-                      </div>
-                  </button>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Click circle to change</p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">Select Your Role</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {(Object.values(RoleType) as RoleType[]).map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => setFormData({...formData, role})}
-                  className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
-                    formData.role === role 
-                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-opacity-60' 
-                      : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'
-                  }`}
+            {/* Switcher */}
+            <div className="px-8 mb-6">
+              <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl relative">
+                <div 
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-zinc-700 rounded-lg shadow-sm transition-all duration-300 ease-in-out ${isLoginMode ? 'left-1' : 'left-[calc(50%+4px)]'}`}
+                ></div>
+                <button 
+                  onClick={() => setIsLoginMode(true)}
+                  className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${isLoginMode ? 'text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}
                 >
-                  {roleIcons[role]}
-                  <span className="font-semibold">{role}</span>
+                  Sign In
                 </button>
-              ))}
+                <button 
+                  onClick={() => setIsLoginMode(false)}
+                  className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${!isLoginMode ? 'text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}
+                >
+                  Create Account
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Martial Arts (Select 2)</label>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${selectedWeapons.length === 2 ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                  {selectedWeapons.length} / 2 Selected
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {WEAPON_LIST.map((weapon) => {
-                const isSelected = selectedWeapons.includes(weapon);
-                const isAvailable = availableWeapons.includes(weapon);
-                const isDisabled = !isAvailable || (!isSelected && selectedWeapons.length >= 2);
-                
-                return (
-                  <button
-                    key={weapon}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() => handleWeaponToggle(weapon)}
-                    className={`text-sm px-3 py-3 rounded-lg border text-left flex items-center justify-between transition-all ${
-                      isSelected 
-                        ? 'border-rose-900 bg-rose-50 dark:bg-rose-900/30 text-rose-900 dark:text-rose-200 font-medium' 
-                        : !isAvailable
-                          ? 'opacity-40 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700 text-zinc-400'
-                          : isDisabled 
-                              ? 'opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
-                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
-                    }`}
-                  >
-                    <span className="truncate">{weapon}</span>
-                    {isSelected && <Check size={14} className="flex-shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            <div className="px-8 pb-8">
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input 
+                      type="email" 
+                      required 
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-400"
+                      placeholder="name@example.com"
+                      value={authEmail}
+                      onChange={e => setAuthEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
-            <button 
-              type="submit"
-              className="bg-rose-900 hover:bg-rose-950 text-white px-8 py-3 rounded-lg font-medium shadow-lg shadow-rose-900/20 transition-all transform active:scale-95 w-full md:w-auto disabled:opacity-50"
-              disabled={!currentUser}
-            >
-              Create Profile
-            </button>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input 
+                      type="password" 
+                      required 
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-900 dark:text-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition-all placeholder:text-zinc-400"
+                      placeholder="••••••••"
+                      value={authPass}
+                      onChange={e => setAuthPass(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="w-full bg-rose-900 hover:bg-rose-950 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-lg shadow-rose-900/20 hover:shadow-rose-900/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+                >
+                  {isLoginMode ? 'Enter Guild' : 'Join the Ranks'}
+                </button>
+              </form>
+
+              <div className="my-6 flex items-center gap-3">
+                <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Or</span>
+                <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+              </div>
+
+              <div className="space-y-3">
+                <button 
+                  onClick={async () => {
+                      setIsRedirecting(true);
+                      await signInWithGoogle();
+                      navigate('/');
+                  }} 
+                  className="w-full flex items-center justify-center gap-3 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors font-medium text-sm group"
+                >
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+                  Continue with Google
+                </button>
+
+                <a 
+                  href="https://www.facebook.com/BlackRoseHQ" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-3 bg-[#1877F2] hover:bg-[#166fe5] text-white py-3 rounded-xl transition-colors font-medium text-sm group shadow-lg shadow-blue-900/20"
+                >
+                  <Facebook size={20} className="group-hover:scale-110 transition-transform" />
+                  Follow us on Facebook
+                </a>
+              </div>
+            </div>
           </div>
-        </form>
-      )}
+        ) : (
+          /* --- PROFILE CREATION UI --- */
+          <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl p-8 md:p-10 rounded-3xl shadow-2xl border border-white/20 dark:border-zinc-800 animate-in slide-in-from-bottom-8 duration-700">
+             <div className="mb-8 text-center">
+                <h2 className="text-3xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">Profile Setup</h2>
+                <p className="text-zinc-500 dark:text-zinc-400 mt-2">Complete your identity to access the guild network.</p>
+             </div>
+
+             <form onSubmit={handleSubmit} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left Col: Info */}
+                    <div className="space-y-5">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">In-Game Name</label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                                <input 
+                                  type="text" 
+                                  required
+                                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all placeholder:text-zinc-400"
+                                  placeholder="Character Name"
+                                  value={formData.displayName}
+                                  onChange={e => setFormData({...formData, displayName: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-zinc-500 uppercase ml-1">In-Game ID (10 Digits)</label>
+                            <div className="relative">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                                <input 
+                                  type="text" 
+                                  required
+                                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all font-mono placeholder:text-zinc-400"
+                                  placeholder="e.g. 4022284874"
+                                  value={formData.inGameId}
+                                  onChange={handleInGameIdChange}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Select Guild Branch</label>
+                             {guilds.length === 0 ? (
+                                <div className="text-sm text-red-500 border border-red-200 bg-red-50 p-3 rounded-xl">System Not Initialized. Contact Admin.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {guilds.map(g => {
+                                        const isSelected = formData.guildId === g.id;
+                                        return (
+                                            <button
+                                                key={g.id}
+                                                type="button"
+                                                onClick={() => handleGuildClick(g)}
+                                                className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all ${
+                                                    isSelected
+                                                    ? 'bg-rose-900 text-white border-rose-900 shadow-md ring-2 ring-rose-900/20 transform scale-[1.02]'
+                                                    : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-rose-500/50 hover:bg-white dark:hover:bg-zinc-700'
+                                                }`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <Building2 size={16} className={isSelected ? 'text-white' : 'text-zinc-400'} />
+                                                    {g.name}
+                                                </span>
+                                                {isSelected && <Check size={16} className="text-white" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <p className="text-[10px] text-zinc-400 ml-1 italic">* Selection is locked upon confirmation.</p>
+                        </div>
+                    </div>
+
+                    {/* Right Col: Avatar & Role */}
+                    <div className="flex flex-col gap-6">
+                        <div className="flex flex-col items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                          <label className="text-xs font-bold text-zinc-500 uppercase mb-3">Profile Avatar</label>
+                          <div className="relative group">
+                              <button 
+                                type="button" 
+                                onClick={() => setIsAvatarModalOpen(true)}
+                                className="w-28 h-28 rounded-full border-4 border-white dark:border-zinc-700 shadow-xl overflow-hidden hover:scale-105 transition-transform duration-300 ring-4 ring-transparent hover:ring-rose-500/20"
+                              >
+                                  <img src={selectedAvatar} alt="Selected" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Edit2 size={24} className="text-white" />
+                                  </div>
+                              </button>
+                              <div className="absolute bottom-0 right-0 bg-rose-900 text-white p-1.5 rounded-full border-2 border-white dark:border-zinc-800 shadow-lg pointer-events-none">
+                                <Edit2 size={12} />
+                              </div>
+                          </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-2 block">Combat Role</label>
+                            <div className="grid grid-cols-4 gap-2">
+                              {(Object.values(RoleType) as RoleType[]).map((role) => (
+                                <button
+                                  key={role}
+                                  type="button"
+                                  onClick={() => setFormData({...formData, role})}
+                                  className={`p-2 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
+                                    formData.role === role 
+                                      ? roleColors[role] + ' ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-opacity-60 scale-105' 
+                                      : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-white dark:hover:bg-zinc-700'
+                                  }`}
+                                >
+                                  {roleIcons[role]}
+                                  <span className="text-[10px] font-bold mt-1">{role}</span>
+                                </button>
+                              ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Weapons */}
+                <div>
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <label className="text-xs font-bold text-zinc-500 uppercase">Select Martial Arts (2)</label>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedWeapons.length === 2 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                          {selectedWeapons.length} / 2
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {WEAPON_LIST.map((weapon) => {
+                        const isSelected = selectedWeapons.includes(weapon);
+                        const isAvailable = availableWeapons.includes(weapon);
+                        const isDisabled = !isAvailable || (!isSelected && selectedWeapons.length >= 2);
+                        
+                        return (
+                          <button
+                            key={weapon}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => handleWeaponToggle(weapon)}
+                            className={`px-3 py-2.5 rounded-lg border text-left text-xs font-bold transition-all flex items-center justify-between ${
+                              isSelected 
+                                ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 shadow-sm' 
+                                : !isAvailable
+                                  ? 'opacity-40 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 text-zinc-400'
+                                  : isDisabled 
+                                      ? 'opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                                      : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 text-zinc-600 dark:text-zinc-300'
+                            }`}
+                          >
+                            <span className="truncate">{weapon}</span>
+                            {isSelected && <Check size={12} className="flex-shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 py-4 rounded-xl font-bold text-lg shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:transform-none"
+                  disabled={!currentUser}
+                >
+                  Confirm Profile
+                </button>
+             </form>
+          </div>
+        )}
+      </div>
 
       <AvatarSelectionModal 
         isOpen={isAvatarModalOpen}

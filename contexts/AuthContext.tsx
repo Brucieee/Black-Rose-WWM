@@ -87,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     // FIX: Use Firebase v8 compat syntax
     await auth.signOut();
+    window.location.reload(); // Force refresh to clear all application state
   };
 
   useEffect(() => {
@@ -105,9 +106,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
 
     // Heartbeat to keep user 'online' and update lastSeen
+    // Increased frequency to 30s to allow for tighter (1 min) inactivity checks
     const heartbeatInterval = setInterval(() => {
         updateUserStatus(currentUser.uid, 'online');
-    }, 60000); // Every 60 seconds
+    }, 30000); // Every 30 seconds
 
     const handleVisibilityChange = () => {
       if (document.hidden) {

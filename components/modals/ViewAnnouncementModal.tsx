@@ -42,6 +42,12 @@ export const ViewAnnouncementModal: React.FC<ViewAnnouncementModalProps> = ({
             </div>
         </div>
 
+        {announcement.imageUrl && (
+            <div className="w-full h-64 rounded-xl overflow-hidden mb-6 bg-zinc-100 dark:bg-zinc-800">
+                <img src={announcement.imageUrl} className="w-full h-full object-cover" alt="Announcement" />
+            </div>
+        )}
+
         <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
             <RichText text={announcement.content} />
         </div>

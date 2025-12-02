@@ -2,16 +2,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock, ArrowRight, Shield } from 'lucide-react';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock, ArrowRight, Shield, ChevronLeft, ChevronRight, User, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
-import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
 import { HerosRealmModal } from '../components/modals/HerosRealmModal';
 import { RichText } from '../components/RichText';
+import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -42,11 +42,13 @@ const GuildDashboard: React.FC = () => {
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [isHerosRealmModalOpen, setIsHerosRealmModalOpen] = useState(false);
   
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  // Announcement Carousel State
+  const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
+  const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
 
   // Global Party State
   const [userActiveParty, setUserActiveParty] = useState<Party | null>(null);
@@ -66,12 +68,12 @@ const GuildDashboard: React.FC = () => {
 
   const prevParties = usePrevious(parties);
 
-  // Helper to check if a user is online based on lastSeen (within 3 mins)
+  // Helper to check if a user is online based on lastSeen (within 1 minute)
   const isUserOnline = (user: UserProfile) => {
       if (user.status === 'online') {
-          if (!user.lastSeen) return true; // Legacy support
+          if (!user.lastSeen) return true; 
           const diff = Date.now() - new Date(user.lastSeen).getTime();
-          return diff < 3 * 60 * 1000; // 3 minutes
+          return diff < 1 * 60 * 1000; // 1 minute inactivity threshold
       }
       return false;
   };
@@ -139,6 +141,8 @@ const GuildDashboard: React.FC = () => {
       if (currentUser) {
         const profile = usersData.find(u => u.uid === currentUser.uid);
         setCurrentUserProfile(profile || null);
+      } else {
+        setCurrentUserProfile(null);
       }
     });
 
@@ -146,6 +150,9 @@ const GuildDashboard: React.FC = () => {
     const unsubUsersCount = qUsersInGuild.onSnapshot(snapshot => setMemberCount(snapshot.size));
 
     const unsubEvents = db.collection("events").onSnapshot(snapshot => setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as GuildEvent)));
+    
+    // Clear announcements before fetching new ones to prevent ghosting
+    setAnnouncements([]);
     
     // Fetch Announcements for this guild
     const unsubAnnouncements = db.collection("announcements")
@@ -175,7 +182,7 @@ const GuildDashboard: React.FC = () => {
       parties.forEach(party => {
         const leader = allUsers.find(u => u.uid === party.leaderId);
         
-        // Use lastSeen check for leader
+        // Use lastSeen check for leader (1 min threshold)
         const isLeaderOnline = leader ? isUserOnline(leader) : false;
 
         if (leader && !isLeaderOnline) {
@@ -183,6 +190,7 @@ const GuildDashboard: React.FC = () => {
           return;
         }
 
+        // Also remove inactive members
         const membersToRemove = party.currentMembers.filter(member => {
             const memberProfile = allUsers.find(u => u.uid === member.uid);
             return memberProfile && !isUserOnline(memberProfile) && member.uid !== party.leaderId;
@@ -200,10 +208,19 @@ const GuildDashboard: React.FC = () => {
 
       batch.commit().catch(err => console.error("Party cleanup failed:", err));
 
-    }, 60000); 
+    }, 10000); // Check every 10 seconds for responsiveness
 
     return () => clearInterval(cleanupInterval);
   }, [parties, allUsers]);
+
+  // Carousel Auto-Slide
+  useEffect(() => {
+    if (announcements.length <= 1) return;
+    const interval = setInterval(() => {
+        setCurrentAnnouncementIndex(prev => (prev + 1) % announcements.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [announcements.length]);
   
   // This derived state is for UI logic within the current guild dashboard context
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
@@ -213,11 +230,14 @@ const GuildDashboard: React.FC = () => {
   // Reset time to start of day for comparison to show events happening today
   now.setHours(0,0,0,0); 
 
-  const branchEvents = events.filter(e => {
-      const isCorrectBranch = e.guildId === guildId || !e.guildId || e.guildId === '';
-      const eventDate = new Date(e.date);
-      return isCorrectBranch && eventDate >= now;
-  });
+  // Sort events by date ascending (soonest first)
+  const branchEvents = events
+    .filter(e => {
+        const isCorrectBranch = e.guildId === guildId || !e.guildId || e.guildId === '';
+        const eventDate = new Date(e.date);
+        return isCorrectBranch && eventDate >= now;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
   const onlineMembers = allUsers.filter(u => u.guildId === guildId && isUserOnline(u));
   const activeHeroSchedule = herosRealmConfig?.schedules?.[guildId || '']?.[0];
@@ -270,34 +290,6 @@ const GuildDashboard: React.FC = () => {
         showAlert("Party created!", 'success');
     } catch (error: any) {
         showAlert(`Failed to create party: ${error.message}`, 'error');
-    }
-  };
-
-  const handlePostAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
-    if (!currentUserProfile) return;
-    try {
-      if (editingAnnouncement) {
-          await db.collection("announcements").doc(editingAnnouncement.id).update({
-              title,
-              content
-          });
-          showAlert("Announcement updated!", 'success');
-      } else {
-          // Fallback if triggered unexpectedly, though button is removed
-          return;
-      }
-      setEditingAnnouncement(null);
-    } catch (err: any) {
-      showAlert(`Error posting announcement: ${err.message}`, 'error');
-    }
-  };
-
-  const handleDeleteAnnouncement = async (id: string) => {
-    try {
-      await db.collection("announcements").doc(id).delete();
-      showAlert("Announcement deleted.", 'info');
-    } catch(err: any) {
-      showAlert(`Error deleting: ${err.message}`, 'error');
     }
   };
 
@@ -383,21 +375,13 @@ const GuildDashboard: React.FC = () => {
     );
   };
 
-  const handleMentionClick = (name: string) => {
-      // Find user by display name
-      const targetUser = allUsers.find(u => u.displayName.toLowerCase() === name.toLowerCase());
-      if (targetUser) {
-          setSelectedUser(targetUser);
-      } else {
-          showAlert(`User '${name}' not found.`, 'info');
-      }
-  };
-
   if (loading) return <div className="p-8 text-center text-zinc-500">Loading Guild Data...</div>;
   if (!guild) return <div className="p-8 text-center text-red-500 font-bold">Guild Branch Not Found (ID: {guildId})</div>;
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
+      
+      {/* HEADER */}
       <div className="mb-8 flex justify-between items-center">
         <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
@@ -406,123 +390,95 @@ const GuildDashboard: React.FC = () => {
             </h1>
             <p className="text-zinc-500 dark:text-zinc-400 mt-1">Branch Dashboard</p>
         </div>
-        
-        <div className="relative group">
-            <button 
-                onClick={() => setIsCreateModalOpen(true)}
-                disabled={!canCreatePartyInThisBranch || !!userActiveParty}
-                className="bg-rose-900 text-white px-5 py-2.5 rounded-xl hover:bg-rose-950 flex items-center gap-2 text-sm font-bold shadow-lg shadow-rose-900/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-                <Plus size={18} /> Create Party
-            </button>
-            {!canCreatePartyInThisBranch && (
-                <div className="absolute top-full mt-2 right-0 w-48 bg-black text-white text-xs p-2 rounded hidden group-hover:block z-20">
-                    You can only create parties in your own guild branch.
-                </div>
-            )}
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* LEFT COLUMN (Main Content) */}
-        <div className="xl:col-span-3 space-y-8">
+        {/* LEFT COLUMN (Main Content - Announcements & Parties) */}
+        <div className="lg:col-span-2 space-y-8">
             
-            {/* Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Members Card */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-blue-500/30 transition-all hover:shadow-md">
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl">
-                        <Users size={24} />
-                    </div>
-                    <div>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">Total Members</p>
-                        <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{memberCount} <span className="text-sm font-medium text-zinc-400">/ {guild.memberCap}</span></p>
-                    </div>
-                </div>
-
-                {/* Parties Card */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-rose-500/30 transition-all hover:shadow-md">
-                    <div className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl">
-                        <Sword size={24} />
-                    </div>
-                    <div>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">Active Parties</p>
-                        <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{parties.length}</p>
-                    </div>
-                </div>
-
-                {/* Upcoming Event Preview */}
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between hover:border-purple-500/30 transition-all hover:shadow-md h-full min-h-[100px]">
-                    <div className="flex justify-between items-start mb-2">
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                            <Calendar size={14} /> Next Event
-                        </p>
-                        <Link to="/events" className="text-[10px] bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">View All</Link>
-                    </div>
-                    {branchEvents.length > 0 ? (
-                        <div>
-                            <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">{branchEvents[0].title}</p>
-                            <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                                {new Date(branchEvents[0].date).toLocaleDateString()}
-                            </p>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-zinc-400 italic mt-1">No upcoming events.</p>
-                    )}
-                </div>
-            </div>
-
-            {/* Announcements Section (Moved here per request) */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-rose-500 to-purple-600"></div>
-                <div className="flex items-center justify-between mb-4">
+            {/* Announcements Section - CAROUSEL (Top of Grid) */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[320px] relative group">
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Megaphone className="text-rose-900 dark:text-rose-500" size={20} /> Guild Board
                     </h3>
                 </div>
                 
-                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="relative flex-1 overflow-hidden">
                     {announcements.length === 0 ? (
-                        <div className="text-center py-8 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 border-dashed">
-                            <p className="text-sm text-zinc-500 dark:text-zinc-400">No announcements posted yet.</p>
+                        <div className="flex items-center justify-center h-full text-zinc-500">
+                            No announcements posted yet.
                         </div>
                     ) : (
-                        announcements.map(ann => {
-                            const isAuthor = currentUser?.uid === ann.authorId;
-                            const isOfficer = currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId;
-                            const isAdmin = currentUserProfile?.systemRole === 'Admin';
-                            const canManage = isAdmin || isOfficer || isAuthor;
-                            
-                            return (
-                                <div key={ann.id} className="p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-xl border border-zinc-100 dark:border-zinc-800/50 relative group/item hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
-                                        <span className="text-[10px] text-zinc-400 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded border border-zinc-100 dark:border-zinc-800">
-                                            {new Date(ann.timestamp).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                    <RichText 
-                                        text={ann.content} 
-                                        className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed mb-2" 
-                                        onMentionClick={handleMentionClick}
-                                    />
-                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50">
-                                        <span className="text-xs text-zinc-400 font-medium flex items-center gap-1">
-                                            By <span className="text-rose-600 dark:text-rose-400 cursor-pointer hover:underline" onClick={() => handleMentionClick(ann.authorName)}>{ann.authorName}</span>
-                                        </span>
-                                        {canManage && (
-                                            <button 
-                                                onClick={() => openDeleteModal("Delete Announcement?", "Are you sure?", () => handleDeleteAnnouncement(ann.id))}
-                                                className="text-zinc-300 hover:text-red-500 transition-colors p-1 opacity-0 group-hover/item:opacity-100"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
+                        <div 
+                            className="flex h-full transition-transform duration-700 ease-in-out"
+                            style={{ transform: `translateX(-${currentAnnouncementIndex * 100}%)` }}
+                        >
+                            {announcements.map((ann) => (
+                                <div 
+                                    key={ann.id} 
+                                    className="min-w-full h-full relative flex flex-col cursor-pointer overflow-hidden"
+                                    onClick={() => setViewingAnnouncement(ann)}
+                                >
+                                    {ann.imageUrl && (
+                                        <>
+                                            <img src={ann.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />
+                                            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-zinc-900 dark:via-zinc-900/90 dark:to-zinc-900/20"></div>
+                                        </>
+                                    )}
+                                    <div className="relative z-10 p-8 flex-1 flex flex-col">
+                                        <div className="flex-1">
+                                            <h4 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 leading-tight drop-shadow-sm">
+                                                {ann.title}
+                                            </h4>
+                                            <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                                <span className="flex items-center gap-1"><User size={14} /> {ann.authorName}</span>
+                                                <span>•</span>
+                                                <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="text-zinc-600 dark:text-zinc-300 line-clamp-3 leading-relaxed max-w-2xl">
+                                                {ann.content}
+                                            </p>
+                                        </div>
+                                        <div className="mt-4 flex justify-between items-center">
+                                             <div className="flex gap-1">
+                                                {announcements.map((_, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                                                            idx === currentAnnouncementIndex 
+                                                            ? 'w-6 bg-rose-600' 
+                                                            : 'w-1.5 bg-zinc-300 dark:bg-zinc-700'
+                                                        }`}
+                                                    />
+                                                ))}
+                                             </div>
+                                             <span className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 hover:underline">
+                                                Read More <ArrowRight size={12} />
+                                             </span>
+                                        </div>
                                     </div>
                                 </div>
-                            );
-                        })
+                            ))}
+                        </div>
+                    )}
+                    
+                    {announcements.length > 1 && (
+                        <>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev - 1 + announcements.length) % announcements.length); }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev + 1) % announcements.length); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
+                            >
+                                <ChevronRight size={20} />
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -533,9 +489,25 @@ const GuildDashboard: React.FC = () => {
                     <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Activity className="text-rose-900 dark:text-rose-500" /> Party Finder
                     </h2>
+                    
+                    {/* Create Party Button (Now moved here) */}
+                    <div className="relative group">
+                        <button 
+                            onClick={() => setIsCreateModalOpen(true)}
+                            disabled={!canCreatePartyInThisBranch || !!userActiveParty}
+                            className="bg-rose-900 text-white px-4 py-2 rounded-lg hover:bg-rose-950 flex items-center gap-2 text-sm font-bold shadow-md shadow-rose-900/10 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                        >
+                            <Plus size={16} /> Create Party
+                        </button>
+                        {!canCreatePartyInThisBranch && (
+                            <div className="absolute bottom-full mb-2 right-0 w-48 bg-black text-white text-xs p-2 rounded hidden group-hover:block z-20 pointer-events-none">
+                                You can only create parties in your own guild branch.
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {parties.length === 0 ? (
                     <div className="col-span-full text-center py-16 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
                         <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4 text-zinc-300">
@@ -593,7 +565,7 @@ const GuildDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Party Grid Layout - Using CSS Grid for 5+ columns if large, else horizontal flex */}
+                        {/* Party Grid Layout */}
                         <div className={party.maxMembers > 5 ? 'grid grid-cols-5 gap-2' : 'flex flex-row gap-2'}>
                             {party.currentMembers.map((member) => {
                                 const memberProfile = allUsers.find(u => u.uid === member.uid);
@@ -607,7 +579,7 @@ const GuildDashboard: React.FC = () => {
                                     title={`${member.name} (${member.role})`}
                                     />
                                     <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
-                                    {/* Role Badge - Adjusted Styling */}
+                                    {/* Role Badge */}
                                     <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap z-10
                                         ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}
                                     `}>
@@ -638,33 +610,92 @@ const GuildDashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* RIGHT COLUMN (Sidebar) */}
+        {/* RIGHT COLUMN (Sidebar - Events, Stats, Online) */}
         <div className="space-y-6">
             
-            {/* Hero's Realm Widget (Sidebar) */}
+            {/* NEXT EVENT WIDGET (Redesigned) */}
+            <div className="relative group overflow-hidden rounded-2xl h-56 bg-zinc-900 border border-zinc-800 shadow-lg cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl" onClick={() => navigate('/events')}>
+                {branchEvents.length > 0 ? (
+                    <>
+                        {branchEvents[0].imageUrl ? (
+                            <img 
+                                src={branchEvents[0].imageUrl} 
+                                alt="Event" 
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70 group-hover:opacity-50"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-rose-900 to-purple-900 opacity-80" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                        
+                        <div className="relative z-10 p-6 flex flex-col h-full justify-end animate-in slide-in-from-bottom duration-500">
+                            <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1 rounded-lg">
+                                <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1">
+                                    <Clock size={12} /> {new Date(branchEvents[0].date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                                </span>
+                            </div>
+                            
+                            <div className="mb-1">
+                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm border border-white/5 inline-block mb-2">
+                                    Next Event
+                                </span>
+                                <h3 className="text-2xl font-black text-white leading-tight mb-1 drop-shadow-md">
+                                    {branchEvents[0].title}
+                                </h3>
+                                <p className="text-sm text-zinc-300 line-clamp-2">{branchEvents[0].description}</p>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-zinc-500 bg-zinc-100 dark:bg-zinc-800">
+                        <Calendar size={48} className="mb-2 opacity-20" />
+                        <p className="font-bold">No Upcoming Events</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Compact Stats Grid */}
+            <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col items-center justify-center text-center hover:border-blue-500/30 transition-colors">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg mb-2">
+                        <Users size={20} />
+                    </div>
+                    <p className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">{memberCount}</p>
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1">Members</p>
+                </div>
+                <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col items-center justify-center text-center hover:border-rose-500/30 transition-colors">
+                    <div className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg mb-2">
+                        <Sword size={20} />
+                    </div>
+                    <p className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">{parties.length}</p>
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1">Parties</p>
+                </div>
+            </div>
+
+            {/* Hero's Realm Widget */}
             <div className="bg-gradient-to-br from-purple-900 to-zinc-900 rounded-xl p-1 shadow-lg">
-                <div className="bg-zinc-900 rounded-[10px] p-6 text-center relative overflow-hidden">
+                <div className="bg-white dark:bg-zinc-900 rounded-[10px] p-6 text-center relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
                     <div className="relative z-10">
-                        <div className="w-12 h-12 bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3 text-purple-400 border border-purple-500/20">
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
                             <Clock size={24} />
                         </div>
-                        <h3 className="font-bold text-white text-lg mb-1">Hero's Realm</h3>
+                        <h3 className="font-bold text-zinc-900 dark:text-white text-lg mb-1">Hero's Realm</h3>
                         {activeHeroSchedule ? (
                             <div className="my-4">
-                                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-purple-400">
+                                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-purple-600 to-purple-400 dark:from-white dark:to-purple-400">
                                     {activeHeroSchedule.day}
                                 </p>
-                                <p className="text-sm font-bold text-purple-300 bg-purple-900/20 py-1 px-3 rounded-full inline-block mt-1 border border-purple-500/20">
+                                <p className="text-sm font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/20 py-1 px-3 rounded-full inline-block mt-1 border border-purple-200 dark:border-purple-500/20">
                                     @ {formatTime(activeHeroSchedule.time)}
                                 </p>
                             </div>
                         ) : (
-                            <p className="text-zinc-400 text-sm italic my-4">Schedule Pending</p>
+                            <p className="text-zinc-500 dark:text-zinc-400 text-sm italic my-4">Schedule Pending</p>
                         )}
                         <button 
                             onClick={() => setIsHerosRealmModalOpen(true)}
-                            className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-purple-900/30"
+                            className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-purple-900/20"
                         >
                             View Polls & Vote
                         </button>
@@ -720,14 +751,6 @@ const GuildDashboard: React.FC = () => {
         data={newPartyData}
         onChange={setNewPartyData}
       />
-
-      <CreateAnnouncementModal 
-        isOpen={isAnnouncementModalOpen}
-        onClose={() => setIsAnnouncementModalOpen(false)}
-        onSubmit={handlePostAnnouncement}
-        userProfile={currentUserProfile}
-        initialData={editingAnnouncement}
-      />
       
       <HerosRealmModal 
         isOpen={isHerosRealmModalOpen}
@@ -751,6 +774,12 @@ const GuildDashboard: React.FC = () => {
             guilds={[guild]}
         />
       )}
+
+      <ViewAnnouncementModal 
+        isOpen={!!viewingAnnouncement}
+        onClose={() => setViewingAnnouncement(null)}
+        announcement={viewingAnnouncement}
+      />
     </div>
   );
 };

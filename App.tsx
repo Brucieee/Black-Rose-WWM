@@ -5,7 +5,7 @@ import Layout from './components/Layout';
 import Register from './pages/Register';
 import Members from './pages/Members';
 import GuildDashboard from './pages/GuildDashboard';
-import Admin from './pages/Admin';
+import Admin from './pages/admin/Admin'; // Updated Import
 import Dashboard from './pages/Dashboard';
 import Events from './pages/Events';
 import Profile from './pages/Profile';

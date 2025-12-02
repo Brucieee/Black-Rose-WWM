@@ -83,6 +83,7 @@ export interface Announcement {
   content: string;
   timestamp: string;
   isGlobal: boolean;
+  imageUrl?: string;
 }
 
 export interface Party {

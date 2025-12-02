@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles, Megaphone, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig } from '../types';
+import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig, ScheduleSlot } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -45,7 +45,7 @@ const Dashboard: React.FC = () => {
       setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild)));
     });
 
-    // Fetch Events - removed slice(0,3) to allow scrolling more
+    // Fetch Events
     const unsubEvents = db.collection("events")
       .orderBy("date", "asc")
       .onSnapshot(snap => {
@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
         setUsers(snap.docs.map(d => d.data() as UserProfile));
     });
 
-    // Fetch Global Announcements - Limit 20 to allow scrolling
+    // Fetch Global Announcements
     const unsubAnnouncements = db.collection("announcements")
       .where("isGlobal", "==", true)
       .limit(20) 
@@ -119,6 +119,8 @@ const Dashboard: React.FC = () => {
     if (currentUser && users.length > 0) {
         const profile = users.find(u => u.uid === currentUser.uid);
         setCurrentUserProfile(profile || null);
+    } else {
+        setCurrentUserProfile(null);
     }
   }, [currentUser, users]);
 
@@ -128,6 +130,51 @@ const Dashboard: React.FC = () => {
   const currentBoss = currentBossName ? breakingArmyConfig?.bossPool.find(b => b.name === currentBossName) : null;
   const guildQueue = queue.filter(q => q.guildId === userGuildId);
   
+  // Smart Schedule Calculation
+  const getNextSchedule = (): { displayDay: string; time: string } | null => {
+      if (!userGuildId || !breakingArmyConfig?.schedules?.[userGuildId]) return null;
+      const schedules = breakingArmyConfig.schedules[userGuildId];
+      if (schedules.length === 0) return null;
+
+      const now = new Date();
+      const currentDayIndex = now.getDay(); // 0 = Sun, 1 = Mon...
+      const currentTimeVal = now.getHours() * 60 + now.getMinutes();
+
+      const dayMap: Record<string, number> = {
+          'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6
+      };
+
+      // Calculate time difference for each schedule
+      const upcoming = schedules.map(s => {
+          const sDayIndex = dayMap[s.day];
+          let dayDiff = sDayIndex - currentDayIndex;
+          const [h, m] = s.time.split(':').map(Number);
+          const sTimeVal = h * 60 + m;
+
+          // If day passed, add 7 days. If same day but time passed, add 7 days.
+          if (dayDiff < 0) dayDiff += 7;
+          if (dayDiff === 0 && sTimeVal < currentTimeVal) dayDiff += 7;
+
+          // Normalize to total minutes for sorting
+          const minutesUntil = (dayDiff * 24 * 60) + (sTimeVal - currentTimeVal);
+          
+          return { ...s, minutesUntil, dayDiff };
+      });
+
+      // Sort by closest time
+      upcoming.sort((a, b) => a.minutesUntil - b.minutesUntil);
+      const next = upcoming[0];
+
+      let displayDay = next.day;
+      if (next.dayDiff === 0) displayDay = "Today";
+      else if (next.dayDiff === 1) displayDay = `Tomorrow, ${next.day}`;
+      // else displayDay remains e.g. "Wednesday"
+
+      return { displayDay, time: next.time };
+  };
+
+  const nextSchedule = getNextSchedule();
+
   // Hero's Realm Schedule & Configured Bosses
   const heroSchedule = userGuildId && herosRealmConfig?.schedules?.[userGuildId]?.[0];
   const configuredBossNames = userGuildId && herosRealmConfig?.currentBosses?.[userGuildId];
@@ -198,17 +245,19 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  const handlePostGlobalAnnouncement = async (title: string, content: string, isGlobal: boolean) => {
+  // Updated handler for new modal signature
+  const handlePostGlobalAnnouncement = async (data: { title: string, content: string, isGlobal: boolean, imageUrl: string }) => {
       if (!currentUserProfile) return;
       try {
         const newAnnouncement = {
-          title,
-          content,
+          title: data.title,
+          content: data.content,
           authorId: currentUserProfile.uid,
           authorName: currentUserProfile.displayName,
           guildId: 'global',
           timestamp: new Date().toISOString(),
-          isGlobal: true
+          isGlobal: true,
+          imageUrl: data.imageUrl
         };
         await db.collection("announcements").add(newAnnouncement);
         showAlert("Global announcement posted!", 'success');
@@ -277,10 +326,15 @@ const Dashboard: React.FC = () => {
                             <h2 className="text-xl font-extrabold leading-tight mb-1 truncate">
                                 {currentBoss?.name || "No Active Boss"}
                             </h2>
-                            {userGuildId && breakingArmyConfig?.schedules?.[userGuildId] && breakingArmyConfig.schedules[userGuildId].length > 0 && (
-                                <div className="mt-1 flex flex-col">
-                                    <span className="text-xs text-zinc-400">Next: {breakingArmyConfig.schedules[userGuildId][0]?.day}</span>
-                                    <span className="text-sm font-bold text-white">@ {formatTime12Hour(breakingArmyConfig.schedules[userGuildId][0]?.time)}</span>
+                            {nextSchedule && (
+                                <div className="mt-2 flex flex-col">
+                                    <span className="text-[10px] text-rose-300 uppercase font-bold tracking-widest mb-0.5">Next Run</span>
+                                    <span className="text-xl font-black text-white leading-none shadow-black drop-shadow-sm">
+                                        {nextSchedule.displayDay}
+                                    </span>
+                                    <span className="text-sm font-bold text-white/90 bg-black/20 backdrop-blur-sm self-start px-2 py-0.5 rounded mt-1 border border-white/10">
+                                        @ {formatTime12Hour(nextSchedule.time)}
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -369,38 +423,46 @@ const Dashboard: React.FC = () => {
                             {globalAnnouncements.map((ann) => (
                                 <div 
                                     key={ann.id} 
-                                    className="min-w-full h-full p-8 flex flex-col cursor-pointer"
+                                    className="min-w-full h-full relative flex flex-col cursor-pointer overflow-hidden"
                                     onClick={() => setViewingAnnouncement(ann)}
                                 >
-                                    <div className="flex-1">
-                                        <h4 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 leading-tight">
-                                            {ann.title}
-                                        </h4>
-                                        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-                                            <span className="flex items-center gap-1"><User size={14} /> {ann.authorName}</span>
-                                            <span>•</span>
-                                            <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                    {ann.imageUrl && (
+                                        <>
+                                            <img src={ann.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />
+                                            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-zinc-900 dark:via-zinc-900/90 dark:to-zinc-900/20"></div>
+                                        </>
+                                    )}
+                                    <div className="relative z-10 p-8 flex-1 flex flex-col">
+                                        <div className="flex-1">
+                                            <h4 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 leading-tight drop-shadow-sm">
+                                                {ann.title}
+                                            </h4>
+                                            <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                                <span className="flex items-center gap-1"><User size={14} /> {ann.authorName}</span>
+                                                <span>•</span>
+                                                <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="text-zinc-600 dark:text-zinc-300 line-clamp-3 leading-relaxed max-w-2xl">
+                                                {ann.content}
+                                            </p>
                                         </div>
-                                        <p className="text-zinc-600 dark:text-zinc-400 line-clamp-3 leading-relaxed">
-                                            {ann.content}
-                                        </p>
-                                    </div>
-                                    <div className="mt-4 flex justify-between items-center">
-                                         <div className="flex gap-1">
-                                            {globalAnnouncements.map((_, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                                                        idx === currentAnnouncementIndex 
-                                                        ? 'w-6 bg-blue-600' 
-                                                        : 'w-1.5 bg-zinc-300 dark:bg-zinc-700'
-                                                    }`}
-                                                />
-                                            ))}
-                                         </div>
-                                         <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline">
-                                            Read More <ArrowRight size={12} />
-                                         </span>
+                                        <div className="mt-4 flex justify-between items-center">
+                                             <div className="flex gap-1">
+                                                {globalAnnouncements.map((_, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                                                            idx === currentAnnouncementIndex 
+                                                            ? 'w-6 bg-blue-600' 
+                                                            : 'w-1.5 bg-zinc-300 dark:bg-zinc-700'
+                                                        }`}
+                                                    />
+                                                ))}
+                                             </div>
+                                             <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline">
+                                                Read More <ArrowRight size={12} />
+                                             </span>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -411,13 +473,13 @@ const Dashboard: React.FC = () => {
                         <>
                             <button 
                                 onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev - 1 + globalAnnouncements.length) % globalAnnouncements.length); }}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200"
+                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
                             >
                                 <ChevronLeft size={20} />
                             </button>
                             <button 
                                 onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev + 1) % globalAnnouncements.length); }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
                             >
                                 <ChevronRight size={20} />
                             </button>

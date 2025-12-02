@@ -22,9 +22,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialUrl) {
-      setPreviewUrl(initialUrl);
-    }
+    setPreviewUrl(initialUrl || null);
   }, [initialUrl]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

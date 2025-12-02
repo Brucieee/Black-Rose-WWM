@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { BaseModal } from './BaseModal';
 import { Megaphone, Globe } from 'lucide-react';
 import { UserProfile, Announcement } from '../../types';
+import { ImageUpload } from '../ImageUpload';
 
 interface CreateAnnouncementModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (title: string, content: string, isGlobal: boolean) => void;
+  onSubmit: (data: { title: string; content: string; isGlobal: boolean; imageUrl: string }) => void;
   userProfile: UserProfile | null;
   forceGlobal?: boolean;
   initialData?: Announcement | null;
@@ -24,6 +25,7 @@ export const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = (
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isGlobal, setIsGlobal] = useState(forceGlobal);
+  const [imageUrl, setImageUrl] = useState('');
 
   // Sync forceGlobal if it changes or initialData provided
   useEffect(() => {
@@ -32,17 +34,19 @@ export const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = (
         setTitle(initialData.title);
         setContent(initialData.content);
         setIsGlobal(initialData.isGlobal);
+        setImageUrl(initialData.imageUrl || '');
       } else {
         setTitle('');
         setContent('');
         setIsGlobal(forceGlobal);
+        setImageUrl('');
       }
     }
   }, [isOpen, initialData, forceGlobal]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(title, content, isGlobal);
+    onSubmit({ title, content, isGlobal, imageUrl });
     onClose();
   };
 
@@ -76,6 +80,15 @@ export const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = (
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
+          </div>
+
+          <div>
+             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Image (Optional)</label>
+             <ImageUpload 
+                folder="announcements"
+                initialUrl={imageUrl}
+                onUploadComplete={setImageUrl}
+             />
           </div>
 
           <div>
