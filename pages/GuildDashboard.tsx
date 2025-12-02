@@ -305,10 +305,7 @@ const GuildDashboard: React.FC = () => {
         showAlert("You are already in a party.", 'error');
         return;
     }
-    if (currentUserProfile.guildId !== party.guildId) {
-        showAlert("You can only join parties from your own branch.", 'error');
-        return;
-    }
+    // Removed restriction to allow cross-branch joining
     if (party.currentMembers.length >= party.maxMembers) {
         showAlert("This party is full.", 'error', "Party Full");
         return;
@@ -558,7 +555,7 @@ const GuildDashboard: React.FC = () => {
                                 ) : (
                                     <button 
                                         onClick={() => handleJoinClick(party)}
-                                        disabled={!!userActiveParty || currentUserProfile?.guildId !== party.guildId} 
+                                        disabled={!!userActiveParty} 
                                         className="bg-rose-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-sm"
                                     >
                                         Join
