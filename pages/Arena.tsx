@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal, Menu } from 'lucide-react';
@@ -778,7 +777,7 @@ const Arena: React.FC = () => {
       const userPlayer = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player1 : userActiveMatch.player2;
 
       return (
-          <div className="relative w-full h-36 md:h-48 bg-zinc-950 overflow-hidden shrink-0 border-b border-zinc-800 animate-in fade-in duration-500">
+          <div className="fixed bottom-0 left-0 right-0 z-40 w-full md:pl-64 h-36 md:h-44 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500">
               {/* Background Effects */}
               <div className="absolute inset-0 bg-gradient-to-r from-blue-950/60 via-black to-red-950/60 z-0"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-800/10 via-transparent to-transparent z-0"></div>
@@ -866,10 +865,10 @@ const Arena: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 pb-20">
-      {renderActiveMatchBanner()}
-
-      <div className="p-4 w-full h-[calc(100vh-64px)] flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      
+      {/* Main Container with dynamic height to accommodate fixed banner */}
+      <div className={`p-4 w-full flex flex-col relative overflow-hidden transition-all duration-300 ${userActiveMatch ? 'h-[calc(100vh-144px)] md:h-[calc(100vh-176px)]' : 'h-[calc(100vh-64px)]'}`}>
         <div className="flex justify-between items-start mb-2">
           <div>
               <div className="flex items-center gap-3">
@@ -1274,9 +1273,11 @@ const Arena: React.FC = () => {
           </div>
         </div>
 
+        {renderActiveMatchBanner()}
+
         {/* Custom Champion Overlay - Absolute on screen */}
         {showOverlayBanner && firstPlace && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none perspective-container">
+            <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none perspective-container">
                 {/* Radial Gradient Overlay to darken background */}
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-500 pointer-events-auto" onClick={() => {/* Block click-through */}}></div>
                 
