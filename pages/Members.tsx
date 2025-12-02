@@ -40,12 +40,8 @@ const Members: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  useEffect(() => {
-      // Force non-admins to view only their guild
-      if (currentUserProfile && currentUserProfile.systemRole !== 'Admin') {
-          setFilterGuild(currentUserProfile.guildId);
-      }
-  }, [currentUserProfile]);
+  // Removed logic that forced filtering to user's guild for non-admins.
+  // Now all users default to 'All' and can change it.
 
   const isUserOnline = (user: UserProfile) => {
       if (user.status === 'online') {
@@ -81,8 +77,6 @@ const Members: React.FC = () => {
     }
   };
 
-  const isAdmin = currentUserProfile?.systemRole === 'Admin';
-
   return (
     <div className="max-w-6xl mx-auto py-8 px-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -114,22 +108,17 @@ const Members: React.FC = () => {
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
           </div>
           
-          {isAdmin ? (
-              <div className="relative w-full sm:w-40">
-                <select 
-                  className="w-full appearance-none pl-3 pr-8 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
-                  value={filterGuild}
-                  onChange={e => setFilterGuild(e.target.value)}
-                >
-                  <option value="All">All Branches</option>
-                  {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
-              </div>
-          ) : (
-             // Hidden fixed value for non-admins (visual only if needed, but here we just hide it)
-             null
-          )}
+          <div className="relative w-full sm:w-40">
+            <select 
+              className="w-full appearance-none pl-3 pr-8 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:ring-2 focus:ring-rose-900/20 outline-none text-zinc-900 dark:text-zinc-100"
+              value={filterGuild}
+              onChange={e => setFilterGuild(e.target.value)}
+            >
+              <option value="All">All Branches</option>
+              {guilds.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4 pointer-events-none" />
+          </div>
         </div>
       </div>
 

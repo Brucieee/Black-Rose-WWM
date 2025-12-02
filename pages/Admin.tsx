@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, Skull, Clock, Edit, Trophy, ShieldAlert, FileText, User, Plane, Megaphone, GripVertical, Globe, Check, Image as ImageIcon, Search, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, Calendar, Database, Crown, Skull, Clock, Edit, Trophy, ShieldAlert, FileText, User, Plane, Megaphone, GripVertical, Globe, Check, Image as ImageIcon, Search, AlertTriangle, ArrowRight, ShieldCheck, Shield } from 'lucide-react';
 import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement, HerosRealmRequest, HerosRealmConfig, RoleType } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
@@ -300,10 +300,6 @@ const Admin: React.FC = () => {
              batch.delete(queueRef);
 
              // 3. Add to Recent Winners (Cooldown) in system config
-             // Need to fetch current config first or use optimistic update? 
-             // Better to just add to a subcollection or separate array if possible, but structure dictates system/breakingArmy
-             // We'll skip complex array union logic here for brevity and assume it works via arrayUnion if we had the ref, 
-             // but 'recentWinners' is inside the big config object.
              const cooldownEntry: CooldownEntry = {
                  uid: entry.uid,
                  branchId: entry.guildId,
@@ -1383,35 +1379,89 @@ const Admin: React.FC = () => {
       case 'users':
           // Only Admin can see this tab content
           if (!isAdmin) return null;
+          
+          const filteredSystemUsers = allUsers.filter(u => 
+              u.displayName.toLowerCase().includes(userSearch.toLowerCase()) ||
+              u.inGameId.includes(userSearch)
+          );
+
           return (
               <div className="space-y-6 animate-in fade-in duration-300">
-                  {/* ... Existing User Role Management ... */}
-                  <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">System Role Management</h2>
-                  {/* ... (Kept simple for brevity, logic identical to previous version just wrapped in div) ... */}
-                  <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-                      <table className="w-full text-left text-sm whitespace-nowrap">
-                          <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
-                              <tr>
-                                  <th className="px-6 py-3">User</th>
-                                  <th className="px-6 py-3">System Role</th>
-                                  <th className="px-6 py-3 text-right">Action</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                              {allUsers.map(u => (
-                                  <tr key={u.uid}>
-                                      <td className="px-6 py-3 font-medium">{u.displayName}</td>
-                                      <td className="px-6 py-3">{u.systemRole}</td>
-                                      <td className="px-6 py-3 text-right">
-                                          {u.systemRole !== 'Admin' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Admin'})} className="text-blue-600 mr-2">Promote Admin</button>}
-                                          {u.systemRole !== 'Officer' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Officer'})} className="text-yellow-600 mr-2">Promote Officer</button>}
-                                          {u.systemRole !== 'Member' && <button onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Member'})} className="text-zinc-500">Demote</button>}
-                                      </td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div>
+                          <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                              <ShieldAlert className="text-rose-900 dark:text-rose-500" /> System Roles
+                          </h2>
+                          <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">Manage administrative privileges.</p>
+                      </div>
+                      <div className="relative w-full md:w-64">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
+                          <input 
+                              type="text" 
+                              placeholder="Search users..." 
+                              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-900/20 text-zinc-900 dark:text-zinc-100"
+                              value={userSearch}
+                              onChange={e => setUserSearch(e.target.value)}
+                          />
+                      </div>
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {filteredSystemUsers.map(u => (
+                          <div key={u.uid} className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center gap-3">
+                                      <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 object-cover" alt={u.displayName} />
+                                      <div className="min-w-0">
+                                          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-sm">{u.displayName}</h3>
+                                          <p className="text-xs text-zinc-500 font-mono">{u.inGameId}</p>
+                                      </div>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                      u.systemRole === 'Admin' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                                      u.systemRole === 'Officer' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                      'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                                  }`}>
+                                      {u.systemRole}
+                                  </span>
+                              </div>
+                              
+                              <div className="flex flex-col gap-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                      {u.systemRole !== 'Admin' && (
+                                          <button 
+                                              onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Admin'})}
+                                              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-900/10 dark:hover:bg-red-900/20 dark:text-red-400 text-xs font-bold transition-colors"
+                                          >
+                                              <Shield size={12} /> Make Admin
+                                          </button>
+                                      )}
+                                      {u.systemRole !== 'Officer' && (
+                                          <button 
+                                              onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Officer'})}
+                                              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-yellow-50 hover:bg-yellow-100 text-yellow-700 dark:bg-yellow-900/10 dark:hover:bg-yellow-900/20 dark:text-yellow-400 text-xs font-bold transition-colors"
+                                          >
+                                              <ShieldCheck size={12} /> Make Officer
+                                          </button>
+                                      )}
+                                  </div>
+                                  {u.systemRole !== 'Member' && (
+                                      <button 
+                                          onClick={() => db.collection("users").doc(u.uid).update({systemRole: 'Member'})}
+                                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-400 text-xs font-bold transition-colors mt-auto"
+                                      >
+                                          <User size={12} /> Demote to Member
+                                      </button>
+                                  )}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  {filteredSystemUsers.length === 0 && (
+                      <div className="text-center py-12 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
+                          <p className="text-zinc-500">No users found.</p>
+                      </div>
+                  )}
               </div>
           )
 
