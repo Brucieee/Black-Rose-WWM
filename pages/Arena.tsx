@@ -790,7 +790,7 @@ const Arena: React.FC = () => {
                   <div className="flex-1 flex items-center justify-end gap-4 min-w-0 pr-4 md:pr-12 animate-in slide-in-from-left duration-700">
                       {/* Text Info */}
                       <div className="flex-col items-end hidden md:flex min-w-0 shrink">
-                          <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md" title={userPlayer?.displayName}>
+                          <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-4 py-1" title={userPlayer?.displayName}>
                               {userPlayer?.displayName}
                           </h3>
                           <div className="flex items-center gap-2 mt-2">
@@ -813,8 +813,8 @@ const Arena: React.FC = () => {
 
                   {/* Center: VS */}
                   <div className="shrink-0 flex flex-col items-center justify-center z-20 mx-4">
-                      <div className="relative">
-                          <span className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 italic tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
+                      <div className="relative px-6">
+                          <span className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
                               VS
                           </span>
                       </div>
@@ -839,7 +839,7 @@ const Arena: React.FC = () => {
 
                               {/* Text Info */}
                               <div className="flex-col items-start hidden md:flex min-w-0 shrink">
-                                  <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md" title={opponent.displayName}>
+                                  <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-4 py-1" title={opponent.displayName}>
                                       {opponent.displayName}
                                   </h3>
                                   <div className="flex items-center gap-2 mt-2">
