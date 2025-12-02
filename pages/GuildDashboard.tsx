@@ -31,6 +31,7 @@ const GuildDashboard: React.FC = () => {
   const { showAlert } = useAlert();
 
   const [guild, setGuild] = useState<Guild | null>(null);
+  const [allGuilds, setAllGuilds] = useState<Guild[]>([]); // New State for looking up other branches
   const [loading, setLoading] = useState(true);
   const [parties, setParties] = useState<Party[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -123,12 +124,17 @@ const GuildDashboard: React.FC = () => {
   useEffect(() => {
     if (!guildId) return;
 
-    // FIX: Use Firebase v8 compat syntax
+    // Fetch Current Guild Info
     const guildRef = db.collection("guilds").doc(guildId);
     const unsubGuild = guildRef.onSnapshot(docSnap => {
       if (docSnap.exists) setGuild({ id: docSnap.id, ...docSnap.data() } as Guild);
       else setGuild(null);
       setLoading(false);
+    });
+
+    // Fetch ALL Guilds (so we can identify users from other branches)
+    const unsubAllGuilds = db.collection("guilds").onSnapshot(snap => {
+        setAllGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild)));
     });
 
     const qParties = db.collection("parties").where("guildId", "==", guildId);
@@ -154,7 +160,6 @@ const GuildDashboard: React.FC = () => {
     setAnnouncements([]);
     
     // Fetch Announcements for this guild
-    // NOTE: Removed .orderBy("timestamp", "desc") to avoid composite index requirements on Firestore
     const unsubAnnouncements = db.collection("announcements")
       .where("guildId", "==", guildId)
       .onSnapshot(snap => {
@@ -171,14 +176,22 @@ const GuildDashboard: React.FC = () => {
         }
     });
 
-    return () => { unsubGuild(); unsubParties(); unsubUsersCount(); unsubEvents(); unsubAllUsers(); unsubAnnouncements(); unsubHerosRealmCorrect(); };
+    return () => { 
+        unsubGuild(); 
+        unsubAllGuilds();
+        unsubParties(); 
+        unsubUsersCount(); 
+        unsubEvents(); 
+        unsubAllUsers(); 
+        unsubAnnouncements(); 
+        unsubHerosRealmCorrect(); 
+    };
   }, [guildId, currentUser]);
 
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
       if (!parties.length || !allUsers.length) return;
 
-      // FIX: Use Firebase v8 compat syntax for batch writes
       const batch = db.batch();
 
       parties.forEach(party => {
@@ -273,7 +286,6 @@ const GuildDashboard: React.FC = () => {
     }
 
     try {
-        // FIX: Use Firebase v8 compat syntax
         await db.collection("parties").add({
             ...newPartyData,
             guildId: guildId,
@@ -770,7 +782,7 @@ const GuildDashboard: React.FC = () => {
         <UserProfileModal 
             user={selectedUser} 
             onClose={() => setSelectedUser(null)} 
-            guilds={[guild]}
+            guilds={allGuilds} // Pass all guilds here for cross-branch lookups
         />
       )}
 
