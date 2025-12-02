@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock } from 'lucide-react';
+import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock, ArrowRight, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
@@ -396,260 +397,319 @@ const GuildDashboard: React.FC = () => {
   if (!guild) return <div className="p-8 text-center text-red-500 font-bold">Guild Branch Not Found (ID: {guildId})</div>;
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-6">
+    <div className="max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
       <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{guild.name} Dashboard</h1>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl"><Users size={28} /></div>
-          <div><p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Total Members</p><p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{memberCount} / {guild.memberCap}</p></div>
-        </div>
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-          <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl"><Sword size={28} /></div>
-          <div><p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Active Parties</p><p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{parties.length}</p></div>
+        <div>
+            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
+                <Shield size={32} className="text-rose-900 dark:text-rose-500" />
+                {guild.name}
+            </h1>
+            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Branch Dashboard</p>
         </div>
         
-        {/* Hero's Realm Card */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-           <div className="flex items-center gap-3 mb-2">
-               <div className="p-2 bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg">
-                   <Clock size={20} />
-               </div>
-               <div>
-                   <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Hero's Realm</p>
-                   {activeHeroSchedule ? (
-                       <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                           {activeHeroSchedule.day} @ {formatTime(activeHeroSchedule.time)}
-                       </p>
-                   ) : (
-                       <p className="text-xs text-zinc-400 italic">Schedule Pending</p>
-                   )}
-               </div>
-           </div>
-           <button 
-                onClick={() => setIsHerosRealmModalOpen(true)}
-                className="w-full py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded transition-colors"
-           >
-               View Requests / Vote
-           </button>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 max-h-[160px] overflow-y-auto custom-scrollbar">
-           <div className="flex-1">
-              <h3 className="text-sm text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-2 mb-2"><Calendar size={16} /> Branch Events</h3>
-              {branchEvents.length === 0 ? (
-                <p className="text-xs text-zinc-400">No upcoming events.</p>
-              ) : (
-                <div className="space-y-2">
-                  {branchEvents.map(event => (
-                    <Link to="/events" key={event.id} className="block p-2 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 hover:border-rose-300 dark:hover:border-rose-700 transition-colors">
-                        <div className="flex justify-between items-start">
-                            <span className="text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-1.5 rounded">{new Date(event.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</span>
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase">{event.type}</span>
-                        </div>
-                        <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200 mt-1 truncate">{event.title}</h4>
-                        <RichText text={event.description} className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1 break-all whitespace-pre-wrap min-w-0" />
-                    </Link>
-                  ))}
+        <div className="relative group">
+            <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                disabled={!canCreatePartyInThisBranch || !!userActiveParty}
+                className="bg-rose-900 text-white px-5 py-2.5 rounded-xl hover:bg-rose-950 flex items-center gap-2 text-sm font-bold shadow-lg shadow-rose-900/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+                <Plus size={18} /> Create Party
+            </button>
+            {!canCreatePartyInThisBranch && (
+                <div className="absolute top-full mt-2 right-0 w-48 bg-black text-white text-xs p-2 rounded hidden group-hover:block z-20">
+                    You can only create parties in your own guild branch.
                 </div>
-              )}
-           </div>
+            )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Online Members */}
-          <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                Online Members
-            </h2>
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-wrap gap-2">
-                {onlineMembers.length === 0 ? (
-                    <span className="text-zinc-500 text-sm">No members online.</span>
-                ) : (
-                    onlineMembers.map(u => (
-                        <div key={u.uid} className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 pr-3 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors" title={u.role} onClick={() => setSelectedUser(u)}>
-                            <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 object-cover" alt={u.displayName} />
-                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{u.displayName}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2"><Activity className="text-rose-900 dark:text-rose-500" /> Party Finder</h2>
-            <div className="relative group">
-                <button 
-                    onClick={() => setIsCreateModalOpen(true)}
-                    disabled={!canCreatePartyInThisBranch || !!userActiveParty}
-                    className="bg-rose-900 text-white px-4 py-2 rounded-lg hover:bg-rose-950 flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Plus size={16} /> Create Party
-                </button>
-                {!canCreatePartyInThisBranch && (
-                    <div className="absolute bottom-full mb-2 right-0 w-48 bg-black text-white text-xs p-2 rounded hidden group-hover:block z-10">
-                        You can only create parties in your own guild branch.
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        
+        {/* LEFT COLUMN (Main Content) */}
+        <div className="xl:col-span-3 space-y-8">
+            
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Members Card */}
+                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-blue-500/30 transition-all hover:shadow-md">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl">
+                        <Users size={24} />
                     </div>
-                )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {parties.length === 0 ? (
-              <div className="col-span-full text-center py-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
-                <Sword size={48} className="mx-auto text-zinc-300 mb-4" />
-                <p className="text-zinc-500 dark:text-zinc-400">No active parties. Be the first to start one!</p>
-              </div>
-            ) : (
-              parties.map(party => {
-                const isMember = currentUser && party.currentMembers.some(m => m.uid === currentUser.uid);
-                const isLeader = currentUser && party.leaderId === currentUser.uid;
-                
-                return (
-                <div key={party.id} className="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-rose-900/30 transition-colors group">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 truncate max-w-full">{party.name}</h3>
-                        <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs rounded-full font-medium border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">{party.activity}</span>
-                      </div>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                        <Crown size={14} className="text-yellow-500 flex-shrink-0" /> Leader: <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
-                      </p>
+                    <div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">Total Members</p>
+                        <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{memberCount} <span className="text-sm font-medium text-zinc-400">/ {guild.memberCap}</span></p>
                     </div>
-                    
-                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                        <div className="flex items-center gap-1 text-sm font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg whitespace-nowrap">
-                            <Users size={14} />
-                            <span>{party.currentMembers.length} / {party.maxMembers}</span>
-                        </div>
-                        {isMember ? (
-                             <button 
-                                onClick={() => leaveParty(party)}
-                                className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1 whitespace-nowrap"
-                             >
-                                <LogOut size={14} /> {isLeader ? 'Disband' : 'Leave'}
-                             </button>
-                        ) : (
-                            <button 
-                                onClick={() => handleJoinClick(party)}
-                                disabled={!!userActiveParty || currentUserProfile?.guildId !== party.guildId} 
-                                className="bg-rose-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                            >
-                                Join
-                            </button>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* Party Grid Layout - Using CSS Grid for 5+ columns if large, else horizontal flex */}
-                  <div className={party.maxMembers > 5 ? 'grid grid-cols-5 gap-2' : 'flex flex-row gap-2'}>
-                    {party.currentMembers.map((member) => {
-                        const memberProfile = allUsers.find(u => u.uid === member.uid);
-                        const isOnline = memberProfile ? isUserOnline(memberProfile) : false;
-                        return (
-                          <div key={member.uid} className="relative w-10 h-10 group/member cursor-pointer" onClick={() => { if(memberProfile) setSelectedUser(memberProfile); }}>
-                            <img 
-                              src={memberProfile?.photoURL || member.photoURL || 'https://via.placeholder.com/150'} 
-                              alt={member.name} 
-                              className="w-10 h-10 rounded-full border-2 border-white dark:border-zinc-800 shadow-sm object-cover"
-                              title={`${member.name} (${member.role})`}
-                            />
-                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
-                            {/* Role Badge - Adjusted Styling */}
-                            <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap z-10
-                                ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}
-                            `}>
-                                {member.role}
-                            </div>
-                            {isLeader && member.uid !== currentUser?.uid && (
-                                <button 
-                                    onClick={(e) => kickMember(e, party, member.uid)}
-                                    className="absolute -bottom-2 -left-1 bg-zinc-800 text-white p-0.5 rounded-full opacity-0 group-hover/member:opacity-100 transition-opacity hover:bg-red-600 z-10"
-                                    title="Kick Member"
-                                >
-                                    <Trash2 size={10} />
-                                </button>
-                            )}
-                          </div>
-                        );
-                    })}
-                    {Array.from({ length: party.maxMembers - party.currentMembers.length }).map((_, i) => (
-                      <div key={i} className="w-10 h-10 rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
-                        <span className="text-zinc-300 dark:text-zinc-700 text-xs">+</span>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Member Names List */}
-                  <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                      {party.currentMembers.map(m => m.name).join(', ')}
-                  </div>
                 </div>
-              )})
-            )}
-          </div>
+
+                {/* Parties Card */}
+                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-rose-500/30 transition-all hover:shadow-md">
+                    <div className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl">
+                        <Sword size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider">Active Parties</p>
+                        <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{parties.length}</p>
+                    </div>
+                </div>
+
+                {/* Upcoming Event Preview */}
+                <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between hover:border-purple-500/30 transition-all hover:shadow-md h-full min-h-[100px]">
+                    <div className="flex justify-between items-start mb-2">
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                            <Calendar size={14} /> Next Event
+                        </p>
+                        <Link to="/events" className="text-[10px] bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">View All</Link>
+                    </div>
+                    {branchEvents.length > 0 ? (
+                        <div>
+                            <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">{branchEvents[0].title}</p>
+                            <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                                {new Date(branchEvents[0].date).toLocaleDateString()}
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-zinc-400 italic mt-1">No upcoming events.</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Announcements Section (Moved here per request) */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-rose-500 to-purple-600"></div>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Megaphone className="text-rose-900 dark:text-rose-500" size={20} /> Guild Board
+                    </h3>
+                </div>
+                
+                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                    {announcements.length === 0 ? (
+                        <div className="text-center py-8 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 border-dashed">
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400">No announcements posted yet.</p>
+                        </div>
+                    ) : (
+                        announcements.map(ann => {
+                            const isAuthor = currentUser?.uid === ann.authorId;
+                            const isOfficer = currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId;
+                            const isAdmin = currentUserProfile?.systemRole === 'Admin';
+                            const canManage = isAdmin || isOfficer || isAuthor;
+                            
+                            return (
+                                <div key={ann.id} className="p-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-xl border border-zinc-100 dark:border-zinc-800/50 relative group/item hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
+                                        <span className="text-[10px] text-zinc-400 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded border border-zinc-100 dark:border-zinc-800">
+                                            {new Date(ann.timestamp).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <RichText 
+                                        text={ann.content} 
+                                        className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed mb-2" 
+                                        onMentionClick={handleMentionClick}
+                                    />
+                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50">
+                                        <span className="text-xs text-zinc-400 font-medium flex items-center gap-1">
+                                            By <span className="text-rose-600 dark:text-rose-400 cursor-pointer hover:underline" onClick={() => handleMentionClick(ann.authorName)}>{ann.authorName}</span>
+                                        </span>
+                                        {canManage && (
+                                            <button 
+                                                onClick={() => openDeleteModal("Delete Announcement?", "Are you sure?", () => handleDeleteAnnouncement(ann.id))}
+                                                className="text-zinc-300 hover:text-red-500 transition-colors p-1 opacity-0 group-hover/item:opacity-100"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+
+            {/* Party Finder Section */}
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Activity className="text-rose-900 dark:text-rose-500" /> Party Finder
+                    </h2>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {parties.length === 0 ? (
+                    <div className="col-span-full text-center py-16 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 border-dashed">
+                        <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4 text-zinc-300">
+                            <Sword size={32} />
+                        </div>
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">No Active Parties</h3>
+                        <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 mb-4">Be the first to start a group!</p>
+                        <button 
+                            onClick={() => setIsCreateModalOpen(true)}
+                            disabled={!canCreatePartyInThisBranch || !!userActiveParty}
+                            className="text-rose-900 dark:text-rose-500 font-bold text-sm hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                        >
+                            Create a Party
+                        </button>
+                    </div>
+                    ) : (
+                    parties.map(party => {
+                        const isMember = currentUser && party.currentMembers.some(m => m.uid === currentUser.uid);
+                        const isLeader = currentUser && party.leaderId === currentUser.uid;
+                        
+                        return (
+                        <div key={party.id} className="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md hover:border-rose-900/30 dark:hover:border-rose-900/30 transition-all group">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+                            <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 truncate max-w-full">{party.name}</h3>
+                                <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[10px] uppercase rounded font-bold border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">{party.activity}</span>
+                            </div>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                                <Crown size={14} className="text-yellow-500 flex-shrink-0" /> <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
+                            </p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                                <div className="flex items-center gap-1 text-sm font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded whitespace-nowrap">
+                                    <Users size={14} />
+                                    <span>{party.currentMembers.length} / {party.maxMembers}</span>
+                                </div>
+                                {isMember ? (
+                                    <button 
+                                        onClick={() => leaveParty(party)}
+                                        className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 whitespace-nowrap"
+                                    >
+                                        <LogOut size={14} /> {isLeader ? 'Disband' : 'Leave'}
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => handleJoinClick(party)}
+                                        disabled={!!userActiveParty || currentUserProfile?.guildId !== party.guildId} 
+                                        className="bg-rose-900 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-sm"
+                                    >
+                                        Join
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Party Grid Layout - Using CSS Grid for 5+ columns if large, else horizontal flex */}
+                        <div className={party.maxMembers > 5 ? 'grid grid-cols-5 gap-2' : 'flex flex-row gap-2'}>
+                            {party.currentMembers.map((member) => {
+                                const memberProfile = allUsers.find(u => u.uid === member.uid);
+                                const isOnline = memberProfile ? isUserOnline(memberProfile) : false;
+                                return (
+                                <div key={member.uid} className="relative w-10 h-10 group/member cursor-pointer" onClick={() => { if(memberProfile) setSelectedUser(memberProfile); }}>
+                                    <img 
+                                    src={memberProfile?.photoURL || member.photoURL || 'https://via.placeholder.com/150'} 
+                                    alt={member.name} 
+                                    className="w-10 h-10 rounded-full border-2 border-white dark:border-zinc-800 shadow-sm object-cover"
+                                    title={`${member.name} (${member.role})`}
+                                    />
+                                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-zinc-800 ${isOnline ? 'bg-green-500' : 'bg-zinc-500'}`}></span>
+                                    {/* Role Badge - Adjusted Styling */}
+                                    <div className={`absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border border-white dark:border-zinc-800 shadow-sm min-w-[20px] w-auto whitespace-nowrap z-10
+                                        ${member.role === RoleType.DPS ? 'bg-red-500' : member.role === RoleType.TANK ? 'bg-yellow-600' : member.role === RoleType.HEALER ? 'bg-green-500' : 'bg-purple-500'}
+                                    `}>
+                                        {member.role}
+                                    </div>
+                                    {isLeader && member.uid !== currentUser?.uid && (
+                                        <button 
+                                            onClick={(e) => kickMember(e, party, member.uid)}
+                                            className="absolute -bottom-2 -left-1 bg-zinc-800 text-white p-0.5 rounded-full opacity-0 group-hover/member:opacity-100 transition-opacity hover:bg-red-600 z-10 shadow-sm"
+                                            title="Kick Member"
+                                        >
+                                            <Trash2 size={10} />
+                                        </button>
+                                    )}
+                                </div>
+                                );
+                            })}
+                            {Array.from({ length: party.maxMembers - party.currentMembers.length }).map((_, i) => (
+                            <div key={i} className="w-10 h-10 rounded-full border-2 border-dashed border-zinc-200 dark:border-zinc-800 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900">
+                                <span className="text-zinc-300 dark:text-zinc-700 text-xs">+</span>
+                            </div>
+                            ))}
+                        </div>
+                        </div>
+                    )})
+                    )}
+                </div>
+            </div>
         </div>
 
-        {/* Right Column: Announcements (Read Only) */}
+        {/* RIGHT COLUMN (Sidebar) */}
         <div className="space-y-6">
-           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                      <Megaphone className="text-rose-900 dark:text-rose-500" size={20} /> Announcements
-                  </h3>
-                  {/* Post Button Removed as requested */}
-              </div>
-              <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
-                  {announcements.length === 0 ? (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4">No announcements.</p>
-                  ) : (
-                      announcements.map(ann => {
-                          // Allow delete if: Admin, or Officer of this guild, or original author (but editing disabled from here per request implied)
-                          // Keeping delete logic for management but removing edit/post triggering from UI
-                          const isAuthor = currentUser?.uid === ann.authorId;
-                          const isOfficer = currentUserProfile?.systemRole === 'Officer' && currentUserProfile?.guildId === guildId;
-                          const isAdmin = currentUserProfile?.systemRole === 'Admin';
-                          const canManage = isAdmin || isOfficer || isAuthor;
-                          
-                          return (
-                              <div key={ann.id} className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 relative group">
-                                  <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
-                                  <div className="text-xs text-zinc-400 mb-2 flex justify-between">
-                                      <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
-                                      <button 
-                                        className="hover:text-rose-600 hover:underline cursor-pointer"
-                                        onClick={() => handleMentionClick(ann.authorName)}
-                                      >
-                                        {ann.authorName}
-                                      </button>
-                                  </div>
-                                  <RichText 
-                                    text={ann.content} 
-                                    className="text-sm text-zinc-600 dark:text-zinc-400" 
-                                    onMentionClick={handleMentionClick}
-                                  />
-                                  {canManage && (
-                                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          {/* Edit removed per request to only manage on admin page, but keeping delete for quick moderation */}
-                                          <button 
-                                            onClick={() => openDeleteModal("Delete Announcement?", "Are you sure you want to delete this?", () => handleDeleteAnnouncement(ann.id))}
-                                            className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
-                                          >
-                                              <Trash2 size={14} />
-                                          </button>
-                                      </div>
-                                  )}
-                              </div>
-                          );
-                      })
-                  )}
-              </div>
-           </div>
+            
+            {/* Hero's Realm Widget (Sidebar) */}
+            <div className="bg-gradient-to-br from-purple-900 to-zinc-900 rounded-xl p-1 shadow-lg">
+                <div className="bg-zinc-900 rounded-[10px] p-6 text-center relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                    <div className="relative z-10">
+                        <div className="w-12 h-12 bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3 text-purple-400 border border-purple-500/20">
+                            <Clock size={24} />
+                        </div>
+                        <h3 className="font-bold text-white text-lg mb-1">Hero's Realm</h3>
+                        {activeHeroSchedule ? (
+                            <div className="my-4">
+                                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-purple-400">
+                                    {activeHeroSchedule.day}
+                                </p>
+                                <p className="text-sm font-bold text-purple-300 bg-purple-900/20 py-1 px-3 rounded-full inline-block mt-1 border border-purple-500/20">
+                                    @ {formatTime(activeHeroSchedule.time)}
+                                </p>
+                            </div>
+                        ) : (
+                            <p className="text-zinc-400 text-sm italic my-4">Schedule Pending</p>
+                        )}
+                        <button 
+                            onClick={() => setIsHerosRealmModalOpen(true)}
+                            className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-purple-900/30"
+                        >
+                            View Polls & Vote
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Online Members Sidebar */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm max-h-[600px] flex flex-col">
+                <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-4">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Online Members</h3>
+                    <span className="ml-auto text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">
+                        {onlineMembers.length}
+                    </span>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                    {onlineMembers.length === 0 ? (
+                        <p className="text-sm text-zinc-400 text-center py-4">No one is online.</p>
+                    ) : (
+                        onlineMembers.map(u => (
+                            <div 
+                                key={u.uid} 
+                                onClick={() => setSelectedUser(u)}
+                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer transition-colors group"
+                            >
+                                <div className="relative">
+                                    <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700" alt={u.displayName} />
+                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-zinc-900 rounded-full"></div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors">
+                                        {u.displayName}
+                                    </p>
+                                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">
+                                        {u.role}
+                                    </p>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
         </div>
       </div>
       

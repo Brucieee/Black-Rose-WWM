@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Database, Crown, Skull, Clock, Edit, Trophy, ShieldAlert, FileText, User, Plane, Megaphone, GripVertical, Globe, Check, Image as ImageIcon, Search, AlertTriangle, ArrowRight, ShieldCheck, Shield } from 'lucide-react';
-import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement, HerosRealmRequest, HerosRealmConfig, RoleType } from '../types';
+import { Plus, Trash2, Calendar, Database, Crown, Skull, Clock, Edit, Trophy, ShieldAlert, FileText, User, Plane, Megaphone, GripVertical, Globe, Check, Image as ImageIcon, Search, AlertTriangle, ArrowRight, ShieldCheck, Shield, X, RefreshCw, MessageSquarePlus, Lightbulb, Bug } from 'lucide-react';
+import { Guild, QueueEntry, GuildEvent, UserProfile, Boss, BreakingArmyConfig, ScheduleSlot, LeaderboardEntry, CooldownEntry, WinnerLog, LeaveRequest, Announcement, HerosRealmRequest, HerosRealmConfig, RoleType, Suggestion } from '../types';
 import { db } from '../services/firebase';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -12,6 +13,8 @@ import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { AddBossModal } from '../components/modals/AddBossModal';
 import { RichText } from '../components/RichText';
 import { ImageUpload } from '../components/ImageUpload';
+import { BaseModal } from '../components/modals/BaseModal';
+import { SearchableUserSelect } from '../components/SearchableUserSelect';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
@@ -20,7 +23,7 @@ const Admin: React.FC = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   
   // Tab Management
-  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves'];
+  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves', 'suggestions'];
   
   const [tabOrder, setTabOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('adminTabOrder');
@@ -55,10 +58,12 @@ const Admin: React.FC = () => {
   const [winnerLogs, setWinnerLogs] = useState<WinnerLog[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   
   const [currentBossMap, setCurrentBossMap] = useState<Record<string, string>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, ScheduleSlot[]>>({});
   const [bossPool, setBossPool] = useState<Boss[]>([]);
+  const [recentWinners, setRecentWinners] = useState<CooldownEntry[]>([]);
   
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   const [herosRealmRequests, setHerosRealmRequests] = useState<HerosRealmRequest[]>([]);
@@ -71,16 +76,17 @@ const Admin: React.FC = () => {
   const [guildEditForm, setGuildEditForm] = useState({ name: '', memberCap: 80 });
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [eventDateInput, setEventDateInput] = useState('');
+  const [eventTimeInput, setEventTimeInput] = useState({ hour: '08', minute: '00', ampm: 'PM' });
   const [eventForm, setEventForm] = useState<{
     title: string;
     description: string;
     type: string;
     customType: string;
-    date: string;
     guildId: string;
     imageUrl: string;
   }>({
-    title: '', description: '', type: 'Raid', customType: '', date: '', guildId: '', imageUrl: ''
+    title: '', description: '', type: 'Raid', customType: '', guildId: '', imageUrl: ''
   });
 
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
@@ -89,6 +95,8 @@ const Admin: React.FC = () => {
   const [isAddBossModalOpen, setIsAddBossModalOpen] = useState(false);
   const [editingBossOriginalName, setEditingBossOriginalName] = useState<string | null>(null);
   const [bossForm, setBossForm] = useState({ name: '', imageUrl: '' });
+
+  const [isManualQueueModalOpen, setIsManualQueueModalOpen] = useState(false);
 
   // 12-Hour Schedule Input State
   const [newScheduleDay, setNewScheduleDay] = useState('Wednesday');
@@ -156,7 +164,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
       if (!loadingProfile && userProfile?.systemRole === 'Officer') {
-          const allowedTabs = ['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members'];
+          const allowedTabs = ['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members', 'suggestions'];
           if (!allowedTabs.includes(activeTab)) {
                setActiveTab('events');
           }
@@ -211,6 +219,7 @@ const Admin: React.FC = () => {
         setCurrentBossMap(data.currentBoss || {});
         setSchedulesMap(data.schedules || {});
         setBossPool(data.bossPool || []);
+        setRecentWinners(data.recentWinners || []);
       }
     });
     
@@ -228,8 +237,12 @@ const Admin: React.FC = () => {
       setAllUsers(snap.docs.map(d => d.data() as UserProfile));
     });
 
+    const unsubSuggestions = db.collection("suggestions").orderBy("timestamp", "desc").onSnapshot(snap => {
+        setSuggestions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Suggestion)));
+    });
+
     return () => {
-      unsubGuilds(); unsubEvents(); unsubConfig(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves(); unsubAnnouncements(); unsubHRConfig(); unsubHRRequests(); unsubQueue();
+      unsubGuilds(); unsubEvents(); unsubConfig(); unsubUsers(); unsubLeaderboard(); unsubWinnerLogs(); unsubLeaves(); unsubAnnouncements(); unsubHRConfig(); unsubHRRequests(); unsubQueue(); unsubSuggestions();
     };
   }, []);
 
@@ -267,6 +280,20 @@ const Admin: React.FC = () => {
       try {
           await db.collection("system").doc("herosRealm").set({ schedules: updatedSchedules }, { merge: true });
           // removed showAlert('success') as requested
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
+  const handleRemoveSchedule = async (targetGuildId: string) => {
+      if (!herosRealmConfig) return;
+      const newSchedules = { ...herosRealmConfig.schedules };
+      delete newSchedules[targetGuildId];
+      try {
+          await db.collection("system").doc("herosRealm").update({
+              schedules: newSchedules
+          });
+          showAlert("Schedule cleared", 'success');
       } catch (err: any) {
           showAlert(err.message, 'error');
       }
@@ -320,6 +347,34 @@ const Admin: React.FC = () => {
   const handleRemoveFromQueue = async (uid: string) => {
       await db.collection("queue").doc(uid).delete();
   };
+
+  const handleManualQueueAdd = async (user: UserProfile) => {
+      if (queue.some(q => q.uid === user.uid)) {
+          showAlert("User is already in the queue.", 'error');
+          return;
+      }
+      
+      await db.collection("queue").doc(user.uid).set({
+          uid: user.uid,
+          name: user.displayName,
+          role: user.role,
+          guildId: selectedBranchId,
+          joinedAt: new Date()
+      });
+      setIsManualQueueModalOpen(false);
+      showAlert(`${user.displayName} added to queue.`, 'success');
+  };
+
+  const handleRemoveCooldown = async (entry: CooldownEntry) => {
+      try {
+          await db.collection("system").doc("breakingArmy").update({
+              recentWinners: firebase.firestore.FieldValue.arrayRemove(entry)
+          });
+          showAlert("Cooldown removed.", 'success');
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
   // ----------------------------------------------------
 
   if (loadingProfile) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-900"></div></div>;
@@ -340,6 +395,31 @@ const Admin: React.FC = () => {
       if (ampm === 'PM' && h < 12) h += 12;
       if (ampm === 'AM' && h === 12) h = 0;
       return `${h.toString().padStart(2, '0')}:${minute}`;
+  };
+
+  const constructDate = (dateStr: string, time: {hour: string, minute: string, ampm: string}) => {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-');
+      const h24 = convertTo24Hour(time.hour, time.minute, time.ampm);
+      return `${y}-${m}-${d}T${h24}:00`;
+  };
+
+  const parseDateToForm = (isoString: string) => {
+      const date = new Date(isoString);
+      const dateStr = date.toISOString().split('T')[0];
+      let hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return {
+          dateStr,
+          time: {
+              hour: hours.toString().padStart(2, '0'),
+              minute: minutes,
+              ampm
+          }
+      };
   };
 
   // -- Handlers --
@@ -461,6 +541,59 @@ const Admin: React.FC = () => {
           </div>
         );
 
+      case 'suggestions':
+        return (
+            <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <MessageSquarePlus className="text-rose-900 dark:text-rose-500" /> Suggestions & Complaints
+                    </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {suggestions.map(s => (
+                        <div key={s.id} className="bg-white dark:bg-zinc-900 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative group">
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-2">
+                                    {s.type === 'Suggestion' && <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1"><Lightbulb size={12} /> Suggestion</span>}
+                                    {s.type === 'Complaint' && <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1"><AlertTriangle size={12} /> Complaint</span>}
+                                    {s.type === 'Bug' && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1"><Bug size={12} /> Bug</span>}
+                                    {s.type === 'Other' && <span className="bg-zinc-100 text-zinc-700 text-xs px-2 py-1 rounded-full font-bold">Other</span>}
+                                    
+                                    <span className="text-xs text-zinc-400">{new Date(s.timestamp).toLocaleDateString()}</span>
+                                </div>
+                                <button 
+                                    onClick={() => setDeleteConf({
+                                        isOpen: true,
+                                        title: "Remove Feedback?",
+                                        message: "This will permanently delete this suggestion.",
+                                        action: async () => await db.collection("suggestions").doc(s.id).delete()
+                                    })}
+                                    className="text-zinc-300 hover:text-red-500 transition-colors p-1"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                            
+                            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed mb-4">
+                                {s.content}
+                            </p>
+
+                            <div className="flex items-center gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">From:</span>
+                                <span className="text-sm text-zinc-900 dark:text-zinc-100 font-medium">{s.displayName}</span>
+                            </div>
+                        </div>
+                    ))}
+                    {suggestions.length === 0 && (
+                        <div className="col-span-full py-12 text-center text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700">
+                            No suggestions or feedback yet.
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+
       case 'events':
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
@@ -507,13 +640,45 @@ const Admin: React.FC = () => {
                          </div>
 
                          <div>
-                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Date & Time</label>
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Date</label>
                             <input 
-                                type="datetime-local" 
-                                className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none" 
-                                value={eventForm.date} 
-                                onChange={e => setEventForm({...eventForm, date: e.target.value})}
+                                type="date" 
+                                className="w-full p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-rose-500 outline-none mb-2" 
+                                value={eventDateInput} 
+                                onChange={e => setEventDateInput(e.target.value)}
                             />
+                            
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Time</label>
+                            <div className="flex gap-2">
+                                <select 
+                                    className="flex-1 p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white outline-none"
+                                    value={eventTimeInput.hour}
+                                    onChange={e => setEventTimeInput({...eventTimeInput, hour: e.target.value})}
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')).map(h => (
+                                        <option key={h} value={h}>{h}</option>
+                                    ))}
+                                </select>
+                                <span className="flex items-center text-zinc-400">:</span>
+                                <select 
+                                    className="flex-1 p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white outline-none"
+                                    value={eventTimeInput.minute}
+                                    onChange={e => setEventTimeInput({...eventTimeInput, minute: e.target.value})}
+                                >
+                                    <option value="00">00</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                    <option value="45">45</option>
+                                </select>
+                                <select 
+                                    className="flex-1 p-3 border rounded-lg dark:bg-zinc-800 dark:border-zinc-700 dark:text-white outline-none"
+                                    value={eventTimeInput.ampm}
+                                    onChange={e => setEventTimeInput({...eventTimeInput, ampm: e.target.value})}
+                                >
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                </select>
+                            </div>
                          </div>
 
                          <div>
@@ -559,13 +724,15 @@ const Admin: React.FC = () => {
                          <div className="flex gap-2 pt-2">
                              <button 
                                 onClick={async () => {
-                                    if (!eventForm.title || !eventForm.date) return showAlert("Missing fields", 'error');
+                                    if (!eventForm.title || !eventDateInput) return showAlert("Missing fields", 'error');
                                     const finalType = eventForm.type === 'Custom' ? eventForm.customType : eventForm.type;
+                                    const finalDate = constructDate(eventDateInput, eventTimeInput);
+                                    
                                     const payload = { 
                                         title: eventForm.title,
                                         description: eventForm.description,
                                         type: finalType,
-                                        date: eventForm.date,
+                                        date: finalDate,
                                         guildId: eventForm.guildId,
                                         imageUrl: eventForm.imageUrl
                                     };
@@ -578,7 +745,9 @@ const Admin: React.FC = () => {
                                         await db.collection("events").add(payload);
                                         showAlert("Event Created", 'success');
                                     }
-                                    setEventForm({ title: '', description: '', type: 'Raid', customType: '', date: '', guildId: selectedBranchId, imageUrl: '' });
+                                    setEventForm({ title: '', description: '', type: 'Raid', customType: '', guildId: selectedBranchId, imageUrl: '' });
+                                    setEventDateInput('');
+                                    setEventTimeInput({ hour: '08', minute: '00', ampm: 'PM' });
                                 }}
                                 className="flex-1 bg-rose-900 text-white py-3 rounded-lg hover:bg-rose-950 font-bold shadow-lg shadow-rose-900/20 transition-all active:scale-95"
                             >
@@ -588,7 +757,8 @@ const Admin: React.FC = () => {
                                  <button 
                                     onClick={() => {
                                         setEditingEventId(null);
-                                        setEventForm({ title: '', description: '', type: 'Raid', customType: '', date: '', guildId: selectedBranchId, imageUrl: '' });
+                                        setEventForm({ title: '', description: '', type: 'Raid', customType: '', guildId: selectedBranchId, imageUrl: '' });
+                                        setEventDateInput('');
                                     }}
                                     className="px-4 bg-zinc-200 text-zinc-800 rounded-lg hover:bg-zinc-300 font-bold"
                                  >
@@ -632,6 +802,9 @@ const Admin: React.FC = () => {
                                      <button 
                                         onClick={() => {
                                             setEditingEventId(event.id);
+                                            const { dateStr, time } = parseDateToForm(event.date);
+                                            setEventDateInput(dateStr);
+                                            setEventTimeInput(time);
                                             setEventForm({
                                                 ...event,
                                                 customType: standardEventTypes.includes(event.type) ? '' : event.type,
@@ -669,6 +842,7 @@ const Admin: React.FC = () => {
         
       case 'breakingArmy':
         const branchQueue = queue.filter(q => q.guildId === selectedBranchId);
+        const branchCooldowns = recentWinners.filter(w => w.branchId === selectedBranchId);
         
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300">
@@ -703,7 +877,6 @@ const Admin: React.FC = () => {
                          <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
                              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Active Boss</label>
                              
-                             {/* Boss Visual Selection */}
                              {currentBossMap[selectedBranchId] && (
                                  <div className="mb-3 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 aspect-video relative">
                                      <img 
@@ -797,12 +970,20 @@ const Admin: React.FC = () => {
              
              {/* Right: Boss Pool & Queue */}
              <div className="lg:col-span-2 space-y-6">
-                 {/* Queue Management (Visible to Officers & Admin) */}
+                 {/* Queue Management */}
                  <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
-                    <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-                        <User size={20} className="text-blue-500" /> Queue Management
-                        <span className="text-xs font-normal text-zinc-500">({branchQueue.length} waiting)</span>
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <User size={20} className="text-blue-500" /> Queue Management
+                            <span className="text-xs font-normal text-zinc-500">({branchQueue.length} waiting)</span>
+                        </h3>
+                        <button 
+                            onClick={() => setIsManualQueueModalOpen(true)}
+                            className="bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                        >
+                            <Plus size={14} /> Add Player
+                        </button>
+                    </div>
                     
                     <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                         {branchQueue.length === 0 ? (
@@ -835,6 +1016,42 @@ const Admin: React.FC = () => {
                                     </div>
                                 </div>
                             ))
+                        )}
+                    </div>
+                 </div>
+
+                 {/* Recent Winners / Cooldowns */}
+                 <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+                    <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+                        <Clock size={20} className="text-orange-500" /> Recent Winners (Cooldown)
+                    </h3>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                        {branchCooldowns.length === 0 ? (
+                            <p className="text-zinc-400 italic text-sm text-center py-4">No active cooldowns.</p>
+                        ) : (
+                            branchCooldowns.map((entry, i) => {
+                                const user = allUsers.find(u => u.uid === entry.uid);
+                                return (
+                                    <div key={i} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                                                {user?.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover"/> : <User size={16} className="m-2 text-zinc-400" />}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{user?.displayName || 'Unknown User'}</div>
+                                                <div className="text-xs text-zinc-500">{new Date(entry.timestamp).toLocaleDateString()}</div>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleRemoveCooldown(entry)}
+                                            className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                            title="Remove Cooldown"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                  </div>
@@ -922,6 +1139,19 @@ const Admin: React.FC = () => {
                     showAlert("Boss Pool Updated", 'success');
                 }}
              />
+
+             <BaseModal isOpen={isManualQueueModalOpen} onClose={() => setIsManualQueueModalOpen(false)} className="max-w-md overflow-visible">
+                 <div className="p-6">
+                     <h3 className="text-lg font-bold mb-4 text-zinc-900 dark:text-zinc-100">Add to Queue</h3>
+                     <p className="text-sm text-zinc-500 mb-4">Select a user to manually add to the queue.</p>
+                     <SearchableUserSelect 
+                         users={allUsers}
+                         selectedUid=""
+                         onSelect={handleManualQueueAdd}
+                         placeholder="Search user..."
+                     />
+                 </div>
+             </BaseModal>
           </div>
         );
 
@@ -1108,14 +1338,25 @@ const Admin: React.FC = () => {
                                  {guilds.map(g => {
                                      const schedule = herosRealmConfig?.schedules?.[g.id]?.[0];
                                      return (
-                                         <div key={g.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                                             <div className="font-bold text-xs text-zinc-500 uppercase mb-1">{g.name}</div>
-                                             {schedule ? (
-                                                 <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold">
-                                                     <Clock size={16} /> {schedule.day} @ {formatTime(schedule.time)}
-                                                 </div>
-                                             ) : (
-                                                 <span className="text-xs text-zinc-400 italic">No schedule set</span>
+                                         <div key={g.id} className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex justify-between items-center group">
+                                             <div>
+                                                 <div className="font-bold text-xs text-zinc-500 uppercase mb-1">{g.name}</div>
+                                                 {schedule ? (
+                                                     <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold">
+                                                         <Clock size={16} /> {schedule.day} @ {formatTime(schedule.time)}
+                                                     </div>
+                                                 ) : (
+                                                     <span className="text-xs text-zinc-400 italic">No schedule set</span>
+                                                 )}
+                                             </div>
+                                             {schedule && (isAdmin || (isOfficer && selectedBranchId === g.id)) && (
+                                                 <button 
+                                                     onClick={() => handleRemoveSchedule(g.id)}
+                                                     className="text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                                     title="Clear Schedule"
+                                                 >
+                                                     <Trash2 size={16} />
+                                                 </button>
                                              )}
                                          </div>
                                      );
@@ -1563,7 +1804,8 @@ const Admin: React.FC = () => {
                     winnerLogs: 'Winner Logs',
                     users: 'System Roles',
                     members: 'Members',
-                    leaves: 'Leave Requests'
+                    leaves: 'Leave Requests',
+                    suggestions: 'Suggestions'
                 };
                 
                 const icons: Record<string, React.ReactNode> = {
@@ -1576,10 +1818,11 @@ const Admin: React.FC = () => {
                     winnerLogs: <Crown size={16} />,
                     users: <ShieldAlert size={16} />,
                     members: <User size={16} />,
-                    leaves: <Plane size={16} />
+                    leaves: <Plane size={16} />,
+                    suggestions: <MessageSquarePlus size={16} />
                 };
 
-                if (!isAdmin && !['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members'].includes(tabId)) {
+                if (!isAdmin && !['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members', 'suggestions'].includes(tabId)) {
                     return null;
                 }
 

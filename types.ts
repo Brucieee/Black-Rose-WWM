@@ -1,6 +1,4 @@
 
-
-
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -164,6 +162,16 @@ export interface LeaveRequest {
   endDate: string;
   timestamp: string;
   reason?: string;
+}
+
+export interface Suggestion {
+  id: string;
+  uid: string;
+  displayName: string;
+  type: 'Suggestion' | 'Complaint' | 'Bug' | 'Other';
+  content: string;
+  timestamp: string;
+  status: 'new' | 'read' | 'resolved';
 }
 
 export interface ArenaParticipant {

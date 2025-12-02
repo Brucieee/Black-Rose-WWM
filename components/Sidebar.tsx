@@ -16,12 +16,14 @@ import {
   Moon,
   Sun,
   Plane,
-  Trophy
+  Trophy,
+  MessageSquarePlus
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { FileLeaveModal } from './modals/FileLeaveModal';
+import { SuggestionModal } from './modals/SuggestionModal';
 
 const { NavLink } = ReactRouterDOM as any;
 
@@ -37,6 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { logout, currentUser } = useAuth();
   const [isFileLeaveModalOpen, setIsFileLeaveModalOpen] = useState(false);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
 
   useEffect(() => {
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -190,14 +193,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </button>
           )}
 
-          <NavLink 
-            to="/alliances" 
-            onClick={handleLinkClick}
-            className={({ isActive }: any) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
-          >
-            <Shield size={18} />
-            Alliances
-          </NavLink>
+          {userProfile && (
+            <button
+              onClick={() => setIsSuggestionModalOpen(true)}
+              className={`${navLinkClasses} w-full text-left hover:text-rose-400`}
+            >
+              <MessageSquarePlus size={18} />
+              Suggestions
+            </button>
+          )}
 
           <div className="mt-8 px-4 mb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
             <span>Guild Branches</span>
@@ -308,6 +312,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           guildName={userGuildName || ''}
         />
       )}
+
+      <SuggestionModal 
+        isOpen={isSuggestionModalOpen}
+        onClose={() => setIsSuggestionModalOpen(false)}
+        userProfile={userProfile}
+      />
     </>
   );
 };
