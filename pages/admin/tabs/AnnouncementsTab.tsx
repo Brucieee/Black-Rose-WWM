@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Announcement, Guild } from '../../../types';
 import { db } from '../../../services/firebase';
@@ -38,6 +37,13 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = ({ userProfile 
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // VALIDATION: Ensure a guild is selected if not global
+    if (!announcementForm.isGlobal && !announcementForm.targetGuildId) {
+        showAlert("Please select a target guild branch.", 'error');
+        return;
+    }
+
     try {
       const data = {
         title: announcementForm.title,
@@ -101,6 +107,7 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = ({ userProfile 
                         value={announcementForm.targetGuildId}
                         onChange={e => setAnnouncementForm({...announcementForm, targetGuildId: e.target.value})}
                         className="w-full p-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white"
+                        required={!announcementForm.isGlobal}
                         >
                             <option value="" className="text-zinc-900 dark:text-white bg-white dark:bg-zinc-800">Select Target Branch</option>
                             {guilds.map(g => <option key={g.id} value={g.id} className="text-zinc-900 dark:text-white bg-white dark:bg-zinc-800">{g.name}</option>)}
@@ -127,7 +134,13 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = ({ userProfile 
                             <div>
                                 <h4 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                                     {ann.title}
-                                    {ann.isGlobal && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">GLOBAL</span>}
+                                    {ann.isGlobal ? (
+                                        <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">GLOBAL</span>
+                                    ) : (
+                                        <span className="bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full uppercase">
+                                            {guilds.find(g => g.id === ann.guildId)?.name || 'Branch'}
+                                        </span>
+                                    )}
                                 </h4>
                                 <p className="text-xs text-zinc-500 mb-2">By {ann.authorName} • {new Date(ann.timestamp).toLocaleDateString()}</p>
                             </div>
