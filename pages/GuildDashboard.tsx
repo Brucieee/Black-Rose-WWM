@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
@@ -155,11 +154,14 @@ const GuildDashboard: React.FC = () => {
     setAnnouncements([]);
     
     // Fetch Announcements for this guild
+    // NOTE: Removed .orderBy("timestamp", "desc") to avoid composite index requirements on Firestore
     const unsubAnnouncements = db.collection("announcements")
       .where("guildId", "==", guildId)
-      .orderBy("timestamp", "desc")
       .onSnapshot(snap => {
-        setAnnouncements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement)));
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
+        // Sort client-side
+        data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setAnnouncements(data);
       });
 
     // Fetch Hero's Realm Config
