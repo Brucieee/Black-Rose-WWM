@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles } from 'lucide-react';
+import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles, Megaphone, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
 import { RichText } from '../components/RichText';
 import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
+import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
 
 const { Link, useNavigate } = ReactRouterDOM as any;
 
@@ -24,12 +25,14 @@ const Dashboard: React.FC = () => {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [globalAnnouncements, setGlobalAnnouncements] = useState<Announcement[]>([]);
+  const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
 
   const [breakingArmyConfig, setBreakingArmyConfig] = useState<BreakingArmyConfig | null>(null);
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
   const [selectedLeaderboardUser, setSelectedLeaderboardUser] = useState<UserProfile | null>(null);
 
   // Leaderboard Filters
@@ -38,30 +41,27 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     // Fetch Guilds
-    // FIX: Use Firebase v8 compat syntax
     const unsubGuilds = db.collection("guilds").onSnapshot(snap => {
       setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild)));
     });
 
-    // Fetch Events
+    // Fetch Events - removed slice(0,3) to allow scrolling more
     const unsubEvents = db.collection("events")
       .orderBy("date", "asc")
       .onSnapshot(snap => {
-        // Filter client side for future events (including today)
         const now = new Date();
-        now.setHours(0, 0, 0, 0); // Reset time to start of day to include today's events
+        now.setHours(0, 0, 0, 0); 
 
         const futureEvents = snap.docs
             .map(d => ({id: d.id, ...d.data()} as GuildEvent))
-            .filter(e => new Date(e.date) >= now)
-            .slice(0, 3);
+            .filter(e => new Date(e.date) >= now);
         setEvents(futureEvents);
       });
       
     // Fetch Leaderboard
     const unsubLeaderboard = db.collection("leaderboard")
       .orderBy("time", "asc")
-      .limit(50) // Increased limit to allow filtering on client side properly
+      .limit(50) 
       .onSnapshot(snap => {
         setLeaderboard(snap.docs.map(d => ({id: d.id, ...d.data()} as LeaderboardEntry)));
       });
@@ -77,10 +77,8 @@ const Dashboard: React.FC = () => {
 
     // Fetch Queue
     const unsubQueue = db.collection("queue").orderBy("joinedAt", "asc").onSnapshot(snap => {
-        // Cast data to QueueEntry, handling Date conversion if needed
         const qData = snap.docs.map(d => {
             const data = d.data();
-            // Ensure joinedAt is a Date object if it's a Timestamp
             const joinedAt = data.joinedAt?.toDate ? data.joinedAt.toDate() : new Date(data.joinedAt);
             return { ...data, joinedAt } as QueueEntry;
         });
@@ -92,7 +90,7 @@ const Dashboard: React.FC = () => {
         setUsers(snap.docs.map(d => d.data() as UserProfile));
     });
 
-    // Fetch Global Announcements
+    // Fetch Global Announcements - Limit 20 to allow scrolling
     const unsubAnnouncements = db.collection("announcements")
       .where("isGlobal", "==", true)
       .limit(20) 
@@ -100,13 +98,22 @@ const Dashboard: React.FC = () => {
          const data = snap.docs.map(d => ({id: d.id, ...d.data()} as Announcement));
          // Sort in memory (Newest first)
          data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-         setGlobalAnnouncements(data.slice(0, 5));
+         setGlobalAnnouncements(data);
       });
 
     return () => {
         unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers(); unsubAnnouncements(); unsubHeroConfig();
     };
   }, []);
+
+  // Carousel Auto-Slide
+  useEffect(() => {
+    if (globalAnnouncements.length <= 1) return;
+    const interval = setInterval(() => {
+        setCurrentAnnouncementIndex(prev => (prev + 1) % globalAnnouncements.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [globalAnnouncements.length]);
 
   useEffect(() => {
     if (currentUser && users.length > 0) {
@@ -125,8 +132,6 @@ const Dashboard: React.FC = () => {
   const heroSchedule = userGuildId && herosRealmConfig?.schedules?.[userGuildId]?.[0];
   const configuredBossNames = userGuildId && herosRealmConfig?.currentBosses?.[userGuildId];
   
-  // Resolve Boss Objects from Pool
-  // If configured in Admin, use those. If not, fallback to first 2 in pool.
   const heroBoss1Name = configuredBossNames?.[0] || breakingArmyConfig?.bossPool?.[0]?.name;
   const heroBoss2Name = configuredBossNames?.[1] || breakingArmyConfig?.bossPool?.[1]?.name;
   
@@ -138,7 +143,6 @@ const Dashboard: React.FC = () => {
 
   const isAdmin = currentUserProfile?.systemRole === 'Admin';
   
-  // Calculate Queue Position
   const myQueueIndex = currentUserProfile ? guildQueue.findIndex(q => q.uid === currentUserProfile.uid) : -1;
   const myQueuePosition = myQueueIndex !== -1 ? myQueueIndex + 1 : null;
 
@@ -157,7 +161,6 @@ const Dashboard: React.FC = () => {
         return;
     }
     
-    // Check if already in queue
     if (queue.some(q => q.uid === currentUserProfile.uid)) {
         showAlert("You are already in the queue.", 'error');
         return;
@@ -189,7 +192,6 @@ const Dashboard: React.FC = () => {
   };
 
   const handleMentionClick = (name: string) => {
-      // Find user by display name
       const targetUser = users.find(u => u.displayName.toLowerCase() === name.toLowerCase());
       if (targetUser) {
           setSelectedLeaderboardUser(targetUser);
@@ -215,15 +217,14 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // Filter Leaderboard Logic
-  const uniqueBosses = Array.from(new Set(leaderboard.map(l => l.boss))).sort();
-  const uniqueGuilds = Array.from(new Set(leaderboard.map(l => l.branch))).sort();
-
   const filteredLeaderboard = leaderboard.filter(entry => {
       const matchBoss = leaderboardFilterBoss === 'All' || entry.boss === leaderboardFilterBoss;
       const matchGuild = leaderboardFilterGuild === 'All' || entry.branch === leaderboardFilterGuild;
       return matchBoss && matchGuild;
-  }).slice(0, 5); // Limit to top 5 after filter
+  }).slice(0, 5); 
+
+  const uniqueBosses = Array.from(new Set(leaderboard.map(l => l.boss))).sort();
+  const uniqueGuilds = Array.from(new Set(leaderboard.map(l => l.branch))).sort();
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-6 space-y-8">
@@ -254,7 +255,6 @@ const Dashboard: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Breaking Army Card */}
                 <div className="relative rounded-xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-rose-950 to-black flex md:col-span-2 lg:col-span-1">
-                    {/* Adjusted width from w-48 to w-40 to give more space for text */}
                     <div className="w-40 relative overflow-hidden flex-shrink-0">
                         {currentBoss?.imageUrl ? (
                             <img 
@@ -269,7 +269,6 @@ const Dashboard: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    {/* Adjusted padding from p-4 to p-4 (unchanged) but parent width change helps. Added whitespace-nowrap to time */}
                     <div className="flex-1 p-4 flex flex-col justify-center text-white relative z-10 min-w-0">
                         <div className="mb-3">
                             <div className="text-rose-500 font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
@@ -306,11 +305,10 @@ const Dashboard: React.FC = () => {
 
                 {/* Hero's Realm Widget */}
                 <div className="relative rounded-xl overflow-hidden shadow-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 md:col-span-2 lg:col-span-1 min-h-[160px]">
-                    {/* Background Images Layer */}
                     <div className="absolute inset-0 flex">
                         <div className="w-1/2 relative h-full">
                             {heroBoss1?.imageUrl ? (
-                                <img src={heroBoss1.imageUrl} className="w-full h-full object-cover opacity-30 mask-image-linear-to-r-transparent" style={{ maskImage: 'linear-gradient(to right, black, transparent)' }} alt="Left Boss" />
+                                <img src={heroBoss1.imageUrl} className="w-full h-full object-cover opacity-30" style={{ maskImage: 'linear-gradient(to right, black, transparent)' }} alt="Left Boss" />
                             ) : (
                                 <div className="w-full h-full bg-purple-900/10 dark:bg-purple-900/20"></div>
                             )}
@@ -324,7 +322,6 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Content Layer */}
                     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center">
                         <div className="flex items-center gap-2 mb-2">
                              <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
@@ -351,79 +348,123 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Global Announcements */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
+            {/* Global Announcements - Carousel */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[280px]">
+                <div className="p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Globe className="text-blue-500" /> Global Announcements
                     </h3>
-                    {isAdmin && (
-                        <button 
-                            onClick={() => setIsAnnouncementModalOpen(true)}
-                            className="text-xs bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-2 py-1.5 rounded-lg text-zinc-600 dark:text-zinc-400 font-medium transition-colors"
+                </div>
+
+                <div className="relative flex-1 overflow-hidden group">
+                    {globalAnnouncements.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-zinc-500">
+                            No global announcements.
+                        </div>
+                    ) : (
+                        <div 
+                            className="flex h-full transition-transform duration-700 ease-in-out"
+                            style={{ transform: `translateX(-${currentAnnouncementIndex * 100}%)` }}
                         >
-                            + Post News
-                        </button>
+                            {globalAnnouncements.map((ann) => (
+                                <div 
+                                    key={ann.id} 
+                                    className="min-w-full h-full p-8 flex flex-col cursor-pointer"
+                                    onClick={() => setViewingAnnouncement(ann)}
+                                >
+                                    <div className="flex-1">
+                                        <h4 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 leading-tight">
+                                            {ann.title}
+                                        </h4>
+                                        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                                            <span className="flex items-center gap-1"><User size={14} /> {ann.authorName}</span>
+                                            <span>•</span>
+                                            <span>{new Date(ann.timestamp).toLocaleDateString()}</span>
+                                        </div>
+                                        <p className="text-zinc-600 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                                            {ann.content}
+                                        </p>
+                                    </div>
+                                    <div className="mt-4 flex justify-between items-center">
+                                         <div className="flex gap-1">
+                                            {globalAnnouncements.map((_, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                                                        idx === currentAnnouncementIndex 
+                                                        ? 'w-6 bg-blue-600' 
+                                                        : 'w-1.5 bg-zinc-300 dark:bg-zinc-700'
+                                                    }`}
+                                                />
+                                            ))}
+                                         </div>
+                                         <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline">
+                                            Read More <ArrowRight size={12} />
+                                         </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {globalAnnouncements.length > 1 && (
+                        <>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev - 1 + globalAnnouncements.length) % globalAnnouncements.length); }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200"
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev + 1) % globalAnnouncements.length); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200"
+                            >
+                                <ChevronRight size={20} />
+                            </button>
+                        </>
                     )}
                 </div>
-                
-                {globalAnnouncements.length === 0 ? (
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-4">No global announcements.</p>
-                ) : (
-                    <div className="space-y-4">
-                        {globalAnnouncements.map(ann => (
-                            <div key={ann.id} className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
-                                <div className="flex justify-between items-start mb-1">
-                                    <h4 className="font-bold text-zinc-900 dark:text-zinc-100">{ann.title}</h4>
-                                    <span className="text-xs text-zinc-400">{new Date(ann.timestamp).toLocaleDateString()}</span>
-                                </div>
-                                <RichText text={ann.content} className="text-sm text-zinc-600 dark:text-zinc-400 mt-2" onMentionClick={handleMentionClick} />
-                                <div className="mt-2 text-xs text-zinc-400 italic flex justify-end">
-                                    <span className="cursor-pointer hover:text-rose-500" onClick={() => handleMentionClick(ann.authorName)}>- {ann.authorName}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
             </div>
 
             {/* Recent Events */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-                    <Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Events
-                </h3>
-                <div className="space-y-4">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Calendar className="text-rose-900 dark:text-rose-500" /> Upcoming Events
+                    </h3>
+                    <Link to="/events" className="text-xs font-bold text-rose-900 dark:text-rose-500 hover:underline">
+                        View Calendar
+                    </Link>
+                </div>
+                
+                {/* Scrollable Container for Events */}
+                <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-3 pr-1">
                     {events.length === 0 ? (
                         <p className="text-zinc-500 text-center py-4">No upcoming events.</p>
                     ) : (
                         events.map(event => (
-                            <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                                <div className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                            <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group border border-transparent hover:border-zinc-100 dark:hover:border-zinc-800">
+                                <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                     {event.imageUrl ? (
                                         <img src={event.imageUrl} alt="Event" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="text-center p-2">
-                                            <span className="block text-[10px] font-bold text-rose-900 dark:text-rose-500 uppercase leading-none mb-1">{new Date(event.date).toLocaleDateString(undefined, {month: 'short'})}</span>
-                                            <span className="block text-2xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{new Date(event.date).getDate()}</span>
+                                        <div className="text-center p-1">
+                                            <span className="block text-[9px] font-bold text-rose-900 dark:text-rose-500 uppercase leading-none mb-0.5">{new Date(event.date).toLocaleDateString(undefined, {month: 'short'})}</span>
+                                            <span className="block text-xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{new Date(event.date).getDate()}</span>
                                         </div>
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h4 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors truncate">{event.title}</h4>
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-1">{event.description}</p>
-                                    <div className="flex gap-2 mt-2">
-                                        <span className="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded font-medium">{event.type}</span>
-                                        <span className="text-xs text-zinc-400 flex items-center gap-1"><Clock size={12} /> {new Date(event.date).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}</span>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-1">{event.description}</p>
+                                    <div className="flex gap-2 mt-1.5">
+                                        <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-1.5 py-0.5 rounded font-medium">{event.type}</span>
+                                        <span className="text-[10px] text-zinc-400 flex items-center gap-1"><Clock size={10} /> {new Date(event.date).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}</span>
                                     </div>
                                 </div>
                             </div>
                         ))
                     )}
-                </div>
-                <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-center">
-                    <Link to="/events" className="text-sm font-bold text-rose-900 dark:text-rose-500 hover:underline flex items-center justify-center gap-1">
-                        View Full Calendar <ArrowRight size={14} />
-                    </Link>
                 </div>
             </div>
         </div>
@@ -519,6 +560,12 @@ const Dashboard: React.FC = () => {
         onSubmit={handlePostGlobalAnnouncement}
         userProfile={currentUserProfile}
         forceGlobal={true}
+      />
+
+      <ViewAnnouncementModal 
+        isOpen={!!viewingAnnouncement}
+        onClose={() => setViewingAnnouncement(null)}
+        announcement={viewingAnnouncement}
       />
 
       <UserProfileModal 
