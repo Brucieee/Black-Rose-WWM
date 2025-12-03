@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
@@ -54,6 +53,14 @@ const GuildDashboard: React.FC = () => {
 
   // Global Party State
   const [userActiveParty, setUserActiveParty] = useState<Party | null>(null);
+
+  // Force re-render for countdown timers
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+      const interval = setInterval(() => setTick(t => t + 1), 1000);
+      return () => clearInterval(interval);
+  }, []);
 
   const [newPartyData, setNewPartyData] = useState({
     name: '',
@@ -299,7 +306,8 @@ const GuildDashboard: React.FC = () => {
                 name: currentUserProfile.displayName,
                 role: currentUserProfile.role,
                 photoURL: currentUserProfile.photoURL,
-            }]
+            }],
+            lastNotificationTime: Date.now() // Initial broadcast timestamp
         });
         await logAction('Create Party', `Created party: ${newPartyData.name} (${newPartyData.activity})`, currentUserProfile, 'Guild');
         setIsCreateModalOpen(false);
@@ -369,6 +377,23 @@ const GuildDashboard: React.FC = () => {
             await logAction('Leave Party', `Left party: ${party.name}`, currentUserProfile, 'Guild');
         }
     }
+  };
+
+  const handleBroadcast = async (party: Party) => {
+      const now = Date.now();
+      const last = party.lastNotificationTime || 0;
+      const cooldown = 60000; // 1 min
+
+      if (now - last < cooldown) return;
+
+      try {
+          await db.collection("parties").doc(party.id).update({
+              lastNotificationTime: now
+          });
+          showAlert("Broadcast sent! Notifying members...", 'success');
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
   };
 
   const kickMember = async (e: React.MouseEvent, party: Party, memberUid: string) => {
@@ -546,6 +571,18 @@ const GuildDashboard: React.FC = () => {
                         const isMember = currentUser && party.currentMembers.some(m => m.uid === currentUser.uid);
                         const isLeader = currentUser && party.leaderId === currentUser.uid;
                         
+                        // Cooldown Logic for Broadcast
+                        const now = Date.now();
+                        const lastBroadcast = party.lastNotificationTime || 0;
+                        const broadcastCooldown = 60000; // 1 min
+                        const canBroadcast = now - lastBroadcast >= broadcastCooldown;
+                        const remainingSecs = Math.ceil((broadcastCooldown - (now - lastBroadcast)) / 1000);
+
+                        // Other members names for display
+                        const otherMemberNames = party.currentMembers
+                            .filter(m => m.uid !== party.leaderId)
+                            .map(m => m.name);
+
                         return (
                         <div key={party.id} className="bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md hover:border-rose-900/30 dark:hover:border-rose-900/30 transition-all group">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
@@ -557,6 +594,11 @@ const GuildDashboard: React.FC = () => {
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
                                 <Crown size={14} className="text-yellow-500 flex-shrink-0" /> <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
                             </p>
+                            {otherMemberNames.length > 0 && (
+                                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
+                                    With: {otherMemberNames.join(", ")}
+                                </p>
+                            )}
                             </div>
                             
                             <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
@@ -565,12 +607,25 @@ const GuildDashboard: React.FC = () => {
                                     <span>{party.currentMembers.length} / {party.maxMembers}</span>
                                 </div>
                                 {isMember ? (
-                                    <button 
-                                        onClick={() => leaveParty(party)}
-                                        className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 whitespace-nowrap"
-                                    >
-                                        <LogOut size={14} /> {isLeader ? 'Disband' : 'Leave'}
-                                    </button>
+                                    <>
+                                        {isLeader && (
+                                            <button 
+                                                onClick={() => handleBroadcast(party)}
+                                                disabled={!canBroadcast}
+                                                className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[52px]"
+                                                title={canBroadcast ? "Broadcast Invite" : `Cooldown: ${remainingSecs}s`}
+                                            >
+                                                <Megaphone size={14} />
+                                                {!canBroadcast && <span className="text-[10px] ml-1 w-[14px] text-center">{remainingSecs}</span>}
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => leaveParty(party)}
+                                            className="bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 whitespace-nowrap"
+                                        >
+                                            <LogOut size={14} /> {isLeader ? 'Disband' : 'Leave'}
+                                        </button>
+                                    </>
                                 ) : (
                                     <button 
                                         onClick={() => handleJoinClick(party)}

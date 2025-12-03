@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../services/firebase';
 import { Party } from '../types';
@@ -18,7 +19,7 @@ export const PartyNotifier: React.FC<PartyNotifierProps> = ({ isMuted }) => {
   
   // Refs for managing state without re-renders inside listeners
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSoundTime = useRef<number>(0);
   
   // Create a ref for isMuted so the listener always sees the latest value
@@ -45,12 +46,26 @@ export const PartyNotifier: React.FC<PartyNotifierProps> = ({ isMuted }) => {
         }
 
         snapshot.docChanges().forEach(change => {
+            const party = { id: change.doc.id, ...change.doc.data() } as Party;
+            
+            // Avoid notifying for own party
+            if (party.leaderId === currentUser.uid) return;
+
+            let shouldNotify = false;
+
             if (change.type === 'added') {
-                const party = { id: change.doc.id, ...change.doc.data() } as Party;
-                // Avoid notifying for own party
-                if (party.leaderId !== currentUser.uid) {
-                    triggerNotification(party);
+                shouldNotify = true;
+            } 
+            else if (change.type === 'modified') {
+                // If modified, check if it was a Broadcast (lastNotificationTime changed recently)
+                const now = Date.now();
+                if (party.lastNotificationTime && (now - party.lastNotificationTime < 5000)) {
+                    shouldNotify = true;
                 }
+            }
+
+            if (shouldNotify) {
+                triggerNotification(party);
             }
         });
     });
@@ -67,6 +82,7 @@ export const PartyNotifier: React.FC<PartyNotifierProps> = ({ isMuted }) => {
 
       const now = Date.now();
       // Sound Logic: Check isMutedRef.current for the fresh value
+      // Debounce: Ensure we don't spam if multiple events happen instantly
       if (!isMutedRef.current && audioRef.current && (now - lastSoundTime.current > 1000)) {
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(e => console.warn("Audio play blocked by browser:", e));
@@ -99,6 +115,10 @@ export const PartyNotifier: React.FC<PartyNotifierProps> = ({ isMuted }) => {
 
   if (!notification) return null;
 
+  const otherMembers = notification.currentMembers
+    .filter(m => m.uid !== notification.leaderId)
+    .map(m => m.name);
+
   return (
     <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out transform ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-24 opacity-0 pointer-events-none'}`}>
         <div className="bg-zinc-900/90 dark:bg-white/90 backdrop-blur-md text-white dark:text-zinc-900 px-6 py-4 rounded-full shadow-2xl border border-zinc-700 dark:border-zinc-200 flex items-center gap-4 min-w-[320px] max-w-[90vw]">
@@ -123,6 +143,11 @@ export const PartyNotifier: React.FC<PartyNotifierProps> = ({ isMuted }) => {
                         {notification.currentMembers.length}/{notification.maxMembers}
                     </span>
                 </div>
+                {otherMembers.length > 0 && (
+                    <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1 truncate max-w-[200px]">
+                        with {otherMembers.join(", ")}
+                    </p>
+                )}
             </div>
 
             <div className="flex items-center gap-2 pl-4 border-l border-zinc-700 dark:border-zinc-300">

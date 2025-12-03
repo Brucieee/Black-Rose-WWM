@@ -1,3 +1,4 @@
+
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -100,6 +101,7 @@ export interface Party {
     role: RoleType;
     photoURL?: string;
   }[];
+  lastNotificationTime?: number;
 }
 
 export interface LeaderboardEntry {
