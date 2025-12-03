@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
@@ -72,16 +71,9 @@ const Register: React.FC = () => {
           if (docSnap.exists) {
             // Profile exists, they are fully registered
             setProfileExists(true);
-            // If they are on this page but have a profile, usually we redirect
-            // But let's fill the form just in case they are editing (though this page is mostly for new users)
-            const data = docSnap.data() as UserProfile;
-            setFormData(prev => ({
-               ...prev,
-               displayName: data.displayName,
-               role: data.role,
-               guildId: data.guildId,
-               inGameId: data.inGameId
-            }));
+            // Redirect to dashboard immediately if profile exists to prevent stuck in setup
+            navigate('/', { replace: true });
+            return; 
           } else {
             // Profile DOES NOT exist yet (New User)
             setProfileExists(false);
@@ -106,7 +98,7 @@ const Register: React.FC = () => {
     };
 
     checkUserProfile();
-  }, [currentUser, rulesAccepted]); // Re-run if rulesAccepted changes to allow flow to proceed
+  }, [currentUser, rulesAccepted, navigate]); // Added navigate to deps
 
   const getFirebaseErrorMessage = (code: string) => {
     switch (code) {
@@ -128,7 +120,7 @@ const Register: React.FC = () => {
       try {
         setIsRedirecting(true);
         await login(authEmail, authPass);
-        navigate('/', { replace: true });
+        // Navigation handled by useEffect when profile found
       } catch (error: any) {
         setIsRedirecting(false);
         const msg = getFirebaseErrorMessage(error.code);
@@ -290,7 +282,8 @@ const Register: React.FC = () => {
 
   const availableWeapons = getAvailableWeapons(formData.role);
 
-  if (isRedirecting) {
+  // Show loading while redirecting OR checking profile status
+  if (isRedirecting || isProfileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="flex flex-col items-center gap-4">
@@ -303,7 +296,7 @@ const Register: React.FC = () => {
 
   // Logic to determine what to render
   const showProfileForm = currentUser && (rulesAccepted || profileExists);
-  const showAuthForm = !currentUser;
+  // const showAuthForm = !currentUser; // Not used directly but implied by !showProfileForm
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
