@@ -124,6 +124,42 @@ const Dashboard: React.FC = () => {
     }
   }, [currentUser, users]);
 
+  // Automatic Daily Queue Reset (Midnight)
+  useEffect(() => {
+      if (queue.length === 0) return;
+
+      const performDailyReset = async () => {
+          const now = new Date();
+          // Reset time: Midnight (00:00) today
+          // Any entry before this time belongs to a previous day
+          const todayMidnight = new Date(now);
+          todayMidnight.setHours(0, 0, 0, 0);
+
+          const batch = db.batch();
+          let deleteCount = 0;
+
+          queue.forEach(q => {
+              const joinDate = new Date(q.joinedAt);
+              if (joinDate < todayMidnight) {
+                  const ref = db.collection("queue").doc(q.uid);
+                  batch.delete(ref);
+                  deleteCount++;
+              }
+          });
+
+          if (deleteCount > 0) {
+              try {
+                  await batch.commit();
+                  console.log(`Daily reset: Cleared ${deleteCount} expired queue entries.`);
+              } catch (err) {
+                  console.error("Failed to reset queue:", err);
+              }
+          }
+      };
+
+      performDailyReset();
+  }, [queue]);
+
   // Derived state for Breaking Army
   const userGuildId = currentUserProfile?.guildId;
   const currentBossName = userGuildId && breakingArmyConfig?.currentBoss ? breakingArmyConfig.currentBoss[userGuildId] : null;
@@ -241,7 +277,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Updated handler for new modal signature
-  const handlePostGlobalAnnouncement = async (data: { title: string, content: string, isGlobal: boolean, imageUrl: string }) => {
+  const handlePostGlobalAnnouncement = async (data: { title: string; content: string; isGlobal: boolean; imageUrl: string }) => {
       if (!currentUserProfile) return;
       try {
         const newAnnouncement = {

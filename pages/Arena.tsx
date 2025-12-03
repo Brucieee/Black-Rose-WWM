@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal, Menu } from 'lucide-react';
+import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal, Menu, Maximize2, Minimize2, Eye } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,6 +60,10 @@ const Arena: React.FC = () => {
 
   // Mobile Participant List Toggle
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Admin View State
+  const [adminSelectedMatch, setAdminSelectedMatch] = useState<ArenaMatch | null>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Confirmation Modal State
   const [confModal, setConfModal] = useState<{
@@ -97,38 +102,48 @@ const Arena: React.FC = () => {
     return uids;
   }, [matches]);
 
-  // Active Match for Current User
+  // Active Match logic
   const userActiveMatch = React.useMemo(() => {
+      if (adminSelectedMatch) return adminSelectedMatch;
       if (!currentUser) return null;
       return matches.find(m => !m.winner && (m.player1?.uid === currentUser.uid || m.player2?.uid === currentUser.uid));
-  }, [matches, currentUser]);
+  }, [matches, currentUser, adminSelectedMatch]);
 
-  // Calculate Tournament Winners (Top 3) - LIVE Calculation from Bracket State for display when tournament just finishes
+  // Calculate Tournament Winners (Top 4) - LIVE Calculation from Bracket State
   const getTournamentWinners = () => {
-      if (matches.length === 0) return { first: null, second: null, third: null };
+      if (matches.length === 0) return { first: null, second: null, third: null, fourth: null };
       
       const regularMatches = matches.filter(m => !m.isThirdPlace);
       const maxRound = Math.max(...regularMatches.map(m => m.round));
       const finalMatch = regularMatches.find(m => m.round === maxRound);
       const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
 
-      if (!finalMatch || !finalMatch.winner) return { first: null, second: null, third: null };
+      if (!finalMatch || !finalMatch.winner) return { first: null, second: null, third: null, fourth: null };
 
       const first = finalMatch.winner;
       const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
-      const third = thirdPlaceMatch?.winner || null;
+      
+      let third = null;
+      let fourth = null;
 
-      return { first, second, third };
+      if (thirdPlaceMatch && thirdPlaceMatch.winner) {
+          third = thirdPlaceMatch.winner;
+          fourth = thirdPlaceMatch.player1?.uid === third.uid ? thirdPlaceMatch.player2 : thirdPlaceMatch.player1;
+      }
+
+      return { first, second, third, fourth };
   };
 
-  const { first: liveFirst, second: liveSecond, third: liveThird } = getTournamentWinners();
+  const { first: liveFirst, second: liveSecond, third: liveThird, fourth: liveFourth } = getTournamentWinners();
   // Is the current live bracket finished?
   const isTournamentDone = !!liveFirst;
 
   useEffect(() => {
-    // Reset banner visibility when switching views or resetting
+    // Reset state when switching views
     setIsChampionBannerVisible(true);
-  }, [selectedId, matches]);
+    setAdminSelectedMatch(null);
+    setIsFullScreen(false);
+  }, [selectedId]);
 
   useEffect(() => {
     // Fetch Guilds
@@ -145,7 +160,7 @@ const Arena: React.FC = () => {
         setCustomTournaments(snap.docs.map(d => ({ id: d.id, ...d.data() } as CustomTournament)));
     });
     
-    // Fetch All Users (for manual add)
+    // Fetch All Users (for manual add & weapon lookup)
     const unsubAllUsers = db.collection("users").onSnapshot(snap => {
         setAllUsers(snap.docs.map(d => d.data() as UserProfile));
     });
@@ -206,6 +221,9 @@ const Arena: React.FC = () => {
       const first = finalMatch.winner;
       const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
       const third = thirdPlaceMatch?.winner || null;
+      const fourth = (thirdPlaceMatch && third) 
+          ? (thirdPlaceMatch.player1?.uid === third.uid ? thirdPlaceMatch.player2 : thirdPlaceMatch.player1) 
+          : null;
 
       const winners = [
           { rank: 1, uid: first.uid, displayName: first.displayName, photoURL: first.photoURL, wonAt: new Date().toISOString() }
@@ -216,6 +234,9 @@ const Arena: React.FC = () => {
       }
       if (third) {
           winners.push({ rank: 3, uid: third.uid, displayName: third.displayName, photoURL: third.photoURL, wonAt: new Date().toISOString() });
+      }
+      if (fourth) {
+          winners.push({ rank: 4, uid: fourth.uid, displayName: fourth.displayName, photoURL: fourth.photoURL, wonAt: new Date().toISOString() });
       }
 
       await db.collection("guilds").doc(selectedId).update({
@@ -374,7 +395,6 @@ const Arena: React.FC = () => {
         }
         
         batch.commit().then(() => {
-            // Animation only, no alert as requested
             setTimeout(() => setIsShuffling(false), 500); 
         });
     }, 600); 
@@ -548,15 +568,12 @@ const Arena: React.FC = () => {
   const handleUpdatePoints = async (uid: string, newPoints: number) => db.collection("arena_participants").doc(uid).update({ activityPoints: newPoints });
 
   const handleManualAddParticipant = async (user: UserProfile) => {
-      // Check if user is already a participant in this specific tournament/arena
       if (participants.some(p => p.uid === user.uid)) {
           showAlert("User is already in the participant list.", 'info');
           return;
       }
-      
       try {
           const docRef = isCustomMode ? db.collection("arena_participants").doc() : db.collection("arena_participants").doc(user.uid);
-          
           await docRef.set({
               uid: user.uid,
               displayName: user.displayName,
@@ -581,7 +598,6 @@ const Arena: React.FC = () => {
 
   const handleDeclareWinner = async (match: ArenaMatch, winner: ArenaParticipant) => {
     if (!canManage) return;
-    
     try {
         const batch = db.batch();
         const matchRef = db.collection("arena_matches").doc(match.id);
@@ -615,10 +631,7 @@ const Arena: React.FC = () => {
         let isChampion = false;
         if (!nextMatchQuery.empty) {
             const nextMatchDoc = nextMatchQuery.docs[0];
-            batch.update(nextMatchDoc.ref, {
-                [nextSlot]: winner,
-                winner: null
-            });
+            batch.update(nextMatchDoc.ref, { [nextSlot]: winner, winner: null });
         } else if (match.round === maxRoundNum) {
              isChampion = true;
         }
@@ -628,7 +641,6 @@ const Arena: React.FC = () => {
         if (!isCustomMode && (isChampion || match.isThirdPlace)) {
             setTimeout(() => saveGuildWinners(), 500); 
         }
-
     } catch (err: any) {
         showAlert(`Error updating bracket: ${err.message}`, 'error');
     }
@@ -651,7 +663,6 @@ const Arena: React.FC = () => {
     const data = e.dataTransfer.getData("application/json");
     if (!data) return;
     const droppedUser: ArenaParticipant = JSON.parse(data);
-    
     await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null });
   };
 
@@ -667,6 +678,11 @@ const Arena: React.FC = () => {
           default: return null;
       }
   };
+
+  // Helper to fetch full user profile including weapons
+  const getFullUserProfile = (uid: string) => {
+      return allUsers.find(u => u.uid === uid);
+  }
 
   const renderMatch = (match: ArenaMatch) => {
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
@@ -721,7 +737,17 @@ const Arena: React.FC = () => {
     const maxRound = regularMatches.length > 0 ? Math.max(...regularMatches.map(m => m.round)) : 3;
 
     return (
-        <div key={match.id} className="match-card match-card-3d relative flex items-center z-10 w-full mb-8 last:mb-0 perspective-container">
+        <div key={match.id} className="match-card match-card-3d relative flex flex-col items-center z-10 w-full mb-8 last:mb-0 perspective-container">
+            {/* Show VS Button for Admin */}
+            {canManage && match.player1 && match.player2 && (
+                <button 
+                    onClick={() => setAdminSelectedMatch(match)}
+                    className="mb-2 text-[10px] bg-zinc-800 text-zinc-400 hover:text-white hover:bg-rose-900 px-2 py-1 rounded flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                    <Eye size={10} /> Show VS
+                </button>
+            )}
+
             <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20`}>
                 {match.isThirdPlace && <div className="text-[10px] text-orange-600 dark:text-orange-500 text-center font-bold uppercase mb-1">3rd Place Match</div>}
                 {renderPlayer(match.player1, 'player1')}
@@ -761,23 +787,47 @@ const Arena: React.FC = () => {
   const firstPlace = arenaWinners.find(w => w.rank === 1) || (isTournamentDone ? liveFirst : null);
   const secondPlace = arenaWinners.find(w => w.rank === 2) || (isTournamentDone ? liveSecond : null);
   const thirdPlace = arenaWinners.find(w => w.rank === 3) || (isTournamentDone ? liveThird : null);
+  const fourthPlace = arenaWinners.find(w => w.rank === 4) || (isTournamentDone ? liveFourth : null);
 
   const hasWinners = !!firstPlace;
-  
-  // Logic Update: Show standard banner for Guilds OR Custom Tournaments without Grand Finale mode
   const showStandardBanner = hasWinners && (!isCustomMode || (isCustomMode && !selectedTournament?.hasGrandFinale));
-  
-  // Logic Update: Show overlay ONLY for Custom Tournaments with Grand Finale mode enabled
   const showOverlayBanner = hasWinners && isCustomMode && selectedTournament?.hasGrandFinale && isChampionBannerVisible;
 
-  // Render Logic for User Active Match Banner
+  // Render Logic for Active Match Banner (User or Admin Selected)
   const renderActiveMatchBanner = () => {
-      if (!userActiveMatch) return null;
-      const opponent = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player2 : userActiveMatch.player1;
-      const userPlayer = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player1 : userActiveMatch.player2;
+      // Prioritize Admin selection, otherwise show user match if available
+      const matchToShow = adminSelectedMatch || userActiveMatch;
+      if (!matchToShow) return null;
+
+      const isAdminView = !!adminSelectedMatch;
+      
+      const p1 = matchToShow.player1;
+      const p2 = matchToShow.player2;
+      
+      // If user view, align them to "YOU" side
+      const isUserP1 = p1?.uid === currentUser?.uid;
+      const userSidePlayer = isUserP1 ? p1 : p2;
+      const opponentSidePlayer = isUserP1 ? p2 : p1;
+
+      // If Admin view, strictly P1 vs P2
+      const leftPlayer = isAdminView ? p1 : userSidePlayer;
+      const rightPlayer = isAdminView ? p2 : opponentSidePlayer;
+
+      const leftProfile = leftPlayer ? getFullUserProfile(leftPlayer.uid) : null;
+      const rightProfile = rightPlayer ? getFullUserProfile(rightPlayer.uid) : null;
 
       return (
-          <div className="fixed bottom-0 left-0 right-0 z-40 w-full md:pl-64 h-36 md:h-44 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500">
+          <div className={`fixed bottom-0 left-0 right-0 z-40 w-full ${isFullScreen ? 'pl-0' : 'md:pl-64'} h-36 md:h-44 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500`}>
+              {/* Close Button for Admin View */}
+              {isAdminView && (
+                  <button 
+                    onClick={() => setAdminSelectedMatch(null)}
+                    className="absolute top-2 right-2 z-50 text-white/50 hover:text-white bg-black/20 hover:bg-black/50 p-1 rounded-full transition-colors"
+                  >
+                      <X size={16} />
+                  </button>
+              )}
+
               {/* Background Effects */}
               <div className="absolute inset-0 bg-gradient-to-r from-blue-950/60 via-black to-red-950/60 z-0"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-800/10 via-transparent to-transparent z-0"></div>
@@ -785,27 +835,34 @@ const Arena: React.FC = () => {
               {/* Main Content Container */}
               <div className="relative z-10 flex items-center justify-between h-full w-full max-w-[95%] mx-auto">
                   
-                  {/* Left Side: User */}
+                  {/* Left Side */}
                   <div className="flex-1 flex items-center justify-end gap-4 min-w-0 pr-4 md:pr-12 animate-in slide-in-from-left duration-700">
                       {/* Text Info */}
                       <div className="flex-col items-end hidden md:flex min-w-0 shrink">
-                          <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-4 py-1" title={userPlayer?.displayName}>
-                              {userPlayer?.displayName}
+                          <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-4 py-1" title={leftPlayer?.displayName}>
+                              {leftPlayer?.displayName || 'TBD'}
                           </h3>
                           <div className="flex items-center gap-2 mt-2">
-                              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">YOU</p>
-                              {getRoleBadge(userPlayer?.role)}
+                              {isAdminView ? (
+                                  <>
+                                    <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{leftProfile?.weapons?.slice(0, 1).join(" / ") || 'Unknown'}</span>
+                                    <div className="h-3 w-px bg-zinc-700"></div>
+                                  </>
+                              ) : (
+                                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">YOU</p>
+                              )}
+                              {getRoleBadge(leftPlayer?.role)}
                           </div>
                       </div>
                       
                       {/* Avatar */}
                       <div 
                         className="relative group shrink-0 cursor-pointer"
-                        onClick={() => userPlayer && handleViewProfile(userPlayer.uid)}
+                        onClick={() => leftPlayer && handleViewProfile(leftPlayer.uid)}
                       >
                           <div className="absolute -inset-3 bg-blue-500/20 rounded-full blur-xl group-hover:bg-blue-500/40 transition-all duration-500"></div>
                           <div className="relative w-16 h-16 md:w-28 md:h-28 rounded-full border-4 border-blue-500/50 group-hover:border-blue-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
-                              <img src={userPlayer?.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                              <img src={leftPlayer?.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
                           </div>
                       </div>
                   </div>
@@ -821,29 +878,36 @@ const Arena: React.FC = () => {
                       <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">Matchup</span>
                   </div>
 
-                  {/* Right Side: Opponent */}
+                  {/* Right Side */}
                   <div className="flex-1 flex items-center justify-start gap-4 min-w-0 pl-4 md:pl-12 animate-in slide-in-from-right duration-700">
-                      {opponent ? (
+                      {rightPlayer ? (
                           <>
                               {/* Avatar */}
                               <div 
                                 className="relative group shrink-0 cursor-pointer"
-                                onClick={() => handleViewProfile(opponent.uid)}
+                                onClick={() => handleViewProfile(rightPlayer.uid)}
                               >
                                   <div className="absolute -inset-3 bg-red-500/20 rounded-full blur-xl group-hover:bg-red-500/40 transition-all duration-500"></div>
                                   <div className="relative w-16 h-16 md:w-28 md:h-28 rounded-full border-4 border-red-500/50 group-hover:border-red-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
-                                      <img src={opponent.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                                      <img src={rightPlayer.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
                                   </div>
                               </div>
 
                               {/* Text Info */}
                               <div className="flex-col items-start hidden md:flex min-w-0 shrink">
-                                  <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-4 py-1" title={opponent.displayName}>
-                                      {opponent.displayName}
+                                  <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-4 py-1" title={rightPlayer.displayName}>
+                                      {rightPlayer.displayName}
                                   </h3>
                                   <div className="flex items-center gap-2 mt-2">
-                                      {getRoleBadge(opponent.role)}
-                                      <p className="text-[10px] text-red-500 font-bold uppercase tracking-[0.2em]">OPPONENT</p>
+                                      {getRoleBadge(rightPlayer.role)}
+                                      {isAdminView ? (
+                                          <>
+                                            <div className="h-3 w-px bg-zinc-700"></div>
+                                            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{rightProfile?.weapons?.slice(0, 1).join(" / ") || 'Unknown'}</span>
+                                          </>
+                                      ) : (
+                                          <p className="text-[10px] text-red-500 font-bold uppercase tracking-[0.2em]">OPPONENT</p>
+                                      )}
                                   </div>
                               </div>
                           </>
@@ -854,7 +918,7 @@ const Arena: React.FC = () => {
                               </div>
                               <div className="flex-col items-start hidden md:flex">
                                   <h3 className="font-bold text-zinc-500 text-xl uppercase italic tracking-wider">Waiting...</h3>
-                                  <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mt-1">Searching for opponent</p>
+                                  <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mt-1">Searching</p>
                               </div>
                           </div>
                       )}
@@ -865,97 +929,100 @@ const Arena: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className={`min-h-screen bg-zinc-50 dark:bg-zinc-950 ${isFullScreen ? 'fixed inset-0 z-50' : ''}`}>
       
       {/* Main Container with dynamic height to accommodate fixed banner */}
-      <div className={`p-4 w-full flex flex-col relative overflow-hidden transition-all duration-300 ${userActiveMatch ? 'h-[calc(100vh-144px)] md:h-[calc(100vh-176px)]' : 'h-[calc(100vh-64px)]'}`}>
-        <div className="flex justify-between items-start mb-2">
-          <div>
-              <div className="flex items-center gap-3">
-                  <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-2 bg-zinc-100 dark:bg-zinc-800 rounded">
-                      <Menu size={18} />
-                  </button>
-                  <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                      <Swords className="text-rose-900" size={24} />
-                      {isCustomMode ? selectedTournament?.title : 'Arena Tournament'}
-                  </h1>
-                  {isCustomMode && canDeleteCustom && (
-                      <button 
-                          onClick={handleDeleteTournament}
-                          className="text-zinc-400 hover:text-red-500 transition-colors p-2"
-                          title="Delete Tournament"
-                      >
-                          <Trash2 size={16} />
-                      </button>
-                  )}
-              </div>
-          </div>
-          <div className="flex items-center gap-4">
-              <div className="flex gap-2 items-center overflow-x-auto custom-scrollbar pb-1 max-w-[40vw] lg:max-w-[60vw]">
-                  {guilds.map(g => (
-                      <button
-                          key={g.id}
-                          onClick={() => setSelectedId(g.id)}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all ${
-                              selectedId === g.id 
-                              ? 'bg-rose-900 text-white shadow-lg shadow-rose-900/20' 
-                              : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
-                          }`}
-                      >
-                          {g.name}
-                      </button>
-                  ))}
-                  
-                  <div className="w-px h-6 bg-zinc-300 dark:bg-zinc-700 mx-1"></div>
+      <div className={`p-4 w-full flex flex-col relative overflow-hidden transition-all duration-300 ${isFullScreen ? 'h-screen' : (userActiveMatch || adminSelectedMatch ? 'h-[calc(100vh-144px)] md:h-[calc(100vh-176px)]' : 'h-[calc(100vh-64px)]')}`}>
+        
+        {!isFullScreen && (
+            <div className="flex justify-between items-start mb-2">
+            <div>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-2 bg-zinc-100 dark:bg-zinc-800 rounded">
+                        <Menu size={18} />
+                    </button>
+                    <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Swords className="text-rose-900" size={24} />
+                        {isCustomMode ? selectedTournament?.title : 'Arena Tournament'}
+                    </h1>
+                    {isCustomMode && canDeleteCustom && (
+                        <button 
+                            onClick={handleDeleteTournament}
+                            className="text-zinc-400 hover:text-red-500 transition-colors p-2"
+                            title="Delete Tournament"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    )}
+                </div>
+            </div>
+            <div className="flex items-center gap-4">
+                <div className="flex gap-2 items-center overflow-x-auto custom-scrollbar pb-1 max-w-[40vw] lg:max-w-[60vw]">
+                    {guilds.map(g => (
+                        <button
+                            key={g.id}
+                            onClick={() => setSelectedId(g.id)}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all ${
+                                selectedId === g.id 
+                                ? 'bg-rose-900 text-white shadow-lg shadow-rose-900/20' 
+                                : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                            }`}
+                        >
+                            {g.name}
+                        </button>
+                    ))}
+                    
+                    <div className="w-px h-6 bg-zinc-300 dark:bg-zinc-700 mx-1"></div>
 
-                  {customTournaments.map(t => (
-                      <button
-                          key={t.id}
-                          onClick={() => setSelectedId(t.id)}
-                          className={`px-3 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 ${
-                              selectedId === t.id 
-                              ? 'bg-purple-900 text-white shadow-lg shadow-purple-900/20' 
-                              : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
-                          }`}
-                      >
-                          <Globe size={12} /> {t.title}
-                      </button>
-                  ))}
+                    {customTournaments.map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setSelectedId(t.id)}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all flex items-center gap-2 ${
+                                selectedId === t.id 
+                                ? 'bg-purple-900 text-white shadow-lg shadow-purple-900/20' 
+                                : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                            }`}
+                        >
+                            <Globe size={12} /> {t.title}
+                        </button>
+                    ))}
 
-                  {userProfile?.systemRole === 'Admin' && (
-                      <button 
-                          onClick={() => setIsCreateTourneyModalOpen(true)}
-                          className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700 p-1.5 rounded-lg transition-colors flex-shrink-0"
-                          title="Create Custom Tournament"
-                      >
-                          <Plus size={16} />
-                      </button>
-                  )}
-              </div>
+                    {userProfile?.systemRole === 'Admin' && (
+                        <button 
+                            onClick={() => setIsCreateTourneyModalOpen(true)}
+                            className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-700 p-1.5 rounded-lg transition-colors flex-shrink-0"
+                            title="Create Custom Tournament"
+                        >
+                            <Plus size={16} />
+                        </button>
+                    )}
+                </div>
 
-              {canManage && (
-                  <div className="flex gap-2 flex-shrink-0">
-                      <button 
-                          onClick={() => setIsSettingsModalOpen(true)}
-                          className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
-                          title="Arena Settings"
-                      >
-                          <Settings size={18} />
-                      </button>
-                      <button 
-                          onClick={() => setIsInitModalOpen(true)}
-                          className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
-                          title="Setup Bracket"
-                      >
-                          <RefreshCw size={18} />
-                      </button>
-                  </div>
-              )}
-          </div>
-        </div>
+                {canManage && (
+                    <div className="flex gap-2 flex-shrink-0">
+                        <button 
+                            onClick={() => setIsSettingsModalOpen(true)}
+                            className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                            title="Arena Settings"
+                        >
+                            <Settings size={18} />
+                        </button>
+                        <button 
+                            onClick={() => setIsInitModalOpen(true)}
+                            className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                            title="Setup Bracket"
+                        >
+                            <RefreshCw size={18} />
+                        </button>
+                    </div>
+                )}
+            </div>
+            </div>
+        )}
 
         {/* Guild Winners Banner - Top (Standard Mode) */}
-        {showStandardBanner && (
+        {!isFullScreen && showStandardBanner && (
             <div className="mb-4 relative overflow-hidden rounded-xl bg-gradient-to-r from-zinc-900 to-black p-[2px] shadow-lg border border-zinc-800 max-h-[180px] flex-shrink-0">
                 <div className="bg-zinc-950 px-4 pt-10 pb-4 rounded-[10px] flex items-center justify-center relative overflow-hidden h-full">
                     
@@ -963,7 +1030,7 @@ const Arena: React.FC = () => {
                     <Sparkles className="absolute top-4 left-10 text-yellow-500/20" size={24} />
                     <Sparkles className="absolute bottom-4 right-10 text-yellow-500/20" size={40} />
 
-                    <div className="relative z-10 flex items-end gap-6 md:gap-16 scale-90 origin-bottom">
+                    <div className="relative z-10 flex items-end gap-4 md:gap-12 scale-90 origin-bottom">
                         
                         {secondPlace && (
                             <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(secondPlace.uid)}>
@@ -995,6 +1062,16 @@ const Arena: React.FC = () => {
                                 <h3 className="font-bold text-zinc-300 text-xs md:text-sm mt-3">{thirdPlace.displayName}</h3>
                             </div>
                         )}
+
+                        {fourthPlace && (
+                            <div className="flex flex-col items-center group cursor-pointer opacity-80 hover:opacity-100 transition-opacity" onClick={() => handleViewProfile(fourthPlace.uid)}>
+                                <div className="relative mb-1 scale-90">
+                                    <img src={fourthPlace.photoURL || 'https://via.placeholder.com/150'} className="w-16 h-16 md:w-20 md:h-20 rounded-full border-4 border-zinc-600 object-cover shadow-lg" />
+                                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-zinc-600 text-white text-xs font-bold px-2 py-0.5 rounded-full border-2 border-white shadow-md">#4</div>
+                                </div>
+                                <h3 className="font-bold text-zinc-400 text-xs md:text-sm mt-3">{fourthPlace.displayName}</h3>
+                            </div>
+                        )}
                     </div>
 
                     {canManage && (
@@ -1012,183 +1089,186 @@ const Arena: React.FC = () => {
 
         {/* Main Container - Responsive Layout */}
         <div className="flex flex-col lg:flex-row flex-1 gap-6 overflow-hidden min-h-0 relative">
-          {/* Sidebar - Collapsible on Mobile */}
-          <div className={`
-              absolute lg:relative z-20 h-full w-full lg:w-80 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300
-              ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          `}>
-              {/* Mobile Close Button */}
-              <button 
-                  onClick={() => setIsSidebarOpen(false)} 
-                  className="lg:hidden absolute top-2 right-2 p-2 text-zinc-500"
-              >
-                  <X size={20} />
-              </button>
+          
+          {/* Sidebar - Collapsible on Mobile, Hidden on Fullscreen */}
+          {!isFullScreen && (
+            <div className={`
+                absolute lg:relative z-20 h-full w-full lg:w-80 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300
+                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
+                {/* Mobile Close Button */}
+                <button 
+                    onClick={() => setIsSidebarOpen(false)} 
+                    className="lg:hidden absolute top-2 right-2 p-2 text-zinc-500"
+                >
+                    <X size={20} />
+                </button>
 
-              {canManage && pendingParticipants.length > 0 && (
-                  <div className="border-b-4 border-zinc-100 dark:border-zinc-950 bg-rose-50 dark:bg-rose-900/10 flex-shrink-0">
-                      <div className="p-3 flex items-center justify-between">
-                          <h3 className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                              <Clock size={12} /> Pending Approval
-                          </h3>
-                          <span className="text-xs font-bold bg-white dark:bg-zinc-800 px-1.5 rounded text-rose-600">{pendingParticipants.length}</span>
-                      </div>
-                      <div className="max-h-40 overflow-y-auto custom-scrollbar px-3 pb-3 space-y-2">
-                          {pendingParticipants.map(p => (
-                              <div key={p.uid} className="bg-white dark:bg-zinc-900 p-2 rounded-lg border border-rose-100 dark:border-rose-900/30 shadow-sm">
-                                  <div className="flex items-center gap-2 mb-1">
-                                      <img src={p.photoURL || 'https://via.placeholder.com/150'} className="w-5 h-5 rounded-full" />
-                                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{p.displayName}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs text-zinc-500 flex items-center gap-1">
-                                          Points: <strong className="text-zinc-700 dark:text-zinc-300">{p.activityPoints}</strong>
-                                          <button onClick={()=>setEditingPointsParticipant(p)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1"><Edit2 size={10} /></button>
-                                      </span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                      <button onClick={() => handleApprove(p.uid)} className="flex-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs py-1 rounded font-bold transition-colors">Approve</button>
-                                      <button onClick={() => handleDeny(p.uid)} className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 text-xs py-1 rounded font-medium transition-colors">Deny</button>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              )}
-
-              <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                          <Users size={18} /> Participants
-                      </h3>
-                      {canManage && (
-                          <button 
-                              onClick={() => setIsAddParticipantModalOpen(true)}
-                              className="text-xs bg-rose-900 text-white hover:bg-rose-950 px-2 py-1 rounded transition-colors font-bold ml-2"
-                              title="Manually Add Participant"
-                          >
-                              + Add Member
-                          </button>
-                      )}
-                  </div>
-                  <span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full font-mono text-zinc-500">{approvedParticipants.length}</span>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative">
-                  {isShuffling && (
-                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 z-20 flex items-center justify-center backdrop-blur-[1px]">
-                        <div className="flex flex-col items-center animate-pulse">
-                            <Shuffle className="text-rose-900 dark:text-rose-500 animate-spin" size={32} />
-                            <span className="text-xs font-bold mt-2 text-rose-900 dark:text-rose-500">SHUFFLING...</span>
+                {canManage && pendingParticipants.length > 0 && (
+                    <div className="border-b-4 border-zinc-100 dark:border-zinc-950 bg-rose-50 dark:bg-rose-900/10 flex-shrink-0">
+                        <div className="p-3 flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                                <Clock size={12} /> Pending Approval
+                            </h3>
+                            <span className="text-xs font-bold bg-white dark:bg-zinc-800 px-1.5 rounded text-rose-600">{pendingParticipants.length}</span>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto custom-scrollbar px-3 pb-3 space-y-2">
+                            {pendingParticipants.map(p => (
+                                <div key={p.uid} className="bg-white dark:bg-zinc-900 p-2 rounded-lg border border-rose-100 dark:border-rose-900/30 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <img src={p.photoURL || 'https://via.placeholder.com/150'} className="w-5 h-5 rounded-full" />
+                                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{p.displayName}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs text-zinc-500 flex items-center gap-1">
+                                            Points: <strong className="text-zinc-700 dark:text-zinc-300">{p.activityPoints}</strong>
+                                            <button onClick={()=>setEditingPointsParticipant(p)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1"><Edit2 size={10} /></button>
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleApprove(p.uid)} className="flex-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs py-1 rounded font-bold transition-colors">Approve</button>
+                                        <button onClick={() => handleDeny(p.uid)} className="flex-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 text-xs py-1 rounded font-medium transition-colors">Deny</button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                  )}
+                )}
 
-                  {approvedParticipants.map((p, idx) => {
-                      const isAssigned = assignedParticipantUids.has(p.uid);
-                      const canDrag = canManage && !isAssigned;
-                      const animDelay = `${idx * 0.05}s`;
-                      
-                      return (
-                          <div 
-                              key={p.uid}
-                              draggable={canDrag}
-                              onDragStart={(e) => handleDragStart(e, p)}
-                              style={{ animationDelay: isShuffling ? animDelay : '0s' }}
-                              className={`flex items-center gap-3 p-2 rounded-lg border transition-all group relative 
-                                  ${isAssigned 
-                                    ? 'bg-zinc-50 dark:bg-zinc-800 opacity-50 border-transparent' 
-                                    : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-rose-900 shadow-sm'
-                                  } 
-                                  ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}
-                                  ${isShuffling ? 'animate-shuffle' : ''}
-                              `}
-                          >
-                              <img src={p.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700" alt={p.displayName} />
-                              <div className="flex flex-col min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{p.displayName}</span>
-                                      {getRoleBadge(p.role)}
-                                  </div>
-                                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                                    {guilds.find(g => g.id === p.originalGuildId || g.id === p.guildId)?.name || 'Custom'}
-                                  </span>
-                                  {!isCustomMode && (
-                                      <span className="text-[10px] text-zinc-400 mt-0.5">{p.activityPoints} pts</span>
-                                  )}
-                              </div>
-                              {canManage && (
-                                  <button 
-                                      onClick={() => handleRemoveParticipant(p.uid, p.displayName)}
-                                      className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                                      title="Remove Participant"
-                                  >
-                                      <Trash2 size={14} />
-                                  </button>
-                              )}
-                          </div>
-                      );
-                  })}
-                  {approvedParticipants.length === 0 && (
-                      <p className="text-center text-zinc-400 text-sm py-4">No approved participants.</p>
-                  )}
-              </div>
-
-              <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-2 bg-zinc-50 dark:bg-zinc-900/50 flex-shrink-0">
-                  {!isCustomMode && (
-                      <>
-                          {!currentUserParticipant ? (
-                              <button 
-                                  onClick={() => {
-                                      if (!currentUser) {
-                                          showAlert("Please sign in first.", 'error');
-                                          return;
-                                      }
-                                      if (!userProfile) {
-                                          showAlert("Please create a profile first.", 'error');
-                                          navigate('/register');
-                                          return;
-                                      }
-                                      setIsJoinModalOpen(true);
-                                  }}
-                                  className="w-full py-2 bg-rose-900 text-white rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2 text-sm"
-                              >
-                                  <Shield size={16} /> Join Tournament
-                              </button>
-                          ) : currentUserParticipant.status === 'pending' ? (
-                              <button disabled className="w-full py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-700 text-sm">
-                                  <Clock size={16} /> Pending Approval
-                              </button>
-                          ) : currentUserParticipant.status === 'denied' ? (
-                              <div className="flex flex-col gap-2">
-                                  <button disabled className="w-full py-2 bg-transparent text-red-600 dark:text-red-500 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-red-200 dark:border-red-900/50 text-sm">
-                                      <AlertCircle size={16} /> Entry Denied
-                                  </button>
-                                  <button onClick={() => setIsJoinModalOpen(true)} className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 underline">Update Points & Re-apply</button>
-                              </div>
-                          ) : (
-                              <button onClick={handleLeaveArena} className="w-full py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-white rounded-lg font-bold hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2 text-sm">
-                                  <LogOut size={16} /> Leave Arena
-                              </button>
-                          )}
-                      </>
-                  )}
-
-                  {canManage && (
-                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-                        <button onClick={handleShuffleClick} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
-                            <Shuffle size={12} className={isShuffling ? "animate-spin" : ""} /> Shuffle
-                        </button>
-                        <button onClick={handleManualReset} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
-                            <RefreshCw size={12} /> Reset Bracket
-                        </button>
-                        <button onClick={handleClearAllParticipants} className="col-span-2 text-xs flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2 rounded border border-red-100 dark:border-red-900/30 transition-colors">
-                            <UserMinus size={12} /> Remove All Participants
-                        </button>
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <Users size={18} /> Participants
+                        </h3>
+                        {canManage && (
+                            <button 
+                                onClick={() => setIsAddParticipantModalOpen(true)}
+                                className="text-xs bg-rose-900 text-white hover:bg-rose-950 px-2 py-1 rounded transition-colors font-bold ml-2"
+                                title="Manually Add Participant"
+                            >
+                                + Add Member
+                            </button>
+                        )}
                     </div>
-                  )}
-              </div>
-          </div>
+                    <span className="text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full font-mono text-zinc-500">{approvedParticipants.length}</span>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative">
+                    {isShuffling && (
+                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 z-20 flex items-center justify-center backdrop-blur-[1px]">
+                            <div className="flex flex-col items-center animate-pulse">
+                                <Shuffle className="text-rose-900 dark:text-rose-500 animate-spin" size={32} />
+                                <span className="text-xs font-bold mt-2 text-rose-900 dark:text-rose-500">SHUFFLING...</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {approvedParticipants.map((p, idx) => {
+                        const isAssigned = assignedParticipantUids.has(p.uid);
+                        const canDrag = canManage && !isAssigned;
+                        const animDelay = `${idx * 0.05}s`;
+                        
+                        return (
+                            <div 
+                                key={p.uid}
+                                draggable={canDrag}
+                                onDragStart={(e) => handleDragStart(e, p)}
+                                style={{ animationDelay: isShuffling ? animDelay : '0s' }}
+                                className={`flex items-center gap-3 p-2 rounded-lg border transition-all group relative 
+                                    ${isAssigned 
+                                        ? 'bg-zinc-50 dark:bg-zinc-800 opacity-50 border-transparent' 
+                                        : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-rose-900 shadow-sm'
+                                    } 
+                                    ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}
+                                    ${isShuffling ? 'animate-shuffle' : ''}
+                                `}
+                            >
+                                <img src={p.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700" alt={p.displayName} />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{p.displayName}</span>
+                                        {getRoleBadge(p.role)}
+                                    </div>
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                        {guilds.find(g => g.id === p.originalGuildId || g.id === p.guildId)?.name || 'Custom'}
+                                    </span>
+                                    {!isCustomMode && (
+                                        <span className="text-[10px] text-zinc-400 mt-0.5">{p.activityPoints} pts</span>
+                                    )}
+                                </div>
+                                {canManage && (
+                                    <button 
+                                        onClick={() => handleRemoveParticipant(p.uid, p.displayName)}
+                                        className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Remove Participant"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                    {approvedParticipants.length === 0 && (
+                        <p className="text-center text-zinc-400 text-sm py-4">No approved participants.</p>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col gap-2 bg-zinc-50 dark:bg-zinc-900/50 flex-shrink-0">
+                    {!isCustomMode && (
+                        <>
+                            {!currentUserParticipant ? (
+                                <button 
+                                    onClick={() => {
+                                        if (!currentUser) {
+                                            showAlert("Please sign in first.", 'error');
+                                            return;
+                                        }
+                                        if (!userProfile) {
+                                            showAlert("Please create a profile first.", 'error');
+                                            navigate('/register');
+                                            return;
+                                        }
+                                        setIsJoinModalOpen(true);
+                                    }}
+                                    className="w-full py-2 bg-rose-900 text-white rounded-lg font-bold hover:bg-rose-950 transition-colors shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <Shield size={16} /> Join Tournament
+                                </button>
+                            ) : currentUserParticipant.status === 'pending' ? (
+                                <button disabled className="w-full py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-700 text-sm">
+                                    <Clock size={16} /> Pending Approval
+                                </button>
+                            ) : currentUserParticipant.status === 'denied' ? (
+                                <div className="flex flex-col gap-2">
+                                    <button disabled className="w-full py-2 bg-transparent text-red-600 dark:text-red-500 rounded-lg font-bold cursor-not-allowed flex items-center justify-center gap-2 border border-red-200 dark:border-red-900/50 text-sm">
+                                        <AlertCircle size={16} /> Entry Denied
+                                    </button>
+                                    <button onClick={() => setIsJoinModalOpen(true)} className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 underline">Update Points & Re-apply</button>
+                                </div>
+                            ) : (
+                                <button onClick={handleLeaveArena} className="w-full py-2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-white rounded-lg font-bold hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2 text-sm">
+                                    <LogOut size={16} /> Leave Arena
+                                </button>
+                            )}
+                        </>
+                    )}
+
+                    {canManage && (
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+                            <button onClick={handleShuffleClick} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
+                                <Shuffle size={12} className={isShuffling ? "animate-spin" : ""} /> Shuffle
+                            </button>
+                            <button onClick={handleManualReset} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
+                                <RefreshCw size={12} /> Reset Bracket
+                            </button>
+                            <button onClick={handleClearAllParticipants} className="col-span-2 text-xs flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2 rounded border border-red-100 dark:border-red-900/30 transition-colors">
+                                <UserMinus size={12} /> Remove All Participants
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+          )}
 
           {/* Bracket Container - Takes up remaining space */}
           <div 
@@ -1199,10 +1279,15 @@ const Arena: React.FC = () => {
                   <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                       <Trophy size={18} className="text-rose-900 dark:text-rose-500" /> Tournament Bracket
                   </h3>
-                  {arenaMinPoints > 0 && !isCustomMode && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
+                  {arenaMinPoints > 0 && !isCustomMode && !isFullScreen && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
               </div>
 
               <div className="absolute top-16 right-4 z-20 flex flex-col gap-2 bg-white dark:bg-zinc-800 p-2 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700">
+                  {canManage && (
+                      <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded text-zinc-700 dark:text-zinc-300" title={isFullScreen ? "Exit Full Screen" : "Full Screen"}>
+                          {isFullScreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                      </button>
+                  )}
                   <button onClick={zoomIn} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded text-zinc-700 dark:text-zinc-300"><Plus size={20} /></button>
                   <button onClick={zoomOut} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded text-zinc-700 dark:text-zinc-300"><Minus size={20} /></button>
                   <div className="h-px bg-zinc-200 dark:bg-zinc-700 my-1"></div>

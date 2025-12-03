@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import { Guild, BreakingArmyConfig, Boss, UserProfile, ScheduleSlot } from '../../../types';
 import { db } from '../../../services/firebase';
 import { useAlert } from '../../../contexts/AlertContext';
 import { TimePicker } from '../../../components/TimePicker';
 import { AddBossModal } from '../../../components/modals/AddBossModal';
-import { Plus, Trash2, X, Clock, Edit2 } from 'lucide-react';
+import { Plus, Trash2, X, Clock, Edit2, RotateCcw, Users } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/modals/ConfirmationModal';
+import { logAction } from '../../../services/auditLogger';
 
 interface BreakingArmyTabProps {
   userProfile: UserProfile;
@@ -28,6 +29,9 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
 
   const [isAddBossModalOpen, setIsAddBossModalOpen] = useState(false);
   const [bossForm, setBossForm] = useState({ name: '', imageUrl: '' });
+
+  // Confirmation State
+  const [confirmAction, setConfirmAction] = useState<{ isOpen: boolean; title: string; message: string; action: () => Promise<void> }>({ isOpen: false, title: '', message: '', action: async () => {} });
 
   const isAdmin = userProfile.systemRole === 'Admin';
   const isOfficer = userProfile.systemRole === 'Officer';
@@ -101,6 +105,7 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
 
       const newMap = { ...schedulesMap, [selectedBranchId]: newScheds };
       await db.collection("system").doc("breakingArmy").update({ schedules: newMap });
+      await logAction('Update Schedule', `Updated Breaking Army schedule for branch ${selectedBranchId}`, userProfile, 'System');
       
       // Reset form
       setNewScheduleDay('Wednesday');
@@ -120,6 +125,37 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
       setNewScheduleTime({ hour: '8', minute: '00', ampm: 'PM' });
   };
 
+  // Reset Actions
+  const handleResetQueue = () => {
+      setConfirmAction({
+          isOpen: true,
+          title: "Reset Queue?",
+          message: "This will remove all players from the Breaking Army queue for this branch. This action cannot be undone.",
+          action: async () => {
+              const batch = db.batch();
+              const qSnap = await db.collection("queue").where("guildId", "==", selectedBranchId).get();
+              qSnap.forEach(doc => batch.delete(doc.ref));
+              await batch.commit();
+              await logAction('Reset Queue', `Manually reset Breaking Army queue for branch ${selectedBranchId}`, userProfile, 'Queue');
+              showAlert("Queue cleared.", 'success');
+          }
+      });
+  };
+
+  const handleResetSchedule = () => {
+      setConfirmAction({
+          isOpen: true,
+          title: "Clear Schedule?",
+          message: "This will remove ALL configured run times for this branch.",
+          action: async () => {
+              const newMap = { ...schedulesMap, [selectedBranchId]: [] };
+              await db.collection("system").doc("breakingArmy").update({ schedules: newMap });
+              await logAction('Clear Schedule', `Cleared Breaking Army schedule for branch ${selectedBranchId}`, userProfile, 'System');
+              showAlert("Schedule cleared.", 'success');
+          }
+      });
+  };
+
   // Sort logic for display
   const dayOrder: Record<string, number> = { 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 7 };
   const currentBranchSchedules = schedulesMap[selectedBranchId] || [];
@@ -135,7 +171,27 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Configuration */}
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <h3 className="text-lg font-bold mb-6 text-zinc-900 dark:text-zinc-100">Configuration</h3>
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Configuration</h3>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={handleResetQueue} 
+                        disabled={!selectedBranchId}
+                        className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        title="Clear Queue"
+                    >
+                        <Users size={14} /> Clear Queue
+                    </button>
+                    <button 
+                        onClick={handleResetSchedule} 
+                        disabled={!selectedBranchId}
+                        className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        title="Clear Schedule"
+                    >
+                        <RotateCcw size={14} /> Reset Sched
+                    </button>
+                </div>
+            </div>
             
             <div className="mb-6">
                 <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Select Branch to Configure</label>
@@ -162,6 +218,7 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
                             onChange={async (e) => {
                                 const newMap = { ...currentBossMap, [selectedBranchId]: e.target.value };
                                 await db.collection("system").doc("breakingArmy").update({ currentBoss: newMap });
+                                await logAction('Change Boss', `Changed active Breaking Army boss to ${e.target.value || 'None'} for branch ${selectedBranchId}`, userProfile, 'System');
                             }}
                             className="w-full p-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white"
                         >
@@ -277,6 +334,14 @@ export const BreakingArmyTab: React.FC<BreakingArmyTabProps> = ({ userProfile })
             </div>
         )}
         <AddBossModal isOpen={isAddBossModalOpen} onClose={() => setIsAddBossModalOpen(false)} data={bossForm} onChange={setBossForm} onSubmit={handleAddBoss} />
+        
+        <ConfirmationModal 
+            isOpen={confirmAction.isOpen}
+            onClose={() => setConfirmAction({ ...confirmAction, isOpen: false })}
+            onConfirm={confirmAction.action}
+            title={confirmAction.title}
+            message={confirmAction.message}
+        />
     </div>
   );
 };
