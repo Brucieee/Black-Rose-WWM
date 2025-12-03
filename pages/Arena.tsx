@@ -1312,7 +1312,9 @@ const Arena: React.FC = () => {
                         
                         <div className="mt-4 flex flex-col items-center gap-2">
                             <p className="text-2xl text-yellow-500 font-bold uppercase tracking-[0.3em] text-center drop-shadow-md">
-                                {guilds.find(g => g.id === firstPlace.originalGuildId || g.id === firstPlace.guildId)?.name || 'Unknown Guild'}
+                                {'guildId' in firstPlace 
+                                    ? guilds.find(g => g.id === firstPlace.originalGuildId || g.id === firstPlace.guildId)?.name || 'Unknown Guild'
+                                    : guilds.find(g => g.id === selectedId)?.name || 'Unknown Guild'}
                             </p>
                             <div className="w-24 h-1 bg-gradient-to-r from-transparent via-yellow-500 to-transparent mt-2"></div>
                             <p className="text-white/60 font-medium tracking-wider text-sm uppercase mt-1">Tournament Winner</p>

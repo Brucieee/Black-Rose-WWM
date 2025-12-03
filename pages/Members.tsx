@@ -91,7 +91,7 @@ const Members: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-4 h-4" />
             <input 
               type="text" 
-              placeholder="Find agent..." 
+              placeholder="Find member..." 
               className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-rose-500/50 outline-none text-zinc-900 dark:text-zinc-100 transition-all placeholder:text-zinc-400"
               value={search}
               onChange={e => setSearch(e.target.value)}

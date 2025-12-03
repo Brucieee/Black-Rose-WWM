@@ -17,7 +17,7 @@ import 'firebase/compat/firestore';
 const { useParams, useNavigate, Link } = ReactRouterDOM as any;
 
 function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>();
+  const ref = useRef<T | undefined>(undefined);
   useEffect(() => {
     ref.current = value;
   });
@@ -434,7 +434,7 @@ const GuildDashboard: React.FC = () => {
                                 >
                                     {ann.imageUrl && (
                                         <>
-                                            <img src={ann.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />
+                                            <img src={ann.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" alt="" />
                                             <div className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-zinc-900 dark:via-zinc-900/90 dark:to-zinc-900/20"></div>
                                         </>
                                     )}

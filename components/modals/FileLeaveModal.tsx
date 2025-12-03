@@ -21,6 +21,7 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFlying, setIsFlying] = useState(false);
 
   const isValidDate = (dateStr: string) => {
       const d = new Date(dateStr);
@@ -48,7 +49,13 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
     }
 
     setIsSubmitting(true);
+    // Trigger Animation
+    setIsFlying(true);
+
     try {
+      // Small delay to let animation start visually before async op
+      await new Promise(r => setTimeout(r, 100));
+
       await db.collection("leaves").add({
         uid: userProfile.uid,
         displayName: userProfile.displayName,
@@ -60,25 +67,44 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
         reason: reason,
         timestamp: new Date().toISOString()
       });
-      showAlert("Leave request filed successfully.", 'success');
-      setStartDate('');
-      setEndDate('');
-      setReason('');
-      onClose();
+
+      // Wait for animation to finish (approx 1s)
+      setTimeout(() => {
+          setIsFlying(false);
+          setIsSubmitting(false);
+          setStartDate('');
+          setEndDate('');
+          setReason('');
+          onClose();
+          showAlert("Leave request filed successfully.", 'success');
+      }, 900);
+
     } catch (error: any) {
       console.error("Error filing leave:", error);
-      showAlert(`Failed to file leave: ${error.message}`, 'error');
-    } finally {
+      setIsFlying(false);
       setIsSubmitting(false);
+      showAlert(`Failed to file leave: ${error.message}`, 'error');
     }
   };
+
+  // If currently flying, we render a special minimized version that flies
+  if (isFlying) {
+      return (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+              <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 p-4 rounded-full shadow-2xl flex items-center gap-2 animate-fly-up-out border-2 border-white/10 dark:border-zinc-200">
+                  <Plane size={24} className="fill-current transform -rotate-45" />
+                  <span className="font-bold whitespace-nowrap">Filing Request...</span>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-sm">
       <div className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="bg-zinc-100 dark:bg-zinc-800 p-3 rounded-full">
-            <Plane className="w-6 h-6 text-zinc-900 dark:text-zinc-100" />
+            <Plane className="w-6 h-6 text-zinc-900 dark:text-zinc-100 transform -rotate-45" />
           </div>
           <div>
             <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">File Leave</h3>

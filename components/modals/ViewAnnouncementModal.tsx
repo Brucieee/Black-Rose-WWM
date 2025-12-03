@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BaseModal } from './BaseModal';
 import { Announcement } from '../../types';
@@ -19,7 +18,7 @@ export const ViewAnnouncementModal: React.FC<ViewAnnouncementModalProps> = ({
   if (!announcement) return null;
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-2xl" hideCloseButton={true}>
+    <BaseModal isOpen={isOpen} onClose={onClose} className="max-w-4xl" hideCloseButton={true}>
       <div className="p-6">
         <div className="mb-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
             <div className="flex items-start justify-between gap-4">
@@ -43,8 +42,8 @@ export const ViewAnnouncementModal: React.FC<ViewAnnouncementModalProps> = ({
         </div>
 
         {announcement.imageUrl && (
-            <div className="w-full h-64 rounded-xl overflow-hidden mb-6 bg-zinc-100 dark:bg-zinc-800">
-                <img src={announcement.imageUrl} className="w-full h-full object-cover" alt="Announcement" />
+            <div className="w-full h-auto max-h-[70vh] rounded-xl overflow-hidden mb-6 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border border-zinc-200 dark:border-zinc-700">
+                <img src={announcement.imageUrl} className="w-full h-full object-contain" alt="Announcement" />
             </div>
         )}
 
