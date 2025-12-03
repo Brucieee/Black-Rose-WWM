@@ -13,6 +13,7 @@ import { RichText } from '../components/RichText';
 import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
+import { logAction } from '../services/auditLogger';
 
 const { useParams, useNavigate, Link } = ReactRouterDOM as any;
 
@@ -299,6 +300,7 @@ const GuildDashboard: React.FC = () => {
                 photoURL: currentUserProfile.photoURL,
             }]
         });
+        await logAction('Create Party', `Created party: ${newPartyData.name} (${newPartyData.activity})`, currentUserProfile, 'Guild');
         setIsCreateModalOpen(false);
         setNewPartyData({ name: '', activity: 'Raid', maxMembers: 5 });
         showAlert("Party created!", 'success');
@@ -337,6 +339,7 @@ const GuildDashboard: React.FC = () => {
         }),
         memberUids: firebase.firestore.FieldValue.arrayUnion(currentUserProfile.uid)
     });
+    await logAction('Join Party', `Joined party: ${party.name}`, currentUserProfile, 'Guild');
   };
 
   const leaveParty = async (party: Party) => {
@@ -350,6 +353,7 @@ const GuildDashboard: React.FC = () => {
             "As the leader, leaving will disband the party for everyone. Are you sure?",
             async () => {
                 await partyRef.delete();
+                await logAction('Disband Party', `Disbanded party: ${party.name}`, currentUserProfile, 'Guild');
                 showAlert("Party disbanded.", 'info');
             }
         );
@@ -361,6 +365,7 @@ const GuildDashboard: React.FC = () => {
                 currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove),
                 memberUids: firebase.firestore.FieldValue.arrayRemove(currentUserProfile.uid)
             });
+            await logAction('Leave Party', `Left party: ${party.name}`, currentUserProfile, 'Guild');
         }
     }
   };
@@ -380,6 +385,7 @@ const GuildDashboard: React.FC = () => {
                     currentMembers: firebase.firestore.FieldValue.arrayRemove(memberToRemove),
                     memberUids: firebase.firestore.FieldValue.arrayRemove(memberUid)
                 });
+                if(currentUserProfile) await logAction('Kick Party Member', `Kicked ${memberToRemove.name} from party: ${party.name}`, currentUserProfile, 'Guild');
                 showAlert("Member kicked.", 'info');
             }
         }

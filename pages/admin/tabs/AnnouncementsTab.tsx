@@ -4,6 +4,7 @@ import { db } from '../../../services/firebase';
 import { useAlert } from '../../../contexts/AlertContext';
 import { ImageUpload } from '../../../components/ImageUpload';
 import { Edit, Trash2 } from 'lucide-react';
+import { logAction } from '../../../services/auditLogger';
 
 interface AnnouncementsTabProps {
   userProfile: UserProfile;
@@ -58,10 +59,12 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = ({ userProfile 
 
       if (editingAnnouncement) {
           await db.collection("announcements").doc(editingAnnouncement.id).update(data);
+          await logAction('Edit Announcement', `Edited announcement: ${announcementForm.title}`, userProfile, 'Announcement');
           setEditingAnnouncement(null);
           showAlert("Announcement updated.", 'success');
       } else {
           await db.collection("announcements").add(data);
+          await logAction('Post Announcement', `Posted announcement: ${announcementForm.title}`, userProfile, 'Announcement');
           showAlert("Announcement posted.", 'success');
       }
       setAnnouncementForm({ title: '', content: '', isGlobal: isAdmin, imageUrl: '', targetGuildId: isAdmin ? '' : userProfile.guildId });
@@ -157,6 +160,7 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = ({ userProfile 
                                 }} className="text-zinc-300 hover:text-blue-500"><Edit size={16} /></button>
                                 <button onClick={async () => {
                                     await db.collection("announcements").doc(ann.id).delete();
+                                    await logAction('Delete Announcement', `Deleted announcement: ${ann.title}`, userProfile, 'Announcement');
                                     showAlert("Deleted.", 'info');
                                 }} className="text-zinc-300 hover:text-red-500"><Trash2 size={16} /></button>
                             </div>

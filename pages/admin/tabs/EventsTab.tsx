@@ -1,12 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import { Calendar, Trash2, Clock, ChevronDown } from 'lucide-react';
+import { Calendar, Trash2, Clock, ChevronDown, Edit } from 'lucide-react';
 import { Guild, GuildEvent, UserProfile } from '../../../types';
 import { db } from '../../../services/firebase';
 import { useAlert } from '../../../contexts/AlertContext';
 import { ImageUpload } from '../../../components/ImageUpload';
 import { ConfirmationModal } from '../../../components/modals/ConfirmationModal';
 import { TimePicker } from '../../../components/TimePicker';
+import { logAction } from '../../../services/auditLogger';
 
 interface EventsTabProps {
   userProfile: UserProfile;
@@ -22,6 +22,8 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
   const [eventForm, setEventForm] = useState({
     title: '', description: '', type: 'Raid', customType: '', guildId: '', imageUrl: ''
   });
+  
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   
   const [deleteConf, setDeleteConf] = useState<{ isOpen: boolean; action: () => Promise<void> }>({ isOpen: false, action: async () => {} });
 
@@ -46,27 +48,88 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
       return `${h.toString().padStart(2, '0')}:${minute}`;
   };
 
-  const handleCreateEvent = async (e: React.FormEvent) => {
+  const resetForm = () => {
+      setEventForm({ title: '', description: '', type: 'Raid', customType: '', guildId: isOfficer ? userProfile.guildId : '', imageUrl: '' });
+      setEventDateInput('');
+      setEventTimeInput({ hour: '8', minute: '00', ampm: 'PM' });
+      setEditingEventId(null);
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
       e.preventDefault();
       const finalType = eventForm.type === 'Other' ? eventForm.customType : eventForm.type;
       const dateStr = `${eventDateInput}T${convertTo24Hour(eventTimeInput.hour, eventTimeInput.minute, eventTimeInput.ampm)}:00`;
       
       if (isOfficer && (!eventForm.guildId || eventForm.guildId !== userProfile.guildId)) {
-          showAlert("You can only create events for your branch.", "error");
+          showAlert("You can only create/edit events for your branch.", "error");
           return;
       }
 
-      await db.collection("events").add({
+      const eventData = {
           title: eventForm.title,
           description: eventForm.description,
           type: finalType,
           guildId: eventForm.guildId,
           imageUrl: eventForm.imageUrl,
           date: new Date(dateStr).toISOString()
-      });
+      };
+
+      try {
+          if (editingEventId) {
+              await db.collection("events").doc(editingEventId).update(eventData);
+              await logAction('Edit Event', `Updated event: ${eventForm.title}`, userProfile, 'Event');
+              showAlert("Event updated.", 'success');
+          } else {
+              await db.collection("events").add(eventData);
+              await logAction('Create Event', `Created event: ${eventForm.title}`, userProfile, 'Event');
+              showAlert("Event created.", 'success');
+          }
+          resetForm();
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
+  const handleEditClick = (event: GuildEvent) => {
+      const isGlobal = !event.guildId || event.guildId === 'global';
       
-      setEventForm({ ...eventForm, title: '', description: '', imageUrl: '' });
-      showAlert("Event created.", 'success');
+      // Permission Check
+      if (isOfficer && isGlobal) {
+          showAlert("Officers cannot edit global events.", "error");
+          return;
+      }
+      if (isOfficer && event.guildId !== userProfile?.guildId) {
+          showAlert("You can only edit events for your branch.", "error");
+          return;
+      }
+
+      setEditingEventId(event.id);
+      
+      // Parse Date
+      const d = new Date(event.date);
+      setEventDateInput(d.toISOString().split('T')[0]);
+      
+      let h = d.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12;
+      h = h ? h : 12;
+      
+      setEventTimeInput({
+          hour: h.toString(),
+          minute: d.getMinutes().toString().padStart(2, '0'),
+          ampm
+      });
+
+      const isStandardType = standardEventTypes.includes(event.type);
+
+      setEventForm({
+          title: event.title,
+          description: event.description,
+          type: isStandardType ? event.type : 'Other',
+          customType: isStandardType ? '' : event.type,
+          guildId: event.guildId || '',
+          imageUrl: event.imageUrl || ''
+      });
   };
 
   const handleDeleteEvent = async (event: GuildEvent) => {
@@ -84,6 +147,8 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
           isOpen: true,
           action: async () => {
               await db.collection("events").doc(event.id).delete();
+              await logAction('Delete Event', `Deleted event: ${event.title}`, userProfile, 'Event');
+              if (editingEventId === event.id) resetForm();
               showAlert("Event deleted.", 'info');
           }
       });
@@ -91,11 +156,12 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 h-fit shadow-sm">
+        <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 h-fit shadow-sm sticky top-6">
             <h3 className="text-lg font-bold mb-6 text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Calendar size={20} className="text-rose-900 dark:text-rose-500" /> Create Event
+                <Calendar size={20} className="text-rose-900 dark:text-rose-500" /> 
+                {editingEventId ? 'Edit Event' : 'Create Event'}
             </h3>
-            <form onSubmit={handleCreateEvent} className="space-y-5">
+            <form onSubmit={handleSaveEvent} className="space-y-5">
                 <div>
                     <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Event Title</label>
                     <input 
@@ -188,9 +254,20 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
                     />
                 </div>
 
-                <button type="submit" className="w-full bg-rose-900 text-white py-3 rounded-lg font-bold shadow-lg shadow-rose-900/20 hover:bg-rose-950 transition-colors">
-                    Create Event
-                </button>
+                <div className="flex gap-2">
+                    {editingEventId && (
+                        <button 
+                            type="button" 
+                            onClick={resetForm}
+                            className="flex-1 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 py-3 rounded-lg font-bold hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    )}
+                    <button type="submit" className="flex-1 bg-rose-900 text-white py-3 rounded-lg font-bold shadow-lg shadow-rose-900/20 hover:bg-rose-950 transition-colors">
+                        {editingEventId ? 'Update Event' : 'Create Event'}
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -203,10 +280,15 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
             ) : (
                 events.map(event => {
                     const isGlobal = !event.guildId || event.guildId === 'global';
-                    const canDelete = isAdmin || (isOfficer && !isGlobal && event.guildId === userProfile.guildId);
+                    // Can delete logic: Admin OR (Officer AND NOT Global AND Own Branch)
+                    const canManage = isAdmin || (isOfficer && !isGlobal && event.guildId === userProfile.guildId);
 
                     return (
-                    <div key={event.id} className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex gap-4 transition-all hover:border-zinc-300 dark:hover:border-zinc-700">
+                    <div key={event.id} className={`bg-white dark:bg-zinc-900 p-4 rounded-xl border transition-all flex gap-4 ${
+                        editingEventId === event.id 
+                        ? 'border-rose-500 dark:border-rose-500 ring-1 ring-rose-500' 
+                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm'
+                    }`}>
                         <div className="w-24 h-24 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex-shrink-0 overflow-hidden border border-zinc-200 dark:border-zinc-700">
                             {event.imageUrl ? (
                                 <img src={event.imageUrl} className="w-full h-full object-cover" />
@@ -225,8 +307,23 @@ export const EventsTab: React.FC<EventsTabProps> = ({ userProfile }) => {
                                     }`}>
                                         {isGlobal ? 'Global' : guilds.find(g => g.id === event.guildId)?.name || 'Branch'}
                                     </span>
-                                    {canDelete && (
-                                        <button onClick={() => handleDeleteEvent(event)} className="text-zinc-300 hover:text-red-500 p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"><Trash2 size={16} /></button>
+                                    {canManage && (
+                                        <>
+                                            <button 
+                                                onClick={() => handleEditClick(event)} 
+                                                className="text-zinc-300 hover:text-blue-500 p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                                title="Edit Event"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteEvent(event)} 
+                                                className="text-zinc-300 hover:text-red-500 p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                                title="Delete Event"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>

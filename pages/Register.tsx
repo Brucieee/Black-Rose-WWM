@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild } from '../types';
+import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Edit2, AlertTriangle, Building2, Facebook, Mail, Lock, User, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
@@ -9,11 +8,12 @@ import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
+import { RulesModal } from '../components/modals/RulesModal';
 
 const { useNavigate } = ReactRouterDOM as any;
 
 const Register: React.FC = () => {
-  const { currentUser, signInWithGoogle, login, signup } = useAuth();
+  const { currentUser, signInWithGoogle, login, signup, logout } = useAuth();
   const [guilds, setGuilds] = useState<Guild[]>([]);
   
   const navigate = useNavigate();
@@ -23,6 +23,11 @@ const Register: React.FC = () => {
   const [authEmail, setAuthEmail] = useState('');
   const [authPass, setAuthPass] = useState('');
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Rules Modal State
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+  const [rulesAccepted, setRulesAccepted] = useState(false);
+  const [pendingSignup, setPendingSignup] = useState(false); // To track if we need to run signup after rules
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -39,9 +44,12 @@ const Register: React.FC = () => {
   const [isGuildModalOpen, setIsGuildModalOpen] = useState(false);
   const [tempSelectedGuild, setTempSelectedGuild] = useState<Guild | null>(null);
 
+  // Profile Existence Check State
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [profileExists, setProfileExists] = useState(false);
+
   useEffect(() => {
     const fetchGuilds = async () => {
-      // FIX: Use Firebase v8 compat syntax
       const q = db.collection("guilds").orderBy("name");
       const snapshot = await q.get();
       const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
@@ -50,16 +58,53 @@ const Register: React.FC = () => {
     fetchGuilds();
   }, []);
 
+  // Monitor Current User & Profile Status
   useEffect(() => {
-    if (currentUser) {
-      setFormData(prev => ({ ...prev, displayName: currentUser.displayName || '' }));
-      if (currentUser.photoURL) {
-          if (PRESET_AVATARS.includes(currentUser.photoURL)) {
-             setSelectedAvatar(currentUser.photoURL);
+    const checkUserProfile = async () => {
+      if (currentUser) {
+        setIsProfileLoading(true);
+        try {
+          const docRef = db.collection("users").doc(currentUser.uid);
+          const docSnap = await docRef.get();
+          
+          if (docSnap.exists) {
+            // Profile exists, they are fully registered
+            setProfileExists(true);
+            // If they are on this page but have a profile, usually we redirect
+            // But let's fill the form just in case they are editing (though this page is mostly for new users)
+            const data = docSnap.data() as UserProfile;
+            setFormData(prev => ({
+               ...prev,
+               displayName: data.displayName,
+               role: data.role,
+               guildId: data.guildId,
+               inGameId: data.inGameId
+            }));
+          } else {
+            // Profile DOES NOT exist yet (New User)
+            setProfileExists(false);
+            
+            // Prefill email name
+            setFormData(prev => ({ ...prev, displayName: currentUser.displayName || '' }));
+            if (currentUser.photoURL && PRESET_AVATARS.includes(currentUser.photoURL)) {
+                setSelectedAvatar(currentUser.photoURL);
+            }
+
+            // TRIGGER RULES IF NOT ACCEPTED YET
+            if (!rulesAccepted) {
+               setIsRulesModalOpen(true);
+            }
           }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setIsProfileLoading(false);
+        }
       }
-    }
-  }, [currentUser]);
+    };
+
+    checkUserProfile();
+  }, [currentUser, rulesAccepted]); // Re-run if rulesAccepted changes to allow flow to proceed
 
   const getFirebaseErrorMessage = (code: string) => {
     switch (code) {
@@ -72,20 +117,58 @@ const Register: React.FC = () => {
     }
   };
 
+  // Called when "Join the Ranks" (Signup) or "Sign In" is clicked
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      if (isLoginMode) {
-        setIsRedirecting(true); // Set loading immediately to prevent flash
+    
+    if (isLoginMode) {
+      // Login Flow: No rules needed here, just login. Profile check happens in useEffect.
+      try {
+        setIsRedirecting(true);
         await login(authEmail, authPass);
         navigate('/', { replace: true });
-      } else {
-        await signup(authEmail, authPass);
+      } catch (error: any) {
+        setIsRedirecting(false);
+        const msg = getFirebaseErrorMessage(error.code);
+        showAlert(msg, 'error', "Login Failed");
       }
-    } catch (error: any) {
-      setIsRedirecting(false); // Reset on error
-      const msg = getFirebaseErrorMessage(error.code);
-      showAlert(msg, 'error', isLoginMode ? "Login Failed" : "Sign Up Failed");
+    } else {
+      // Signup Flow: Show Rules First
+      setPendingSignup(true);
+      setIsRulesModalOpen(true);
+    }
+  };
+
+  // Called when Rules Modal is Confirmed
+  const handleRulesConfirm = async () => {
+    setRulesAccepted(true);
+    setIsRulesModalOpen(false);
+
+    // If we were waiting to signup via Email/Pass
+    if (pendingSignup) {
+      try {
+        await signup(authEmail, authPass);
+        setPendingSignup(false);
+        // Auth success will trigger useEffect -> checkUserProfile -> show Profile Form
+      } catch (error: any) {
+        const msg = getFirebaseErrorMessage(error.code);
+        showAlert(msg, 'error', "Sign Up Failed");
+        setPendingSignup(false);
+        setRulesAccepted(false); // Reset so they have to accept again if they retry
+      }
+    }
+    // If it was Google Sign In, the user is already authenticated (currentUser exists).
+    // Setting rulesAccepted=true will cause the Profile Form to be revealed by the render logic below.
+  };
+
+  // Called when Rules Modal is Cancelled/Declined
+  const handleRulesDecline = async () => {
+    setIsRulesModalOpen(false);
+    setPendingSignup(false);
+    // If they were already signed in (Google flow) but declined rules, log them out
+    if (currentUser && !profileExists) {
+        await logout();
+        showAlert("You must accept the guild rules to join.", 'info');
     }
   };
 
@@ -207,6 +290,14 @@ const Register: React.FC = () => {
     );
   }
 
+  // Logic to determine what to render
+  const showProfileForm = currentUser && (rulesAccepted || profileExists);
+  const showAuthForm = !currentUser;
+
+  // Note: if currentUser exists BUT rulesAccepted is false and profileExists is false,
+  // we show a loading or empty state behind the modal, or the auth form (hidden by modal).
+  // In this case, we'll keep the background but `RulesModal` will be overlaying.
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       
@@ -217,7 +308,7 @@ const Register: React.FC = () => {
       </div>
 
       <div className="w-full max-w-4xl relative z-10">
-        {!currentUser ? (
+        {!showProfileForm ? (
           /* --- LOGIN / SIGNUP CARD --- */
           <div className="max-w-md mx-auto w-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
             
@@ -301,9 +392,13 @@ const Register: React.FC = () => {
               <div className="space-y-3">
                 <button 
                   onClick={async () => {
-                      setIsRedirecting(true);
-                      await signInWithGoogle();
-                      navigate('/');
+                      // For Google, we allow Auth FIRST, then check if rules needed in useEffect
+                      try {
+                        await signInWithGoogle();
+                        // If success, useEffect will handle rule check for new users
+                      } catch (err) {
+                        // Error handled in context/alert
+                      }
                   }} 
                   className="w-full flex items-center justify-center gap-3 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors font-medium text-sm group"
                 >
@@ -507,6 +602,12 @@ const Register: React.FC = () => {
         message="This selection is final. If you wish to change your branch later, you will need to contact an Officer or Admin."
         confirmText="Confirm Branch"
         type="warning"
+      />
+
+      <RulesModal 
+        isOpen={isRulesModalOpen}
+        onClose={handleRulesDecline}
+        onConfirm={handleRulesConfirm}
       />
     </div>
   );

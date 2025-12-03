@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Guild } from '../../../types';
 import { db } from '../../../services/firebase';
@@ -6,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useAlert } from '../../../contexts/AlertContext';
 import { ConfirmationModal } from '../../../components/modals/ConfirmationModal';
 import { Trash2 } from 'lucide-react';
+import { logAction } from '../../../services/auditLogger';
 
 interface MembersTabProps {
   userProfile: UserProfile;
@@ -82,6 +82,7 @@ export const MembersTab: React.FC<MembersTabProps> = ({ userProfile }) => {
                                                     message: "This will remove the user from the guild branch. They will need to rejoin.",
                                                     action: async () => {
                                                         await db.collection("users").doc(u.uid).update({ guildId: '', systemRole: 'Member' });
+                                                        await logAction('Kick Member', `Kicked member ${u.displayName} from guild`, userProfile, 'Member');
                                                         showAlert(`${u.displayName} kicked.`, 'info');
                                                     }
                                                 });

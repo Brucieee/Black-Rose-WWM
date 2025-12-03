@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles, Megaphone, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
@@ -11,6 +10,7 @@ import { QueueModal } from '../components/modals/QueueModal';
 import { RichText } from '../components/RichText';
 import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
 import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
+import { logAction } from '../services/auditLogger';
 
 const { Link, useNavigate } = ReactRouterDOM as any;
 
@@ -221,6 +221,7 @@ const Dashboard: React.FC = () => {
             guildId: userGuildId,
             joinedAt: new Date()
         });
+        await logAction('Join Queue', `Joined Breaking Army queue for ${currentBossName}`, currentUserProfile, 'Queue');
         showAlert("Joined queue successfully!", 'success');
     } catch (err: any) {
         showAlert(err.message, 'error');
@@ -230,19 +231,13 @@ const Dashboard: React.FC = () => {
   const handleLeaveQueue = async () => {
       if (!currentUserProfile) return;
       await db.collection("queue").doc(currentUserProfile.uid).delete();
+      await logAction('Leave Queue', `Left Breaking Army queue`, currentUserProfile, 'Queue');
       showAlert("Left the queue.", 'info');
   };
 
   const handleProfileClick = (uid: string) => {
       const user = users.find(u => u.uid === uid);
       if (user) setSelectedLeaderboardUser(user);
-  };
-
-  const handleMentionClick = (name: string) => {
-      const targetUser = users.find(u => u.displayName.toLowerCase() === name.toLowerCase());
-      if (targetUser) {
-          setSelectedLeaderboardUser(targetUser);
-      }
   };
 
   // Updated handler for new modal signature
@@ -260,6 +255,7 @@ const Dashboard: React.FC = () => {
           imageUrl: data.imageUrl
         };
         await db.collection("announcements").add(newAnnouncement);
+        await logAction('Post Global Announcement', `Posted global announcement: ${data.title}`, currentUserProfile, 'Announcement');
         showAlert("Global announcement posted!", 'success');
       } catch (err: any) {
         showAlert(`Error posting: ${err.message}`, 'error');

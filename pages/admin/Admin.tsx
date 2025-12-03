@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, GripVertical } from 'lucide-react';
 import { UserProfile } from '../../types';
@@ -15,13 +14,14 @@ import { MembersTab } from './tabs/MembersTab';
 import { UsersTab } from './tabs/UsersTab';
 import { LeavesTab } from './tabs/LeavesTab';
 import { SuggestionsTab } from './tabs/SuggestionsTab';
+import { AuditLogTab } from './tabs/AuditLogTab';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   
-  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves', 'suggestions'];
+  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves', 'suggestions', 'audit'];
   
   const [tabOrder, setTabOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('adminTabOrder');
@@ -86,7 +86,7 @@ const Admin: React.FC = () => {
       guilds: 'Guilds', events: 'Events', announcements: 'Announcements', 
       breakingArmy: 'Breaking Army', herosRealm: "Hero's Realm", 
       leaderboard: 'Leaderboard', winnerLogs: 'Winner Logs', members: 'Members', 
-      users: 'Users', leaves: 'Leaves', suggestions: 'Suggestions'
+      users: 'Users', leaves: 'Leaves', suggestions: 'Suggestions', audit: 'Audit Log'
   };
 
   return (
@@ -107,6 +107,7 @@ const Admin: React.FC = () => {
             if (tab === 'suggestions' && !isAdmin) return null;
             if (tab === 'guilds' && !isAdmin) return null;
             if (tab === 'users' && !isAdmin) return null;
+            if (tab === 'audit' && !isAdmin) return null;
             
             return (
                 <div 
@@ -141,6 +142,7 @@ const Admin: React.FC = () => {
           {activeTab === 'users' && <UsersTab />}
           {activeTab === 'leaves' && <LeavesTab userProfile={userProfile} />}
           {activeTab === 'suggestions' && <SuggestionsTab />}
+          {activeTab === 'audit' && isAdmin && <AuditLogTab />}
       </div>
     </div>
   );

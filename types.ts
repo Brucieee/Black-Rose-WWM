@@ -1,4 +1,3 @@
-
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -219,4 +218,14 @@ export interface HerosRealmRequest {
 export interface HerosRealmConfig {
   schedules: Record<string, ScheduleSlot[]>; // guildId -> [{day, time}]
   currentBosses?: Record<string, string[]>; // guildId -> [BossName1, BossName2]
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string; 
+  details: string; 
+  performedBy: string; 
+  performedByName: string; 
+  timestamp: string;
+  category: 'System' | 'Guild' | 'Queue' | 'Event' | 'Announcement' | 'Member';
 }
