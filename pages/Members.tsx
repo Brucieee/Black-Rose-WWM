@@ -48,9 +48,16 @@ const Members: React.FC = () => {
       return a.displayName.localeCompare(b.displayName);
     })
     .filter(user => {
+      // EXCLUDE users with no branch (kicked or unassigned)
+      if (!user.guildId) return false;
+
       const matchesSearch = user.displayName.toLowerCase().includes(search.toLowerCase());
       const matchesRole = filterRole === 'All' || user.role === filterRole;
-      const matchesGuild = filterGuild === 'All' || user.guildId === filterGuild;
+      
+      let matchesGuild = false;
+      if (filterGuild === 'All') matchesGuild = true;
+      else matchesGuild = user.guildId === filterGuild;
+
       return matchesSearch && matchesRole && matchesGuild;
     });
 
@@ -92,7 +99,7 @@ const Members: React.FC = () => {
             <input 
               type="text" 
               placeholder="Find member..." 
-              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-rose-500/50 outline-none text-zinc-900 dark:text-zinc-100 transition-all placeholder:text-zinc-400"
+              className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-zinc-300 dark:focus:ring-zinc-700 text-zinc-900 dark:text-zinc-100 transition-all placeholder:text-zinc-400"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -100,7 +107,7 @@ const Members: React.FC = () => {
           <div className="flex gap-2">
             <div className="relative w-full sm:w-32">
                 <select 
-                className="w-full appearance-none pl-3 pr-8 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-rose-500/50 outline-none text-zinc-700 dark:text-zinc-300 cursor-pointer border-r-[8px] border-transparent"
+                className="w-full appearance-none pl-3 pr-8 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold uppercase focus:outline-none focus:ring-1 focus:ring-zinc-300 dark:focus:ring-zinc-700 text-zinc-700 dark:text-zinc-300 cursor-pointer border-r-[8px] border-transparent"
                 value={filterRole}
                 onChange={e => setFilterRole(e.target.value)}
                 >
@@ -111,7 +118,7 @@ const Members: React.FC = () => {
             
             <div className="relative w-full sm:w-40">
                 <select 
-                className="w-full appearance-none pl-3 pr-8 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-rose-500/50 outline-none text-zinc-700 dark:text-zinc-300 cursor-pointer border-r-[8px] border-transparent"
+                className="w-full appearance-none pl-3 pr-8 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl text-xs font-bold uppercase focus:outline-none focus:ring-1 focus:ring-zinc-300 dark:focus:ring-zinc-700 text-zinc-700 dark:text-zinc-300 cursor-pointer border-r-[8px] border-transparent"
                 value={filterGuild}
                 onChange={e => setFilterGuild(e.target.value)}
                 >

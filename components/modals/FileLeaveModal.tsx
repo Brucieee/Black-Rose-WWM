@@ -87,13 +87,12 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
     }
   };
 
-  // If currently flying, we render a special minimized version that flies
+  // If currently flying, we render the paper plane animation
   if (isFlying) {
       return (
           <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
-              <div className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 p-4 rounded-full shadow-2xl flex items-center gap-2 animate-fly-up-out border-2 border-white/10 dark:border-zinc-200">
-                  <Plane size={24} className="fill-current transform -rotate-45" />
-                  <span className="font-bold whitespace-nowrap">Filing Request...</span>
+              <div className="bg-zinc-900 text-white p-6 rounded-full shadow-2xl flex items-center justify-center animate-fly-up-out ring-4 ring-white/20">
+                  <Plane size={48} className="fill-current transform -rotate-45" />
               </div>
           </div>
       );
