@@ -737,18 +737,23 @@ const Arena: React.FC = () => {
     const maxRound = regularMatches.length > 0 ? Math.max(...regularMatches.map(m => m.round)) : 3;
 
     return (
-        <div key={match.id} className="match-card match-card-3d relative flex flex-col items-center z-10 w-full mb-8 last:mb-0 perspective-container">
-            {/* Show VS Button for Admin */}
-            {canManage && match.player1 && match.player2 && (
-                <button 
-                    onClick={() => setAdminSelectedMatch(match)}
-                    className="mb-2 text-[10px] bg-zinc-800 text-zinc-400 hover:text-white hover:bg-rose-900 px-2 py-1 rounded flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100"
-                >
-                    <Eye size={10} /> Show VS
-                </button>
-            )}
-
+        <div key={match.id} className="match-card match-card-3d relative flex flex-col items-center z-10 w-full mb-8 last:mb-0 perspective-container group">
+            
             <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20`}>
+                {/* Show VS Button for Admin (Absolute inside card, visible on hover) */}
+                {canManage && match.player1 && match.player2 && (
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setAdminSelectedMatch(match);
+                        }}
+                        className="absolute -top-3 -right-3 z-50 bg-zinc-800 text-zinc-400 hover:text-white hover:bg-rose-900 p-2 rounded-full shadow-lg border border-zinc-700 transition-all opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"
+                        title="Show VS Banner"
+                    >
+                        <Eye size={16} />
+                    </button>
+                )}
+
                 {match.isThirdPlace && <div className="text-[10px] text-orange-600 dark:text-orange-500 text-center font-bold uppercase mb-1">3rd Place Match</div>}
                 {renderPlayer(match.player1, 'player1')}
                 <div className="text-[10px] text-zinc-500 dark:text-zinc-400 text-center font-black py-0.5 tracking-wider">VS</div>
@@ -845,7 +850,7 @@ const Arena: React.FC = () => {
                           <div className="flex items-center gap-2 mt-2">
                               {isAdminView ? (
                                   <>
-                                    <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{leftProfile?.weapons?.slice(0, 1).join(" / ") || 'Unknown'}</span>
+                                    <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{leftProfile?.weapons?.join(" + ") || 'Unknown'}</span>
                                     <div className="h-3 w-px bg-zinc-700"></div>
                                   </>
                               ) : (
@@ -903,7 +908,7 @@ const Arena: React.FC = () => {
                                       {isAdminView ? (
                                           <>
                                             <div className="h-3 w-px bg-zinc-700"></div>
-                                            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{rightProfile?.weapons?.slice(0, 1).join(" / ") || 'Unknown'}</span>
+                                            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{rightProfile?.weapons?.join(" + ") || 'Unknown'}</span>
                                           </>
                                       ) : (
                                           <p className="text-[10px] text-red-500 font-bold uppercase tracking-[0.2em]">OPPONENT</p>
@@ -927,6 +932,9 @@ const Arena: React.FC = () => {
           </div>
       );
   };
+
+  const isAdmin = userProfile?.systemRole === 'Admin';
+  const isOfficer = userProfile?.systemRole === 'Officer';
 
   return (
     <div className={`min-h-screen bg-zinc-50 dark:bg-zinc-950 ${isFullScreen ? 'fixed inset-0 z-50' : ''}`}>
