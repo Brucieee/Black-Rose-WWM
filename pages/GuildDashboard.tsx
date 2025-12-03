@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
@@ -69,12 +70,12 @@ const GuildDashboard: React.FC = () => {
 
   const prevParties = usePrevious(parties);
 
-  // Helper to check if a user is online based on lastSeen (within 1 minute)
+  // Helper to check if a user is online based on lastSeen (within 3 minutes)
   const isUserOnline = (user: UserProfile) => {
       if (user.status === 'online') {
           if (!user.lastSeen) return true; 
           const diff = Date.now() - new Date(user.lastSeen).getTime();
-          return diff < 1 * 60 * 1000; // 1 minute inactivity threshold
+          return diff < 3 * 60 * 1000; // 3 minute inactivity threshold
       }
       return false;
   };
@@ -198,7 +199,7 @@ const GuildDashboard: React.FC = () => {
       parties.forEach(party => {
         const leader = allUsers.find(u => u.uid === party.leaderId);
         
-        // Use lastSeen check for leader (1 min threshold)
+        // Use lastSeen check for leader (3 min threshold)
         const isLeaderOnline = leader ? isUserOnline(leader) : false;
 
         if (leader && !isLeaderOnline) {

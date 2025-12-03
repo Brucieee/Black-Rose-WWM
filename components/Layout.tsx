@@ -6,6 +6,17 @@ import { PartyNotifier } from './PartyNotifier';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Mute State for Party Notifications
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('party_notifier_muted') === 'true';
+  });
+
+  const toggleMute = () => {
+    const newState = !isMuted;
+    setIsMuted(newState);
+    localStorage.setItem('party_notifier_muted', String(newState));
+  };
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
@@ -19,10 +30,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       </div>
 
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+      />
       
       {/* Global Party Notification */}
-      <PartyNotifier />
+      <PartyNotifier isMuted={isMuted} />
       
       {/* Changed transition-all to transition-[margin] to prevent creating a containing block for fixed descendants (Modals) */}
       <main className="flex-1 md:ml-64 p-0 mt-16 md:mt-0 transition-[margin] duration-300 flex flex-col min-h-screen">

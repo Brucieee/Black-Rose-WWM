@@ -106,30 +106,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
 
     // Heartbeat to keep user 'online' and update lastSeen
-    // Increased frequency to 30s to allow for tighter (1 min) inactivity checks
     const heartbeatInterval = setInterval(() => {
         updateUserStatus(currentUser.uid, 'online');
     }, 30000); // Every 30 seconds
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        updateUserStatus(currentUser.uid, 'away');
-      } else {
-        updateUserStatus(currentUser.uid, 'online');
-      }
-    };
 
     const handleBeforeUnload = () => {
       // This is a best-effort attempt. Modern browsers may not guarantee its execution.
       updateUserStatus(currentUser.uid, 'offline');
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       clearInterval(heartbeatInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [currentUser]);

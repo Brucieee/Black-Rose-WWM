@@ -34,7 +34,7 @@ const Members: React.FC = () => {
       if (user.status === 'online') {
           if (!user.lastSeen) return true; 
           const diff = Date.now() - new Date(user.lastSeen).getTime();
-          return diff < 1 * 60 * 1000; // 1 minute inactivity
+          return diff < 3 * 60 * 1000; // 3 minute inactivity
       }
       return false;
   };

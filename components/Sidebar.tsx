@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { 
@@ -17,7 +16,9 @@ import {
   Sun,
   Plane,
   Trophy,
-  MessageSquarePlus
+  MessageSquarePlus,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
@@ -30,9 +31,11 @@ const { NavLink } = ReactRouterDOM as any;
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isMuted: boolean;
+  onToggleMute: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMuted, onToggleMute }) => {
   const [isGuildsOpen, setIsGuildsOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -105,8 +108,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const navLinkClasses = "flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-r-full mr-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800";
   const activeNavLinkClasses = "bg-rose-900/10 text-rose-500 border-l-4 border-rose-900";
 
-  // Updated online check: using lastSeen with 1 min threshold
-  const isOnline = userProfile?.status === 'online' && (!userProfile.lastSeen || (Date.now() - new Date(userProfile.lastSeen).getTime() < 1 * 60 * 1000));
+  // Updated online check: using lastSeen with 3 min threshold
+  const isOnline = userProfile?.status === 'online' && (!userProfile.lastSeen || (Date.now() - new Date(userProfile.lastSeen).getTime() < 3 * 60 * 1000));
 
   const userGuildName = userProfile?.guildId ? guilds.find(g => g.id === userProfile.guildId)?.name : '';
 
@@ -281,6 +284,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 title="Toggle Theme"
               >
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button 
+                onClick={onToggleMute}
+                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+                title={isMuted ? "Unmute Notifications" : "Mute Notifications"}
+              >
+                {isMuted ? <BellOff size={18} /> : <Bell size={18} />}
               </button>
               <button 
                 onClick={logout}
