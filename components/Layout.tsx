@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
+import { PartyNotifier } from './PartyNotifier';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -19,6 +20,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
 
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      
+      {/* Global Party Notification */}
+      <PartyNotifier />
       
       {/* Changed transition-all to transition-[margin] to prevent creating a containing block for fixed descendants (Modals) */}
       <main className="flex-1 md:ml-64 p-0 mt-16 md:mt-0 transition-[margin] duration-300 flex flex-col min-h-screen">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
@@ -9,6 +10,7 @@ import { PRESET_AVATARS } from '../services/mockData';
 import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { RulesModal } from '../components/modals/RulesModal';
+import { logAction } from '../services/auditLogger';
 
 const { useNavigate } = ReactRouterDOM as any;
 
@@ -255,6 +257,15 @@ const Register: React.FC = () => {
         systemRole: 'Member'
       });
 
+      // Audit Log for Joining
+      const joinedGuild = guilds.find(g => g.id === formData.guildId);
+      await logAction(
+        'Join Guild', 
+        `User ${formData.displayName} joined ${joinedGuild?.name || 'a guild'}`, 
+        { uid: currentUser.uid, displayName: formData.displayName }, 
+        'Member'
+      );
+
       showAlert("Profile Created Successfully!", 'success', "Welcome!");
       navigate('/');
     } catch (error) {
@@ -293,10 +304,6 @@ const Register: React.FC = () => {
   // Logic to determine what to render
   const showProfileForm = currentUser && (rulesAccepted || profileExists);
   const showAuthForm = !currentUser;
-
-  // Note: if currentUser exists BUT rulesAccepted is false and profileExists is false,
-  // we show a loading or empty state behind the modal, or the auth form (hidden by modal).
-  // In this case, we'll keep the background but `RulesModal` will be overlaying.
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
