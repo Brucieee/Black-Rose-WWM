@@ -74,10 +74,10 @@ const VsScreen: React.FC = () => {
   const getRoleIcon = (role?: RoleType) => {
       if (!role) return null;
       switch(role) {
-          case RoleType.DPS: return <Swords size={60} />;
-          case RoleType.TANK: return <Shield size={60} />;
-          case RoleType.HEALER: return <Heart size={60} />;
-          case RoleType.HYBRID: return <Zap size={60} />;
+          case RoleType.DPS: return <Swords size={70} />;
+          case RoleType.TANK: return <Shield size={70} />;
+          case RoleType.HEALER: return <Heart size={70} />;
+          case RoleType.HYBRID: return <Zap size={70} />;
       }
   };
 
@@ -169,7 +169,7 @@ const VsScreen: React.FC = () => {
 
         {/* VS CENTER */}
         <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="relative transform scale-[7] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+            <div className="relative transform scale-[15] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
                 <span className="font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-500 to-red-700 italic tracking-tighter" style={{ WebkitTextStroke: '1px white' }}>
                     VS
                 </span>
@@ -195,23 +195,27 @@ const VsScreen: React.FC = () => {
             </div>
 
             {/* Info Panel */}
-            <div className="relative z-20 animate-[slide-in-left_0.8s_ease-out]">
+            <div className="relative z-20 animate-[slide-in-left_0.8s_ease-out] w-full max-w-[85%]">
                 <div className="flex items-end gap-6 mb-4">
-                    <div className="text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)] pb-2">
+                    <div className="text-blue-500 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] drop-shadow-[0_0_15px_rgba(59,130,246,0.8)] pb-2 flex-shrink-0">
                         {getRoleIcon(p1.role)}
                     </div>
-                    <div>
-                        <span className="block text-7xl md:text-9xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-2xl">{p1.displayName}</span>
-                        <span className="text-3xl md:text-4xl font-bold text-blue-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg">{p1GuildName}</span>
+                    <div className="flex-1 min-w-0">
+                        <span className="block text-6xl md:text-8xl lg:text-9xl font-black text-white uppercase tracking-tight leading-none text-stroke drop-shadow-2xl truncate w-full" title={p1.displayName}>
+                            {p1.displayName}
+                        </span>
+                        <span className="text-2xl md:text-4xl font-bold text-blue-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg truncate">
+                            {p1GuildName}
+                        </span>
                     </div>
                 </div>
                 
-                <div className="flex gap-3 mt-4">
+                <div className="flex gap-3 mt-4 flex-wrap">
                     <span className="bg-blue-900/80 text-white px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border-l-4 border-blue-500 shadow-lg">
                         {p1.role}
                     </span>
                     {p1Weapons.map((w, i) => (
-                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700">
+                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700 whitespace-nowrap">
                             {w}
                         </span>
                     ))}
@@ -231,20 +235,24 @@ const VsScreen: React.FC = () => {
             </div>
 
             {/* Info Panel */}
-            <div className="relative z-20 animate-[slide-in-right_0.8s_ease-out]">
+            <div className="relative z-20 animate-[slide-in-right_0.8s_ease-out] w-full max-w-[85%]">
                 <div className="flex items-end justify-end gap-6 mb-4">
-                    <div>
-                        <span className="block text-7xl md:text-9xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-2xl">{p2.displayName}</span>
-                        <span className="text-3xl md:text-4xl font-bold text-red-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg">{p2GuildName}</span>
+                    <div className="flex-1 min-w-0 flex flex-col items-end">
+                        <span className="block text-6xl md:text-8xl lg:text-9xl font-black text-white uppercase tracking-tight leading-none text-stroke drop-shadow-2xl truncate w-full text-right" title={p2.displayName}>
+                            {p2.displayName}
+                        </span>
+                        <span className="text-2xl md:text-4xl font-bold text-red-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg truncate">
+                            {p2GuildName}
+                        </span>
                     </div>
-                    <div className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)] pb-2">
+                    <div className="text-red-500 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] drop-shadow-[0_0_15px_rgba(239,68,68,0.8)] pb-2 flex-shrink-0">
                         {getRoleIcon(p2.role)}
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-3 mt-4">
+                <div className="flex justify-end gap-3 mt-4 flex-wrap">
                     {p2Weapons.map((w, i) => (
-                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700">
+                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700 whitespace-nowrap">
                             {w}
                         </span>
                     ))}
