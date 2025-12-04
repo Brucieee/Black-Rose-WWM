@@ -1,7 +1,6 @@
-
 import React from 'react';
-import { ArenaMatch, ArenaParticipant, RoleType } from '../../types';
-import { Sparkles, Trash2, Crown, X, Clock } from 'lucide-react';
+import { ArenaMatch, RoleType, UserProfile, Guild, ArenaParticipant } from '../../types';
+import { Sparkles, Trash2, Crown, Clock, Swords, Shield, Heart, Zap, X } from 'lucide-react';
 
 interface ArenaChampionsProps {
   firstPlace: any;
@@ -16,95 +15,155 @@ interface ArenaChampionsProps {
   onRemoveChampion: () => void;
   onViewProfile: (uid: string) => void;
   onCloseBanner: () => void;
+  allUsers: UserProfile[];
+  guilds: Guild[];
 }
 
 export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
   firstPlace, secondPlace, thirdPlace, canManage, showStandardBanner, showOverlayBanner,
   userActiveMatch, currentUser, isChampionBannerVisible,
-  onRemoveChampion, onViewProfile, onCloseBanner
+  onRemoveChampion, onViewProfile, onCloseBanner,
+  allUsers, guilds
 }) => {
 
-  const getRoleBadge = (role?: RoleType) => {
-      if (!role) return null;
+  const getRoleIcon = (role?: RoleType) => {
+      const className = "w-4 h-4";
       switch (role) {
-          case RoleType.DPS: return <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-bold tracking-wide">DPS</span>;
-          case RoleType.TANK: return <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 font-bold tracking-wide">TANK</span>;
-          case RoleType.HEALER: return <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-bold tracking-wide">HEALER</span>;
-          case RoleType.HYBRID: return <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-bold tracking-wide">HYBRID</span>;
+          case RoleType.DPS: return <Swords className={className} />;
+          case RoleType.TANK: return <Shield className={className} />;
+          case RoleType.HEALER: return <Heart className={className} />;
+          case RoleType.HYBRID: return <Zap className={className} />;
           default: return null;
       }
   };
 
+  const getRoleBadge = (role?: RoleType) => {
+      if (!role) return null;
+      let colorClass = "";
+      switch (role) {
+          case RoleType.DPS: colorClass = "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"; break;
+          case RoleType.TANK: colorClass = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"; break;
+          case RoleType.HEALER: colorClass = "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"; break;
+          case RoleType.HYBRID: colorClass = "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"; break;
+      }
+      return (
+          <span className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wide ${colorClass}`}>
+              {getRoleIcon(role)} {role}
+          </span>
+      );
+  };
+
+  const resolvePlayerDetails = (participant: ArenaParticipant | null | undefined) => {
+      if (!participant) return null;
+      const profile = allUsers.find(u => u.uid === participant.uid);
+      
+      const gid = profile?.guildId || participant.originalGuildId || participant.guildId;
+      const guildName = guilds.find(g => g.id === gid)?.name || 'Challenger';
+      
+      return {
+          ...participant,
+          guildName,
+          weapons: profile?.weapons || []
+      };
+  };
+
   const renderActiveMatchBanner = () => {
       if (!userActiveMatch) return null;
-      const opponent = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player2 : userActiveMatch.player1;
-      const userPlayer = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player1 : userActiveMatch.player2;
+
+      const p1Raw = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player1 : userActiveMatch.player2;
+      const p2Raw = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player2 : userActiveMatch.player1;
+
+      const leftPlayer = resolvePlayerDetails(p1Raw);
+      const rightPlayer = resolvePlayerDetails(p2Raw);
 
       return (
-          <div className="fixed bottom-0 left-0 right-0 z-40 w-full md:pl-64 h-36 md:h-44 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500">
+          <div className="fixed bottom-0 left-0 right-0 z-40 w-full md:pl-64 h-40 md:h-48 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-950/60 via-black to-red-950/60 z-0"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-800/10 via-transparent to-transparent z-0"></div>
               
               <div className="relative z-10 flex items-center justify-between h-full w-full max-w-[95%] mx-auto">
                   
+                  {/* Left Player (User) */}
                   <div className="flex-1 flex items-center justify-end gap-4 min-w-0 pr-4 md:pr-12 animate-in slide-in-from-left duration-700">
-                      <div className="flex-col items-end hidden md:flex min-w-0 shrink">
-                          <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-4 py-1" title={userPlayer?.displayName}>
-                              {userPlayer?.displayName}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-2">
-                              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">YOU</p>
-                              {getRoleBadge(userPlayer?.role)}
-                          </div>
-                      </div>
-                      
-                      <div 
-                        className="relative group shrink-0 cursor-pointer"
-                        onClick={() => userPlayer && onViewProfile(userPlayer.uid)}
-                      >
-                          <div className="absolute -inset-3 bg-blue-500/20 rounded-full blur-xl group-hover:bg-blue-500/40 transition-all duration-500"></div>
-                          <div className="relative w-16 h-16 md:w-28 md:h-28 rounded-full border-4 border-blue-500/50 group-hover:border-blue-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
-                              <img src={userPlayer?.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
-                          </div>
-                      </div>
+                      {leftPlayer ? (
+                          <>
+                            <div className="flex-col items-end hidden md:flex min-w-0 shrink">
+                                <h3 className="font-black text-white text-xl md:text-3xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-2 py-1" title={leftPlayer.displayName}>
+                                    {leftPlayer.displayName}
+                                </h3>
+                                <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1 text-right">{leftPlayer.guildName}</div>
+                                <div className="flex items-center gap-2 mt-1 justify-end">
+                                    {leftPlayer.weapons?.slice(0,2).map((w, i) => (
+                                        <span key={i} className="text-[9px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-700 whitespace-nowrap">{w}</span>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2 justify-end">
+                                    {getRoleBadge(leftPlayer.role)}
+                                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.2em]">YOU</p>
+                                </div>
+                            </div>
+                            
+                            <div 
+                                className="relative group shrink-0 cursor-pointer"
+                                onClick={() => onViewProfile(leftPlayer.uid)}
+                            >
+                                <div className="absolute -inset-3 bg-blue-500/20 rounded-full blur-xl group-hover:bg-blue-500/40 transition-all duration-500"></div>
+                                <div className="relative w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-blue-500/50 group-hover:border-blue-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
+                                    <img src={leftPlayer.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                                </div>
+                            </div>
+                          </>
+                      ) : (
+                          <div className="text-zinc-500 italic text-sm">Empty Slot</div>
+                      )}
                   </div>
 
+                  {/* VS Center */}
                   <div className="shrink-0 flex flex-col items-center justify-center z-20 mx-4">
                       <div className="relative px-6">
-                          <span className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
+                          <span className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
                               VS
                           </span>
                       </div>
                       <div className="h-px w-full bg-gradient-to-r from-transparent via-zinc-500 to-transparent mt-2 opacity-50"></div>
-                      <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">Matchup</span>
+                      <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
+                          Matchup
+                      </span>
                   </div>
 
+                  {/* Right Player (Opponent) */}
                   <div className="flex-1 flex items-center justify-start gap-4 min-w-0 pl-4 md:pl-12 animate-in slide-in-from-right duration-700">
-                      {opponent ? (
+                      {rightPlayer ? (
                           <>
                               <div 
                                 className="relative group shrink-0 cursor-pointer"
-                                onClick={() => onViewProfile(opponent.uid)}
+                                onClick={() => onViewProfile(rightPlayer.uid)}
                               >
                                   <div className="absolute -inset-3 bg-red-500/20 rounded-full blur-xl group-hover:bg-red-500/40 transition-all duration-500"></div>
-                                  <div className="relative w-16 h-16 md:w-28 md:h-28 rounded-full border-4 border-red-500/50 group-hover:border-red-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
-                                      <img src={opponent.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                                  <div className="relative w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-red-500/50 group-hover:border-red-400 transition-colors z-10 bg-zinc-900 overflow-hidden shadow-2xl">
+                                      <img src={rightPlayer.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
                                   </div>
                               </div>
 
                               <div className="flex-col items-start hidden md:flex min-w-0 shrink">
-                                  <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-4 py-1" title={opponent.displayName}>
-                                      {opponent.displayName}
+                                  <h3 className="font-black text-white text-xl md:text-3xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-2 py-1" title={rightPlayer.displayName}>
+                                      {rightPlayer.displayName}
                                   </h3>
+                                  <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1 text-left">{rightPlayer.guildName}</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                      {rightPlayer.weapons?.slice(0,2).map((w, i) => (
+                                          <span key={i} className="text-[9px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded border border-zinc-700 whitespace-nowrap">{w}</span>
+                                      ))}
+                                  </div>
                                   <div className="flex items-center gap-2 mt-2">
-                                      {getRoleBadge(opponent.role)}
+                                      {getRoleBadge(rightPlayer.role)}
                                       <p className="text-[10px] text-red-500 font-bold uppercase tracking-[0.2em]">OPPONENT</p>
                                   </div>
                               </div>
                           </>
                       ) : (
                           <div className="flex items-center gap-4 opacity-50 min-w-0">
-                              <div className="w-16 h-16 md:w-28 md:h-28 rounded-full border-4 border-dashed border-zinc-700 bg-zinc-900/50 flex items-center justify-center shrink-0">
+                              <div className="w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-dashed border-zinc-700 bg-zinc-900/50 flex items-center justify-center shrink-0">
                                   <Clock className="text-zinc-500 animate-spin-slow" size={32} />
                               </div>
                               <div className="flex-col items-start hidden md:flex">

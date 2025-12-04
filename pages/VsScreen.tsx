@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import * as ReactRouterDOM from "react-router-dom";
 import { db } from "../services/firebase";
@@ -10,12 +9,14 @@ const { useSearchParams } = ReactRouterDOM as any;
 const VsScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
   const contextId = searchParams.get("contextId");
+  const matchId = searchParams.get("matchId");
 
   const [activeMatch, setActiveMatch] = useState<ArenaMatch | null>(null);
   const [p1Profile, setP1Profile] = useState<UserProfile | null>(null);
   const [p2Profile, setP2Profile] = useState<UserProfile | null>(null);
   const [guilds, setGuilds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [streamMatchId, setStreamMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = db.collection("guilds").onSnapshot((snap: any) => {
@@ -26,7 +27,61 @@ const VsScreen: React.FC = () => {
     return () => unsub();
   }, []);
 
+  // Listen for Remote Control (activeStreamMatchId) on the parent document
   useEffect(() => {
+      if (!contextId) return;
+
+      const setupListener = (collection: string) => {
+          return db.collection(collection).doc(contextId).onSnapshot((doc: any) => {
+              if (doc.exists) {
+                  const data = doc.data();
+                  if (data?.activeStreamMatchId) {
+                      setStreamMatchId(data.activeStreamMatchId);
+                  } else {
+                      setStreamMatchId(null);
+                  }
+              }
+          });
+      };
+
+      let unsubscribe = () => {};
+      
+      // Try to determine if it's a guild or tournament
+      db.collection("guilds").doc(contextId).get().then((doc: any) => {
+          if (doc.exists) {
+              unsubscribe = setupListener("guilds");
+          } else {
+              unsubscribe = setupListener("custom_tournaments");
+          }
+      });
+
+      return () => unsubscribe();
+  }, [contextId]);
+
+  useEffect(() => {
+    // 1. URL Match ID Priority (Specific Link)
+    if (matchId) {
+        const unsub = db.collection("arena_matches").doc(matchId).onSnapshot((doc: any) => {
+            if (doc.exists) {
+                setActiveMatch({ id: doc.id, ...doc.data() } as ArenaMatch);
+            }
+            setLoading(false);
+        });
+        return () => unsub();
+    }
+
+    // 2. Remote Control Priority (Admin Selected)
+    if (streamMatchId) {
+        const unsub = db.collection("arena_matches").doc(streamMatchId).onSnapshot((doc: any) => {
+            if (doc.exists) {
+                setActiveMatch({ id: doc.id, ...doc.data() } as ArenaMatch);
+            }
+            setLoading(false);
+        });
+        return () => unsub();
+    }
+
+    // 3. Default Auto-Rotation (Next Playable)
     if (!contextId) return;
     const unsub = db
       .collection("arena_matches")
@@ -40,7 +95,7 @@ const VsScreen: React.FC = () => {
       });
 
     return () => unsub();
-  }, [contextId]);
+  }, [contextId, matchId, streamMatchId]);
 
   useEffect(() => {
     if (activeMatch?.player1?.uid) {

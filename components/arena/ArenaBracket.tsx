@@ -1,22 +1,23 @@
-
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { ArenaMatch, ArenaParticipant, RoleType } from '../../types';
-import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw } from 'lucide-react';
+import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio } from 'lucide-react';
 
 interface ArenaBracketProps {
   matches: ArenaMatch[];
   canManage: boolean;
   arenaMinPoints: number;
   isCustomMode: boolean;
+  activeStreamMatchId?: string;
   onDeclareWinner: (match: ArenaMatch, winner: ArenaParticipant) => void;
   onClearSlot: (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => void;
   onDrop: (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => void;
   onViewProfile: (uid: string) => void;
+  onPreviewMatch: (match: ArenaMatch) => void;
 }
 
 export const ArenaBracket: React.FC<ArenaBracketProps> = ({
-  matches, canManage, arenaMinPoints, isCustomMode,
-  onDeclareWinner, onClearSlot, onDrop, onViewProfile
+  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId,
+  onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 50, y: 50 });
@@ -71,6 +72,8 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   };
 
   const renderMatch = (match: ArenaMatch) => {
+    const isLive = activeStreamMatchId === match.id;
+
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
         const isWinner = match.winner?.uid === player?.uid;
         const isInteractive = !!player;
@@ -124,7 +127,21 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
 
     return (
         <div key={match.id} className="match-card match-card-3d relative flex items-center z-10 w-full mb-8 last:mb-0 perspective-container">
-            <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20`}>
+            <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : isLive ? 'border-red-500 ring-2 ring-red-500/50 shadow-red-500/20' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20 transition-all`}>
+                {canManage && match.player1 && match.player2 && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onPreviewMatch(match); }}
+                        className={`absolute -top-3 -right-3 p-1.5 rounded-full shadow-md z-30 border transition-all ${
+                            isLive 
+                            ? 'bg-red-600 text-white border-red-500 animate-pulse' 
+                            : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700 opacity-0 group-hover:opacity-100'
+                        }`}
+                        title={isLive ? "Currently Streaming" : "Broadcast to Stream"}
+                    >
+                        {isLive ? <Radio size={14} /> : <Eye size={14} />}
+                    </button>
+                )}
+                
                 {match.isThirdPlace && <div className="text-[10px] text-orange-600 dark:text-orange-500 text-center font-bold uppercase mb-1">3rd Place Match</div>}
                 {renderPlayer(match.player1, 'player1')}
                 <div className="text-[10px] text-zinc-500 dark:text-zinc-400 text-center font-black py-0.5 tracking-wider">VS</div>
@@ -150,13 +167,13 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   };
 
   const regularMatches = matches.filter(m => !m.isThirdPlace);
+  const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
   const maxRound = regularMatches.length > 0 ? Math.max(...regularMatches.map(m => m.round)) : 3;
   const rounds = Array.from({ length: maxRound }, (_, i) => ({ 
       id: i + 1, 
       name: i + 1 === maxRound ? 'Finals' : (i + 1 === maxRound - 1 ? 'Semi-Finals' : `Round ${i + 1}`) 
   }));
 
-  const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
 

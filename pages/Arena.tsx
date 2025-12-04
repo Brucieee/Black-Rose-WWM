@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
+import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -35,8 +34,11 @@ const Arena: React.FC = () => {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [customTournaments, setCustomTournaments] = useState<CustomTournament[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  
+  // ID can be a Guild ID OR a Tournament ID
   const [selectedId, setSelectedId] = useState<string>(''); 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
   const [matches, setMatches] = useState<ArenaMatch[]>([]);
   
@@ -67,6 +69,11 @@ const Arena: React.FC = () => {
   const pendingParticipants = participants.filter(p => p.status === 'pending');
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
   const arenaWinners = selectedGuild?.lastArenaWinners || (selectedGuild?.lastArenaChampion ? [{...selectedGuild.lastArenaChampion, rank: 1}] : []);
+
+  // Determine Active Stream Match
+  const activeStreamMatchId = isCustomMode 
+    ? selectedTournament?.activeStreamMatchId 
+    : selectedGuild?.activeStreamMatchId;
 
   const assignedParticipantUids = React.useMemo(() => {
     const uids = new Set<string>();
@@ -142,9 +149,6 @@ const Arena: React.FC = () => {
   // Actions
   const saveGuildWinners = async () => {
       if (isCustomMode) return;
-      // Logic for saving winners to guild history... (simplified for brevity as logic is in original file)
-      // Assuming logic exists or is handled by backend in future. 
-      // For now, retaining frontend save logic:
       const matchesSnap = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
       const dbMatches = matchesSnap.docs.map(d => d.data() as ArenaMatch);
       const regularMatches = dbMatches.filter(m => !m.isThirdPlace);
@@ -305,6 +309,19 @@ const Arena: React.FC = () => {
   const handleClearSlot = async (e: React.MouseEvent, mid: string, slot: string) => { e.stopPropagation(); await db.collection("arena_matches").doc(mid).update({ [slot]: null, winner: null }); };
   const handleDrop = async (e: React.DragEvent, match: ArenaMatch, slot: string) => { if (!canManage) return; e.preventDefault(); const data = e.dataTransfer.getData("application/json"); if (!data) return; const droppedUser = JSON.parse(data); await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null }); };
   const handleOpenStreamScreen = () => window.open(`/#/vs-screen?contextId=${selectedId}`, 'VsScreen', 'width=1920,height=1080');
+  
+  // Update stream match in DB (Remote Control)
+  const handlePreviewMatch = async (match: ArenaMatch) => {
+      const collection = isCustomMode ? "custom_tournaments" : "guilds";
+      try {
+          await db.collection(collection).doc(selectedId).update({
+              activeStreamMatchId: match.id
+          });
+          showAlert("Stream updated to this match.", "success");
+      } catch (e: any) {
+          showAlert(e.message, "error");
+      }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -341,6 +358,8 @@ const Arena: React.FC = () => {
           onRemoveChampion={handleRemoveChampion}
           onViewProfile={(uid) => handleViewProfile(uid)}
           onCloseBanner={() => setIsChampionBannerVisible(false)}
+          allUsers={allUsers}
+          guilds={guilds}
         />
 
         <div className="flex flex-col lg:flex-row flex-1 gap-6 overflow-hidden min-h-0 relative">
@@ -374,10 +393,12 @@ const Arena: React.FC = () => {
             canManage={canManage} 
             arenaMinPoints={arenaMinPoints} 
             isCustomMode={isCustomMode} 
+            activeStreamMatchId={activeStreamMatchId}
             onDeclareWinner={handleDeclareWinner}
             onClearSlot={handleClearSlot as any}
             onDrop={handleDrop as any}
             onViewProfile={handleViewProfile}
+            onPreviewMatch={handlePreviewMatch}
           />
         </div>
       </div>

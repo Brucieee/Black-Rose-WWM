@@ -1,4 +1,3 @@
-
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',
@@ -49,6 +48,7 @@ export interface Guild {
   name: string;
   memberCap: number;
   arenaMinPoints?: number; // Added for arena threshold
+  activeStreamMatchId?: string; // ID of the match currently being broadcasted
   lastArenaChampion?: {
       uid: string;
       displayName: string;
@@ -194,6 +194,7 @@ export interface CustomTournament {
   createdBy: string;
   hasGrandFinale?: boolean;
   hideRankings?: boolean;
+  activeStreamMatchId?: string; // ID of the match currently being broadcasted
 }
 
 export interface ArenaMatch {

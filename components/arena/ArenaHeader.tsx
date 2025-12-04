@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Guild, CustomTournament, UserProfile } from '../../types';
 import { Swords, Globe, Plus, MonitorPlay, Settings, RefreshCw, Menu, Trash2 } from 'lucide-react';

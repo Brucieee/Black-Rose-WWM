@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ArenaParticipant, Guild, RoleType } from '../../types';
 import { X, Clock, Edit2, Users, Shuffle, RefreshCw, UserMinus, Shield, LogOut, AlertCircle, Trash2 } from 'lucide-react';
