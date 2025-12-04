@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal, Menu } from 'lucide-react';
+import { Swords, Trophy, Users, Shield, Crown, RefreshCw, LogOut, X, Shuffle, Check, Clock, AlertCircle, Settings, Edit2, Plus, Minus, RotateCcw, Move, Trash2, Sparkles, UserMinus, Globe, Medal, Menu, MonitorPlay } from 'lucide-react';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -657,6 +658,12 @@ const Arena: React.FC = () => {
 
   const handleDragOver = (e: React.DragEvent) => { if (canManage) e.preventDefault(); };
 
+  const handleOpenStreamScreen = () => {
+      if (!selectedId) return;
+      // Open VS Screen in new window
+      window.open(`/#/vs-screen?contextId=${selectedId}`, 'VsScreen', 'width=1920,height=1080');
+  };
+
   const getRoleBadge = (role?: RoleType) => {
       if (!role) return null;
       switch (role) {
@@ -770,7 +777,6 @@ const Arena: React.FC = () => {
   // Logic Update: Show overlay ONLY for Custom Tournaments with Grand Finale mode enabled
   const showOverlayBanner = hasWinners && isCustomMode && selectedTournament?.hasGrandFinale && isChampionBannerVisible;
 
-  // Render Logic for User Active Match Banner
   const renderActiveMatchBanner = () => {
       if (!userActiveMatch) return null;
       const opponent = userActiveMatch.player1?.uid === currentUser?.uid ? userActiveMatch.player2 : userActiveMatch.player1;
@@ -778,16 +784,12 @@ const Arena: React.FC = () => {
 
       return (
           <div className="fixed bottom-0 left-0 right-0 z-40 w-full md:pl-64 h-36 md:h-44 bg-zinc-950 overflow-hidden border-t border-zinc-800 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-500">
-              {/* Background Effects */}
               <div className="absolute inset-0 bg-gradient-to-r from-blue-950/60 via-black to-red-950/60 z-0"></div>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-800/10 via-transparent to-transparent z-0"></div>
               
-              {/* Main Content Container */}
               <div className="relative z-10 flex items-center justify-between h-full w-full max-w-[95%] mx-auto">
                   
-                  {/* Left Side: User */}
                   <div className="flex-1 flex items-center justify-end gap-4 min-w-0 pr-4 md:pr-12 animate-in slide-in-from-left duration-700">
-                      {/* Text Info */}
                       <div className="flex-col items-end hidden md:flex min-w-0 shrink">
                           <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-4 py-1" title={userPlayer?.displayName}>
                               {userPlayer?.displayName}
@@ -798,7 +800,6 @@ const Arena: React.FC = () => {
                           </div>
                       </div>
                       
-                      {/* Avatar */}
                       <div 
                         className="relative group shrink-0 cursor-pointer"
                         onClick={() => userPlayer && handleViewProfile(userPlayer.uid)}
@@ -810,7 +811,6 @@ const Arena: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Center: VS */}
                   <div className="shrink-0 flex flex-col items-center justify-center z-20 mx-4">
                       <div className="relative px-6">
                           <span className="text-5xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
@@ -821,11 +821,9 @@ const Arena: React.FC = () => {
                       <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">Matchup</span>
                   </div>
 
-                  {/* Right Side: Opponent */}
                   <div className="flex-1 flex items-center justify-start gap-4 min-w-0 pl-4 md:pl-12 animate-in slide-in-from-right duration-700">
                       {opponent ? (
                           <>
-                              {/* Avatar */}
                               <div 
                                 className="relative group shrink-0 cursor-pointer"
                                 onClick={() => handleViewProfile(opponent.uid)}
@@ -836,7 +834,6 @@ const Arena: React.FC = () => {
                                   </div>
                               </div>
 
-                              {/* Text Info */}
                               <div className="flex-col items-start hidden md:flex min-w-0 shrink">
                                   <h3 className="font-black text-white text-xl md:text-4xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-4 py-1" title={opponent.displayName}>
                                       {opponent.displayName}
@@ -867,7 +864,6 @@ const Arena: React.FC = () => {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       
-      {/* Main Container with dynamic height to accommodate fixed banner */}
       <div className={`p-4 w-full flex flex-col relative overflow-hidden transition-all duration-300 ${userActiveMatch ? 'h-[calc(100vh-144px)] md:h-[calc(100vh-176px)]' : 'h-[calc(100vh-64px)]'}`}>
         <div className="flex justify-between items-start mb-2">
           <div>
@@ -936,6 +932,13 @@ const Arena: React.FC = () => {
               {canManage && (
                   <div className="flex gap-2 flex-shrink-0">
                       <button 
+                          onClick={handleOpenStreamScreen}
+                          className="bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-1.5 rounded-lg border border-rose-200 dark:border-rose-900 transition-colors animate-pulse"
+                          title="Launch Stream Screen"
+                      >
+                          <MonitorPlay size={18} />
+                      </button>
+                      <button 
                           onClick={() => setIsSettingsModalOpen(true)}
                           className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
                           title="Arena Settings"
@@ -954,17 +957,14 @@ const Arena: React.FC = () => {
           </div>
         </div>
 
-        {/* Guild Winners Banner - Top (Standard Mode) */}
         {showStandardBanner && (
             <div className="mb-4 relative overflow-hidden rounded-xl bg-gradient-to-r from-zinc-900 to-black p-[2px] shadow-lg border border-zinc-800 max-h-[180px] flex-shrink-0">
                 <div className="bg-zinc-950 px-4 pt-10 pb-4 rounded-[10px] flex items-center justify-center relative overflow-hidden h-full">
-                    
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-yellow-500/10 via-zinc-950 to-zinc-950"></div>
                     <Sparkles className="absolute top-4 left-10 text-yellow-500/20" size={24} />
                     <Sparkles className="absolute bottom-4 right-10 text-yellow-500/20" size={40} />
 
                     <div className="relative z-10 flex items-end gap-6 md:gap-16 scale-90 origin-bottom">
-                        
                         {secondPlace && (
                             <div className="flex flex-col items-center group cursor-pointer" onClick={() => handleViewProfile(secondPlace.uid)}>
                                 <div className="relative mb-2">
@@ -1010,14 +1010,11 @@ const Arena: React.FC = () => {
             </div>
         )}
 
-        {/* Main Container - Responsive Layout */}
         <div className="flex flex-col lg:flex-row flex-1 gap-6 overflow-hidden min-h-0 relative">
-          {/* Sidebar - Collapsible on Mobile */}
           <div className={`
               absolute lg:relative z-20 h-full w-full lg:w-80 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col transition-transform duration-300
               ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
-              {/* Mobile Close Button */}
               <button 
                   onClick={() => setIsSidebarOpen(false)} 
                   className="lg:hidden absolute top-2 right-2 p-2 text-zinc-500"
@@ -1190,7 +1187,6 @@ const Arena: React.FC = () => {
               </div>
           </div>
 
-          {/* Bracket Container - Takes up remaining space */}
           <div 
               className="flex-1 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden flex flex-col z-0 min-h-0"
               ref={containerRef}
@@ -1275,13 +1271,9 @@ const Arena: React.FC = () => {
 
         {renderActiveMatchBanner()}
 
-        {/* Custom Champion Overlay - Absolute on screen */}
         {showOverlayBanner && firstPlace && (
             <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none perspective-container">
-                {/* Radial Gradient Overlay to darken background */}
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-500 pointer-events-auto" onClick={() => {/* Block click-through */}}></div>
-                
-                {/* Close Button */}
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-md animate-in fade-in duration-500 pointer-events-auto" onClick={() => {}}></div>
                 <button 
                     onClick={() => setIsChampionBannerVisible(false)}
                     className="absolute top-8 right-8 z-50 text-white/50 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors pointer-events-auto"
@@ -1289,14 +1281,11 @@ const Arena: React.FC = () => {
                     <X size={32} />
                 </button>
 
-                {/* The Banner Itself */}
                 <div className="relative w-full max-w-4xl p-10 flex flex-col items-center justify-center pointer-events-auto animate-hero-entrance">
-                    {/* Rays - Huge 5x Scale */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500%] h-[500%] opacity-30 pointer-events-none">
                         <div className="w-full h-full bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0deg,rgba(234,179,8,0.1)_20deg,transparent_40deg,rgba(234,179,8,0.1)_60deg,transparent_80deg,rgba(234,179,8,0.1)_100deg,transparent_120deg,rgba(234,179,8,0.1)_140deg,transparent_160deg,rgba(234,179,8,0.1)_180deg,transparent_200deg,rgba(234,179,8,0.1)_220deg,transparent_240deg,rgba(234,179,8,0.1)_260deg,transparent_280deg,rgba(234,179,8,0.1)_300deg,transparent_320deg,rgba(234,179,8,0.1)_340deg,transparent_360deg)] animate-spin-slow"></div>
                     </div>
                     
-                    {/* Content Container with 3D Float */}
                     <div className="relative z-10 flex flex-col items-center animate-hero-float">
                         <Crown size={80} className="text-yellow-400 mb-6 drop-shadow-[0_0_25px_rgba(250,204,21,0.8)] fill-yellow-400" />
                         
@@ -1332,10 +1321,7 @@ const Arena: React.FC = () => {
               <p className="text-sm text-zinc-500 mb-4">Search for a user to manually add to the participant list.</p>
               <SearchableUserSelect 
                   users={allUsers.filter(u => {
-                      // Filter out users who are ALREADY in the tournament list
                       const isAlreadyIn = participants.some(p => p.uid === u.uid);
-                      // If user is an Officer, only show users from their branch? 
-                      // Requirement: "officer... add manual participants from their own branch"
                       const isSameBranch = userProfile?.systemRole === 'Admin' || u.guildId === selectedId;
                       return !isAlreadyIn && isSameBranch;
                   })}

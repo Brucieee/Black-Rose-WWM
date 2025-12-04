@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Events from './pages/Events';
 import Profile from './pages/Profile';
 import Arena from './pages/Arena';
+import VsScreen from './pages/VsScreen';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
@@ -20,19 +21,26 @@ function App() {
     <AlertProvider>
       <AuthProvider>
         <HashRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/guild/:guildId" element={<GuildDashboard />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/arena" element={<Arena />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Layout>
+          <Routes>
+            {/* VS Screen stands alone outside Layout for fullscreen stream usage */}
+            <Route path="/vs-screen" element={<VsScreen />} />
+            
+            <Route path="/*" element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/members" element={<Members />} />
+                  <Route path="/guild/:guildId" element={<GuildDashboard />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/events" element={<Events />} />
+                  <Route path="/arena" element={<Arena />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Layout>
+            } />
+          </Routes>
         </HashRouter>
       </AuthProvider>
     </AlertProvider>
