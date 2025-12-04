@@ -118,7 +118,6 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
               <input 
                 type="date" 
                 required
-                onClick={(e) => e.currentTarget.showPicker()}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none cursor-pointer"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
@@ -133,7 +132,6 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
               <input 
                 type="date" 
                 required
-                onClick={(e) => e.currentTarget.showPicker()}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none cursor-pointer"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
