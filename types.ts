@@ -193,6 +193,7 @@ export interface CustomTournament {
   createdAt: string;
   createdBy: string;
   hasGrandFinale?: boolean;
+  hideRankings?: boolean;
 }
 
 export interface ArenaMatch {

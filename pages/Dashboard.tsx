@@ -175,6 +175,10 @@ const Dashboard: React.FC = () => {
 
   const nextSchedule = getNextSchedule();
 
+  // Check if today matches a scheduled day for the user's guild
+  const todayDayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const isEventToday = userGuildId && breakingArmyConfig?.schedules?.[userGuildId]?.some(s => s.day === todayDayName);
+
   // Hero's Realm Schedule & Configured Bosses
   const heroSchedule = userGuildId && herosRealmConfig?.schedules?.[userGuildId]?.[0];
   const configuredBossNames = userGuildId && herosRealmConfig?.currentBosses?.[userGuildId];
@@ -203,6 +207,14 @@ const Dashboard: React.FC = () => {
         showAlert("You must be part of a guild branch.", 'error');
         return;
     }
+    // Double check schedule on click just in case
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const isTodayScheduled = breakingArmyConfig?.schedules?.[userGuildId]?.some(s => s.day === today);
+    if (!isTodayScheduled) {
+        showAlert("Queue is closed. Please check the schedule.", 'error');
+        return;
+    }
+
     if (isCooldown) {
         showAlert("You are on cooldown from a recent win.", 'error');
         return;
@@ -241,7 +253,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Updated handler for new modal signature
-  const handlePostGlobalAnnouncement = async (data: { title: string, content: string, isGlobal: boolean, imageUrl: string }) => {
+  const handlePostGlobalAnnouncement = async (data: { title: string; content: string; isGlobal: boolean; imageUrl: string }) => {
       if (!currentUserProfile) return;
       try {
         const newAnnouncement = {
@@ -339,9 +351,9 @@ const Dashboard: React.FC = () => {
                             <button 
                                 onClick={() => setIsQueueModalOpen(true)}
                                 className="bg-white text-rose-950 hover:bg-zinc-200 px-4 py-2 rounded font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                                disabled={!currentBossName}
+                                disabled={!myQueuePosition && (!currentBossName || !isEventToday)}
                             >
-                                {myQueuePosition ? 'View Queue' : 'Join Queue'}
+                                {myQueuePosition ? 'View Queue' : (!isEventToday ? 'Queue Closed' : 'Join Queue')}
                             </button>
                             {myQueuePosition && (
                                 <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-900/50 border border-zinc-800">

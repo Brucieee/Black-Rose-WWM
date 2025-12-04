@@ -2,14 +2,14 @@
 import React, { useState } from 'react';
 import { BaseModal } from './BaseModal';
 import { Guild, ArenaParticipant, UserProfile, RoleType } from '../../types';
-import { Swords, Trophy, Users, Crown } from 'lucide-react';
+import { Swords, Trophy, Users, Crown, EyeOff } from 'lucide-react';
 import { db } from '../../services/firebase';
 
 interface CreateTournamentModalProps {
   isOpen: boolean;
   onClose: () => void;
   guilds: Guild[];
-  onConfirm: (title: string, participants: ArenaParticipant[], hasGrandFinale: boolean) => void;
+  onConfirm: (title: string, participants: ArenaParticipant[], hasGrandFinale: boolean, hideRankings: boolean) => void;
 }
 
 export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ isOpen, onClose, guilds, onConfirm }) => {
@@ -22,6 +22,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
   const [importWinners, setImportWinners] = useState(true); // Top 3
   const [importLosers, setImportLosers] = useState(false); // Everyone else
   const [hasGrandFinale, setHasGrandFinale] = useState(true); // Exaggerated Top 1 Banner
+  const [hideRankings, setHideRankings] = useState(false); // Hide Top 3 Banner completely
 
   // Load users to get roles
   React.useEffect(() => {
@@ -87,11 +88,13 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
       // De-duplicate by UID
       const uniqueParticipants = Array.from(new Map(allParticipants.map(item => [item.uid, item])).values());
 
-      onConfirm(title, uniqueParticipants, hasGrandFinale);
+      onConfirm(title, uniqueParticipants, hasGrandFinale, hideRankings);
       setTitle('');
       setSelectedGuilds([]);
       setImportWinners(true);
       setImportLosers(false);
+      setHasGrandFinale(true);
+      setHideRankings(false);
       onClose();
     } catch (err) {
         console.error(err);
@@ -175,7 +178,9 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
               </div>
           </div>
 
-          <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 p-4 rounded-xl border border-yellow-500/20">
+          <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 p-4 rounded-xl border border-yellow-500/20 space-y-3">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Display Options</label>
+              
               <div className="flex items-center gap-3">
                   <input 
                     type="checkbox" 
@@ -189,7 +194,25 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
                           <Crown size={16} className="text-yellow-500" /> Grand Finale Mode
                       </span>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                          Enables the special "Champion" celebration overlay for the #1 winner. Uncheck to use standard Top 3 banner.
+                          Show the special "Champion" celebration overlay for the winner.
+                      </span>
+                  </label>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 border-t border-yellow-500/10">
+                  <input 
+                    type="checkbox" 
+                    id="hideRankings"
+                    checked={hideRankings}
+                    onChange={e => setHideRankings(e.target.checked)}
+                    className="w-5 h-5 text-yellow-600 rounded focus:ring-yellow-500"
+                  />
+                  <label htmlFor="hideRankings" className="flex-1 cursor-pointer select-none">
+                      <span className="block text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                          <EyeOff size={16} className="text-zinc-500" /> Disable Top 3 Banner
+                      </span>
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Hide the standard 1st/2nd/3rd place podium banner entirely.
                       </span>
                   </label>
               </div>

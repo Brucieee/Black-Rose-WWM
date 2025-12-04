@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { db } from '../services/firebase';
-import { ArenaMatch, RoleType, UserProfile, Guild } from '../types';
-import { Swords, Shield, Heart, Zap, Loader2, Flame } from 'lucide-react';
+import { ArenaMatch, RoleType, UserProfile } from '../types';
+import { Swords, Shield, Heart, Zap, Loader2 } from 'lucide-react';
 
 const { useSearchParams } = ReactRouterDOM as any;
 
@@ -18,9 +18,9 @@ const VsScreen: React.FC = () => {
 
   // Fetch Guilds for lookup
   useEffect(() => {
-      const unsub = db.collection("guilds").onSnapshot(snap => {
+      const unsub = db.collection("guilds").onSnapshot((snap: any) => {
           const lookup: Record<string, string> = {};
-          snap.docs.forEach(d => { lookup[d.id] = d.data().name; });
+          snap.docs.forEach((d: any) => { lookup[d.id] = d.data().name; });
           setGuilds(lookup);
       });
       return () => unsub();
@@ -73,27 +73,11 @@ const VsScreen: React.FC = () => {
   const getRoleIcon = (role?: RoleType) => {
       if (!role) return null;
       switch(role) {
-          case RoleType.DPS: return <Swords size={48} className="drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" />;
-          case RoleType.TANK: return <Shield size={48} className="drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" />;
-          case RoleType.HEALER: return <Heart size={48} className="drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" />;
-          case RoleType.HYBRID: return <Zap size={48} className="drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" />;
+          case RoleType.DPS: return <Swords size={40} />;
+          case RoleType.TANK: return <Shield size={40} />;
+          case RoleType.HEALER: return <Heart size={40} />;
+          case RoleType.HYBRID: return <Zap size={40} />;
       }
-  };
-
-  const renderParticles = (color: string) => {
-      return Array.from({ length: 20 }).map((_, i) => (
-          <div 
-            key={i}
-            className={`absolute bottom-[-20px] rounded-full blur-sm opacity-0 animate-fire-rise ${color}`}
-            style={{
-                left: `${Math.random() * 100}%`,
-                width: `${Math.random() * 10 + 5}px`,
-                height: `${Math.random() * 10 + 5}px`,
-                animationDuration: `${Math.random() * 2 + 2}s`,
-                animationDelay: `${Math.random() * 2}s`
-            }}
-          />
-      ));
   };
 
   if (loading) {
@@ -108,21 +92,11 @@ const VsScreen: React.FC = () => {
       return (
           <div className="h-screen w-screen bg-zinc-950 flex flex-col items-center justify-center relative overflow-hidden font-sans">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black"></div>
-              
-              {/* Animated Background Lines */}
-              <div className="absolute inset-0 opacity-20">
-                  {Array.from({length: 10}).map((_, i) => (
-                      <div key={i} className="absolute h-[1px] bg-white/50 w-full" style={{ top: `${i * 10}%`, left: 0, animation: `scanline ${3 + i}s linear infinite` }}></div>
-                  ))}
-              </div>
-
-              <div className="z-10 text-center relative">
-                  <div className="absolute -inset-10 bg-rose-500/10 blur-3xl animate-pulse rounded-full"></div>
+              <div className="z-10 text-center relative animate-pulse">
                   <h1 className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-zinc-400 to-zinc-800 uppercase tracking-widest italic drop-shadow-2xl">
                       STANDBY
                   </h1>
-                  <div className="h-1 w-32 bg-rose-900 mx-auto mt-6 mb-4"></div>
-                  <p className="text-zinc-500 font-mono tracking-[0.5em] text-xl uppercase">Awaiting Challengers</p>
+                  <p className="text-zinc-500 font-mono tracking-[0.5em] text-xl uppercase mt-4">Awaiting Challengers</p>
               </div>
           </div>
       );
@@ -138,158 +112,147 @@ const VsScreen: React.FC = () => {
   return (
     <>
     <style>{`
-        @keyframes fire-rise {
-            0% { transform: translateY(0) scale(1); opacity: 0; }
-            20% { opacity: 0.8; }
-            100% { transform: translateY(-100vh) scale(0); opacity: 0; }
+        @keyframes breathe {
+            0%, 100% { transform: scale(1) translateY(0); filter: brightness(1); }
+            50% { transform: scale(1.03) translateY(-10px); filter: brightness(1.1); }
         }
-        @keyframes slide-clash-left {
-            0% { transform: translateX(-100%) skewX(-10deg); opacity: 0; }
-            100% { transform: translateX(0) skewX(-10deg); opacity: 1; }
+        @keyframes slide-in-left {
+            0% { transform: translateX(-100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
         }
-        @keyframes slide-clash-right {
-            0% { transform: translateX(100%) skewX(-10deg); opacity: 0; }
-            100% { transform: translateX(0) skewX(-10deg); opacity: 1; }
+        @keyframes slide-in-right {
+            0% { transform: translateX(100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
         }
-        @keyframes lightning-flash {
-            0%, 90%, 100% { opacity: 0; }
-            92%, 96% { opacity: 1; filter: brightness(2); }
+        .animate-breathe {
+            animation: breathe 4s ease-in-out infinite;
         }
-        .text-stroke { -webkit-text-stroke: 1px rgba(0,0,0,0.5); }
-        .text-glow-blue { text-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
-        .text-glow-red { text-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+        .text-stroke { -webkit-text-stroke: 2px black; }
     `}</style>
 
     <div className="h-screen w-screen bg-black overflow-hidden relative font-sans select-none flex">
         
-        {/* === PLAYER 1 SIDE (LEFT) === */}
-        <div className="relative w-[55%] h-full bg-zinc-900 overflow-hidden -skew-x-6 -ml-[5%] border-r-4 border-blue-500/50 shadow-[10px_0_50px_rgba(0,0,0,0.8)] z-10">
-            {/* Background Image / Color */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-zinc-900 to-black skew-x-6 scale-110"></div>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 mix-blend-overlay"></div>
-            
-            {/* Particles */}
-            <div className="absolute inset-0 overflow-hidden skew-x-6 scale-110">
-                {renderParticles('bg-blue-500')}
+        {/* Background Split */}
+        <div className="absolute inset-0 flex">
+            <div className="w-1/2 h-full bg-gradient-to-br from-blue-950 via-zinc-900 to-black relative overflow-hidden border-r-4 border-black">
+                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 mix-blend-overlay"></div>
+                 {/* Blue Particles */}
+                 <div className="absolute inset-0 opacity-30">
+                    {Array.from({ length: 15 }).map((_, i) => (
+                        <div key={i} className="absolute bg-blue-500 rounded-full blur-md animate-pulse" 
+                             style={{ 
+                                 width: Math.random() * 10 + 'px', height: Math.random() * 10 + 'px', 
+                                 top: Math.random() * 100 + '%', left: Math.random() * 100 + '%',
+                                 animationDuration: Math.random() * 3 + 2 + 's' 
+                             }} 
+                        />
+                    ))}
+                 </div>
             </div>
-
-            {/* Content Container (Un-skewed) */}
-            <div className="absolute inset-0 skew-x-6 ml-[5%] flex flex-col justify-end pb-16 pl-12 md:pl-24">
-                
-                {/* Character Portrait */}
-                <div className="absolute bottom-0 right-0 h-[110%] w-[120%] flex items-end justify-center transform translate-x-20">
-                    <img 
-                        src={p1.photoURL || 'https://via.placeholder.com/800'} 
-                        className="h-full w-auto object-cover max-w-none opacity-0 animate-hero-entrance filter contrast-125 brightness-110 drop-shadow-[-20px_0_30px_rgba(0,0,0,0.8)]"
-                        style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}
-                    />
-                </div>
-
-                {/* Text Info */}
-                <div className="relative z-20 opacity-0 animate-in slide-in-from-left duration-700 delay-300 fill-mode-forwards">
-                    <div className="flex items-center gap-4 text-blue-400 mb-2 drop-shadow-md">
-                        {getRoleIcon(p1.role)}
-                        <div>
-                            <span className="block text-4xl font-black uppercase tracking-widest leading-none text-white">{p1.role}</span>
-                            <span className="block text-sm font-bold text-blue-300 tracking-[0.3em] uppercase">{p1GuildName}</span>
-                        </div>
-                    </div>
-                    
-                    <h1 className="text-8xl md:text-[10rem] font-black text-white italic tracking-tighter uppercase leading-[0.8] drop-shadow-xl transform -skew-x-12 origin-bottom-left text-glow-blue">
-                        {p1.displayName}
-                    </h1>
-
-                    <div className="mt-6 flex flex-wrap gap-2 max-w-md">
-                        {p1Weapons.map((w, i) => (
-                            <span key={i} className="bg-blue-900/80 backdrop-blur-sm border border-blue-500/30 text-white px-4 py-1 text-lg font-bold uppercase tracking-wider rounded skew-x-[-12deg]">
-                                {w}
-                            </span>
-                        ))}
-                    </div>
-                </div>
+            <div className="w-1/2 h-full bg-gradient-to-bl from-red-950 via-zinc-900 to-black relative overflow-hidden border-l-4 border-black">
+                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 mix-blend-overlay"></div>
+                 {/* Red Particles */}
+                 <div className="absolute inset-0 opacity-30">
+                    {Array.from({ length: 15 }).map((_, i) => (
+                        <div key={i} className="absolute bg-red-500 rounded-full blur-md animate-pulse" 
+                             style={{ 
+                                 width: Math.random() * 10 + 'px', height: Math.random() * 10 + 'px', 
+                                 top: Math.random() * 100 + '%', left: Math.random() * 100 + '%',
+                                 animationDuration: Math.random() * 3 + 2 + 's' 
+                             }} 
+                        />
+                    ))}
+                 </div>
             </div>
         </div>
 
-        {/* === PLAYER 2 SIDE (RIGHT) === */}
-        <div className="relative w-[55%] h-full bg-zinc-900 overflow-hidden -skew-x-6 -mr-[5%] -ml-[10%] border-l-4 border-red-500/50 shadow-[-10px_0_50px_rgba(0,0,0,0.8)] z-10">
-            {/* Background Image / Color */}
-            <div className="absolute inset-0 bg-gradient-to-bl from-red-950 via-zinc-900 to-black skew-x-6 scale-110"></div>
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 mix-blend-overlay"></div>
-
-            {/* Particles */}
-            <div className="absolute inset-0 overflow-hidden skew-x-6 scale-110">
-                {renderParticles('bg-red-500')}
-            </div>
-
-            {/* Content Container (Un-skewed) */}
-            <div className="absolute inset-0 skew-x-6 mr-[5%] flex flex-col justify-end items-end pb-16 pr-12 md:pr-24 text-right">
-                
-                {/* Character Portrait */}
-                <div className="absolute bottom-0 left-0 h-[110%] w-[120%] flex items-end justify-center transform -translate-x-20 scale-x-[-1]">
-                    <img 
-                        src={p2.photoURL || 'https://via.placeholder.com/800'} 
-                        className="h-full w-auto object-cover max-w-none opacity-0 animate-hero-entrance filter contrast-125 brightness-110 drop-shadow-[-20px_0_30px_rgba(0,0,0,0.8)]"
-                        style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}
-                    />
-                </div>
-
-                {/* Text Info */}
-                <div className="relative z-20 opacity-0 animate-in slide-in-from-right duration-700 delay-300 fill-mode-forwards flex flex-col items-end">
-                    <div className="flex items-center gap-4 text-red-500 mb-2 drop-shadow-md flex-row-reverse">
-                        {getRoleIcon(p2.role)}
-                        <div className="text-right">
-                            <span className="block text-4xl font-black uppercase tracking-widest leading-none text-white">{p2.role}</span>
-                            <span className="block text-sm font-bold text-red-300 tracking-[0.3em] uppercase">{p2GuildName}</span>
-                        </div>
-                    </div>
-                    
-                    <h1 className="text-8xl md:text-[10rem] font-black text-white italic tracking-tighter uppercase leading-[0.8] drop-shadow-xl transform -skew-x-12 origin-bottom-right text-glow-red">
-                        {p2.displayName}
-                    </h1>
-
-                    <div className="mt-6 flex flex-wrap gap-2 max-w-md justify-end">
-                        {p2Weapons.map((w, i) => (
-                            <span key={i} className="bg-red-900/80 backdrop-blur-sm border border-red-500/30 text-white px-4 py-1 text-lg font-bold uppercase tracking-wider rounded skew-x-[-12deg]">
-                                {w}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {/* === CENTER VS ELEMENT === */}
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-            {/* Lightning Flash Overlay */}
-            <div className="absolute inset-0 bg-white mix-blend-overlay pointer-events-none animate-[lightning-flash_5s_infinite]"></div>
-
-            <div className="relative transform scale-[2.5] md:scale-[4] rotate-[-5deg]">
-                {/* VS Text */}
-                <span className="relative z-10 font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-orange-500 to-red-700 italic tracking-tighter drop-shadow-[0_5px_5px_rgba(0,0,0,1)] text-stroke" 
-                      style={{ WebkitTextStroke: '1px white' }}>
+        {/* VS CENTER */}
+        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="relative transform scale-[4] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+                <span className="font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-500 to-red-700 italic tracking-tighter" style={{ WebkitTextStroke: '1px white' }}>
                     VS
                 </span>
-                
-                {/* Energy Burst behind VS */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-orange-500/30 blur-[50px] animate-pulse"></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[20%] bg-white blur-md rotate-[-45deg] animate-pulse"></div>
             </div>
         </div>
 
         {/* Round Indicator */}
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-40">
-            <div className="bg-black/80 backdrop-blur-md border border-white/20 px-12 py-3 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] transform skew-x-[-20deg]">
-                <div className="transform skew-x-[20deg] text-center">
-                    <span className="block text-zinc-400 font-bold tracking-[0.5em] text-xs uppercase mb-1">Current Match</span>
-                    <span className="block text-white font-black tracking-widest text-2xl uppercase text-glow-blue">
-                        {activeMatch.isThirdPlace ? "3rd Place Match" : `Round ${activeMatch.round}`}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 z-30 bg-black/80 border border-zinc-700 px-8 py-2 rounded-full backdrop-blur-md">
+            <span className="text-xl font-bold text-white uppercase tracking-widest text-shadow-sm">
+                {activeMatch.isThirdPlace ? "3rd Place Match" : `Round ${activeMatch.round}`}
+            </span>
+        </div>
+
+        {/* === PLAYER 1 (LEFT) === */}
+        <div className="relative w-1/2 h-full z-10 flex flex-col justify-end pb-20 pl-16">
+            {/* Character Image */}
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                <img 
+                    src={p1.photoURL || 'https://via.placeholder.com/800'} 
+                    className="h-[110%] w-auto object-cover animate-breathe filter drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
+                    style={{ maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)' }}
+                />
+            </div>
+
+            {/* Info Panel */}
+            <div className="relative z-20 animate-[slide-in-left_0.8s_ease-out]">
+                <div className="flex items-end gap-4 mb-2">
+                    <div className="text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
+                        {getRoleIcon(p1.role)}
+                    </div>
+                    <div>
+                        <span className="block text-5xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-xl">{p1.displayName}</span>
+                        <span className="text-xl font-bold text-blue-400 tracking-[0.3em] uppercase block mt-1">{p1GuildName}</span>
+                    </div>
+                </div>
+                
+                <div className="flex gap-3 mt-4">
+                    <span className="bg-blue-900/80 text-white px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border-l-4 border-blue-500 shadow-lg">
+                        {p1.role}
                     </span>
+                    {p1Weapons.map((w, i) => (
+                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700">
+                            {w}
+                        </span>
+                    ))}
                 </div>
             </div>
         </div>
 
-        {/* Footer Overlay */}
-        <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-black via-black/80 to-transparent z-20 pointer-events-none"></div>
+        {/* === PLAYER 2 (RIGHT) === */}
+        <div className="relative w-1/2 h-full z-10 flex flex-col justify-end items-end pb-20 pr-16 text-right">
+            {/* Character Image */}
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                <img 
+                    src={p2.photoURL || 'https://via.placeholder.com/800'} 
+                    className="h-[110%] w-auto object-cover animate-breathe filter drop-shadow-[0_0_20px_rgba(239,68,68,0.4)] transform scale-x-[-1]"
+                    style={{ animationDelay: '0.5s', maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)' }}
+                />
+            </div>
+
+            {/* Info Panel */}
+            <div className="relative z-20 animate-[slide-in-right_0.8s_ease-out]">
+                <div className="flex items-end justify-end gap-4 mb-2">
+                    <div>
+                        <span className="block text-5xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-xl">{p2.displayName}</span>
+                        <span className="text-xl font-bold text-red-400 tracking-[0.3em] uppercase block mt-1">{p2GuildName}</span>
+                    </div>
+                    <div className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+                        {getRoleIcon(p2.role)}
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-4">
+                    {p2Weapons.map((w, i) => (
+                        <span key={i} className="bg-zinc-900/80 text-zinc-300 px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border border-zinc-700">
+                            {w}
+                        </span>
+                    ))}
+                    <span className="bg-red-900/80 text-white px-4 py-1 rounded text-lg font-bold uppercase tracking-wider border-r-4 border-red-500 shadow-lg">
+                        {p2.role}
+                    </span>
+                </div>
+            </div>
+        </div>
 
     </div>
     </>
