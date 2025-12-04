@@ -36,6 +36,8 @@ const MatchBanner: React.FC = () => {
                   const data = doc.data();
                   if (data?.activeBannerMatchId) {
                       setMatchId(data.activeBannerMatchId);
+                  } else {
+                      setMatchId(null);
                   }
               }
           });
@@ -65,6 +67,8 @@ const MatchBanner: React.FC = () => {
     const unsub = db.collection("arena_matches").doc(matchId).onSnapshot((doc: any) => {
         if (doc.exists) {
             setMatch({ id: doc.id, ...doc.data() } as ArenaMatch);
+        } else {
+            setMatch(null);
         }
         setLoading(false);
     });
@@ -132,8 +136,26 @@ const MatchBanner: React.FC = () => {
   
   if (!match) return (
       <div className="h-screen w-screen bg-transparent flex flex-col justify-end overflow-hidden">
-        <div className="relative w-full h-40 md:h-48 bg-zinc-950/80 backdrop-blur-md overflow-hidden border-t border-zinc-800 flex items-center justify-center">
-            <p className="text-zinc-500 font-mono tracking-widest uppercase">Waiting for Match Selection...</p>
+        <div className="relative w-full h-40 md:h-48 bg-black/90 backdrop-blur-md overflow-hidden border-t border-zinc-800 flex flex-col items-center justify-center group">
+            
+            {/* Scanner */}
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(220,38,38,0.1)_50%,transparent_100%)] w-[200%] -translate-x-full animate-shimmer" />
+            
+            <div className="relative z-10 flex items-center gap-3 opacity-60">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                <p className="text-zinc-400 font-mono tracking-[0.3em] uppercase text-sm font-bold">
+                    Waiting for Match Data...
+                </p>
+            </div>
+            
+            <style>{`
+                @keyframes shimmer {
+                    100% { transform: translateX(100%); }
+                }
+                .animate-shimmer {
+                    animation: shimmer 3s infinite linear;
+                }
+            `}</style>
         </div>
       </div>
   );

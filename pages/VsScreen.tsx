@@ -59,11 +59,15 @@ const VsScreen: React.FC = () => {
   }, [contextId]);
 
   useEffect(() => {
+    setLoading(true);
+    
     // 1. URL Match ID Priority (Specific Link)
     if (matchId) {
         const unsub = db.collection("arena_matches").doc(matchId).onSnapshot((doc: any) => {
             if (doc.exists) {
                 setActiveMatch({ id: doc.id, ...doc.data() } as ArenaMatch);
+            } else {
+                setActiveMatch(null);
             }
             setLoading(false);
         });
@@ -71,31 +75,23 @@ const VsScreen: React.FC = () => {
     }
 
     // 2. Remote Control Priority (Admin Selected)
+    // If streamMatchId is set, show it. If not, show nothing (Standby).
     if (streamMatchId) {
         const unsub = db.collection("arena_matches").doc(streamMatchId).onSnapshot((doc: any) => {
             if (doc.exists) {
                 setActiveMatch({ id: doc.id, ...doc.data() } as ArenaMatch);
+            } else {
+                setActiveMatch(null);
             }
             setLoading(false);
         });
         return () => unsub();
-    }
-
-    // 3. Default Auto-Rotation (Next Playable)
-    if (!contextId) return;
-    const unsub = db
-      .collection("arena_matches")
-      .where("guildId", "==", contextId)
-      .onSnapshot((snap: any) => {
-        const matches = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as ArenaMatch));
-        const playable = matches.filter((m) => m.player1 && m.player2 && !m.winner);
-        playable.sort((a, b) => (b.round - a.round) || (a.position - b.position));
-        setActiveMatch(playable[0] || null);
+    } else {
+        // No match selected, clear active match to show standby screen
+        setActiveMatch(null);
         setLoading(false);
-      });
-
-    return () => unsub();
-  }, [contextId, matchId, streamMatchId]);
+    }
+  }, [matchId, streamMatchId]);
 
   useEffect(() => {
     if (activeMatch?.player1?.uid) {
@@ -125,19 +121,6 @@ const VsScreen: React.FC = () => {
 
   return (
     <>
-      <style>{`
-        @keyframes vs-pulse {
-            0%, 100% { transform: scale(1) rotate(-3deg); filter: brightness(1); }
-            50% { transform: scale(1.1) rotate(-3deg); filter: brightness(1.2); }
-        }
-        .animate-vs-pulse {
-            animation: vs-pulse 1.5s ease-in-out infinite;
-        }
-        .text-stroke-vs {
-            -webkit-text-stroke: 4px white;
-            paint-order: stroke fill;
-        }
-      `}</style>
       <div className="h-screen w-screen bg-black overflow-hidden relative font-sans select-none">
         {/* Cinematic bars */}
         <div className="absolute top-0 left-0 w-full h-16 bg-black z-50 pointer-events-none" />
@@ -156,24 +139,6 @@ const VsScreen: React.FC = () => {
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
             <div className="absolute inset-0 bg-gradient-to-l from-red-900/20 to-transparent" />
           </div>
-        </div>
-
-        {/* VS Center Graphic */}
-        <div className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none">
-            <div className="relative animate-vs-pulse drop-shadow-[0_0_60px_rgba(255,100,0,0.8)]">
-                <span 
-                    className="font-black italic tracking-tighter text-stroke-vs leading-none block" 
-                    style={{ 
-                        fontSize: '250px',
-                        backgroundImage: 'linear-gradient(to bottom, #fde047 0%, #f97316 50%, #dc2626 100%)',
-                        WebkitBackgroundClip: 'text',
-                        backgroundClip: 'text',
-                        color: 'transparent'
-                    }}
-                >
-                    VS
-                </span>
-            </div>
         </div>
 
         {/* Round banner */}
@@ -369,13 +334,34 @@ const LoadingScreen = () => (
 );
 
 const StandbyScreen = () => (
-  <div className="h-screen w-screen bg-zinc-950 flex flex-col items-center justify-center relative overflow-hidden">
+  <div className="h-screen w-screen bg-black flex flex-col items-center justify-center relative overflow-hidden">
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black opacity-80" />
-    <div className="z-10 text-center relative">
-      <h1 className="text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-zinc-300 to-zinc-700 uppercase italic tracking-widest drop-shadow-2xl">
-        STANDBY
-      </h1>
-      <p className="text-zinc-500 font-mono tracking-[0.5em] text-xl uppercase mt-4">Awaiting Challengers</p>
+    
+    {/* Scanning Line */}
+    <div className="absolute inset-0 w-full h-full pointer-events-none opacity-20">
+        <div className="w-full h-1 bg-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-scan"></div>
     </div>
+
+    <div className="z-10 text-center relative flex flex-col items-center">
+      <Loader2 className="w-16 h-16 text-red-600 animate-spin mb-6" />
+      <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-zinc-500 to-zinc-800 uppercase tracking-widest drop-shadow-2xl">
+        AWAITING SIGNAL
+      </h1>
+      <div className="flex items-center gap-2 mt-4 text-red-500/80 font-mono text-sm tracking-[0.3em] uppercase animate-pulse">
+          <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+          <span>Standby Mode</span>
+      </div>
+    </div>
+    
+    <style>{`
+        @keyframes scan {
+            0% { transform: translateY(-10vh); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(110vh); opacity: 0; }
+        }
+        .animate-scan {
+            animation: scan 4s linear infinite;
+        }
+    `}</style>
   </div>
 );
