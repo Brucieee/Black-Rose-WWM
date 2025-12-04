@@ -1,6 +1,6 @@
 import React from 'react';
 import { Guild, CustomTournament, UserProfile } from '../../types';
-import { Swords, Globe, Plus, MonitorPlay, Settings, RefreshCw, Menu, Trash2 } from 'lucide-react';
+import { Swords, Globe, Plus, MonitorPlay, Settings, RefreshCw, Menu, Trash2, LayoutTemplate } from 'lucide-react';
 
 interface ArenaHeaderProps {
   guilds: Guild[];
@@ -18,6 +18,7 @@ interface ArenaHeaderProps {
   onOpenSettings: () => void;
   onOpenInit: () => void;
   onToggleSidebar: () => void;
+  onOpenBanner?: () => void;
 }
 
 export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
@@ -35,7 +36,8 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
   onOpenStream,
   onOpenSettings,
   onOpenInit,
-  onToggleSidebar
+  onToggleSidebar,
+  onOpenBanner
 }) => {
   return (
     <div className="flex justify-between items-start mb-2">
@@ -104,6 +106,15 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
 
         {canManage && (
           <div className="flex gap-2 flex-shrink-0">
+            {onOpenBanner && (
+              <button 
+                onClick={onOpenBanner}
+                className="bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                title="Launch Match Banner"
+              >
+                <LayoutTemplate size={18} />
+              </button>
+            )}
             <button 
               onClick={onOpenStream}
               className="bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-1.5 rounded-lg border border-rose-200 dark:border-rose-900 transition-colors animate-pulse"

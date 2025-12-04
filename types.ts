@@ -48,7 +48,8 @@ export interface Guild {
   name: string;
   memberCap: number;
   arenaMinPoints?: number; // Added for arena threshold
-  activeStreamMatchId?: string; // ID of the match currently being broadcasted
+  activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
+  activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
   lastArenaChampion?: {
       uid: string;
       displayName: string;
@@ -194,7 +195,8 @@ export interface CustomTournament {
   createdBy: string;
   hasGrandFinale?: boolean;
   hideRankings?: boolean;
-  activeStreamMatchId?: string; // ID of the match currently being broadcasted
+  activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
+  activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
 }
 
 export interface ArenaMatch {

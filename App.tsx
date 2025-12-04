@@ -11,6 +11,7 @@ import Events from './pages/Events';
 import Profile from './pages/Profile';
 import Arena from './pages/Arena';
 import VsScreen from './pages/VsScreen';
+import MatchBanner from './pages/MatchBanner';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
 
@@ -22,8 +23,9 @@ function App() {
       <AuthProvider>
         <HashRouter>
           <Routes>
-            {/* VS Screen stands alone outside Layout for fullscreen stream usage */}
+            {/* Fullscreen Views */}
             <Route path="/vs-screen" element={<VsScreen />} />
+            <Route path="/match-banner" element={<MatchBanner />} />
             
             <Route path="/*" element={
               <Layout>

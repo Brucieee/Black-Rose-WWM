@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ArenaMatch, ArenaParticipant, RoleType } from '../../types';
-import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio } from 'lucide-react';
+import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio, Square, Maximize } from 'lucide-react';
 
 interface ArenaBracketProps {
   matches: ArenaMatch[];
@@ -8,16 +8,18 @@ interface ArenaBracketProps {
   arenaMinPoints: number;
   isCustomMode: boolean;
   activeStreamMatchId?: string;
+  activeBannerMatchId?: string;
   onDeclareWinner: (match: ArenaMatch, winner: ArenaParticipant) => void;
   onClearSlot: (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => void;
   onDrop: (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => void;
   onViewProfile: (uid: string) => void;
   onPreviewMatch: (match: ArenaMatch) => void;
+  onPreviewBanner?: (match: ArenaMatch) => void;
 }
 
 export const ArenaBracket: React.FC<ArenaBracketProps> = ({
-  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId,
-  onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch
+  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId,
+  onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch, onPreviewBanner
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 50, y: 50 });
@@ -72,7 +74,8 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   };
 
   const renderMatch = (match: ArenaMatch) => {
-    const isLive = activeStreamMatchId === match.id;
+    const isStreamLive = activeStreamMatchId === match.id;
+    const isBannerLive = activeBannerMatchId === match.id;
 
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
         const isWinner = match.winner?.uid === player?.uid;
@@ -127,19 +130,34 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
 
     return (
         <div key={match.id} className="match-card match-card-3d relative flex items-center z-10 w-full mb-8 last:mb-0 perspective-container">
-            <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : isLive ? 'border-red-500 ring-2 ring-red-500/50 shadow-red-500/20' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20 transition-all`}>
+            <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : isStreamLive ? 'border-red-500 ring-2 ring-red-500/50 shadow-red-500/20' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20 transition-all`}>
                 {canManage && match.player1 && match.player2 && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onPreviewMatch(match); }}
-                        className={`absolute -top-3 -right-3 p-1.5 rounded-full shadow-md z-30 border transition-all ${
-                            isLive 
-                            ? 'bg-red-600 text-white border-red-500 animate-pulse' 
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700 opacity-0 group-hover:opacity-100'
-                        }`}
-                        title={isLive ? "Currently Streaming" : "Broadcast to Stream"}
-                    >
-                        {isLive ? <Radio size={14} /> : <Eye size={14} />}
-                    </button>
+                    <div className="absolute -top-3 -right-3 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onPreviewMatch(match); }}
+                            className={`p-1.5 rounded-full shadow-md border transition-all ${
+                                isStreamLive 
+                                ? 'bg-red-600 text-white border-red-500 animate-pulse' 
+                                : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700'
+                            }`}
+                            title={isStreamLive ? "Currently Streaming" : "Broadcast to Stream Screen"}
+                        >
+                            {isStreamLive ? <Radio size={14} /> : <Eye size={14} />}
+                        </button>
+                        {onPreviewBanner && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onPreviewBanner(match); }}
+                                className={`p-1.5 rounded-full shadow-md border transition-all ${
+                                    isBannerLive
+                                    ? 'bg-blue-600 text-white border-blue-500'
+                                    : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700'
+                                }`}
+                                title={isBannerLive ? "Currently on Banner" : "Broadcast to Match Banner"}
+                            >
+                                <Maximize size={14} />
+                            </button>
+                        )}
+                    </div>
                 )}
                 
                 {match.isThirdPlace && <div className="text-[10px] text-orange-600 dark:text-orange-500 text-center font-bold uppercase mb-1">3rd Place Match</div>}

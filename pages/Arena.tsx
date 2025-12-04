@@ -70,10 +70,9 @@ const Arena: React.FC = () => {
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
   const arenaWinners = selectedGuild?.lastArenaWinners || (selectedGuild?.lastArenaChampion ? [{...selectedGuild.lastArenaChampion, rank: 1}] : []);
 
-  // Determine Active Stream Match
-  const activeStreamMatchId = isCustomMode 
-    ? selectedTournament?.activeStreamMatchId 
-    : selectedGuild?.activeStreamMatchId;
+  // Determine Active Matches
+  const activeStreamMatchId = isCustomMode ? selectedTournament?.activeStreamMatchId : selectedGuild?.activeStreamMatchId;
+  const activeBannerMatchId = isCustomMode ? selectedTournament?.activeBannerMatchId : selectedGuild?.activeBannerMatchId;
 
   const assignedParticipantUids = React.useMemo(() => {
     const uids = new Set<string>();
@@ -310,7 +309,7 @@ const Arena: React.FC = () => {
   const handleDrop = async (e: React.DragEvent, match: ArenaMatch, slot: string) => { if (!canManage) return; e.preventDefault(); const data = e.dataTransfer.getData("application/json"); if (!data) return; const droppedUser = JSON.parse(data); await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null }); };
   const handleOpenStreamScreen = () => window.open(`/#/vs-screen?contextId=${selectedId}`, 'VsScreen', 'width=1920,height=1080');
   
-  // Update stream match in DB (Remote Control)
+  // Handler for Remote Stream Control
   const handlePreviewMatch = async (match: ArenaMatch) => {
       const collection = isCustomMode ? "custom_tournaments" : "guilds";
       try {
@@ -322,6 +321,21 @@ const Arena: React.FC = () => {
           showAlert(e.message, "error");
       }
   };
+
+  // Handler for Remote Banner Control
+  const handlePreviewBanner = async (match: ArenaMatch) => {
+      const collection = isCustomMode ? "custom_tournaments" : "guilds";
+      try {
+          await db.collection(collection).doc(selectedId).update({
+              activeBannerMatchId: match.id
+          });
+          showAlert("Match Banner updated.", "success");
+      } catch (e: any) {
+          showAlert(e.message, "error");
+      }
+  };
+
+  const handleOpenBannerScreen = () => window.open(`/#/match-banner?contextId=${selectedId}`, 'MatchBanner', 'width=1200,height=300');
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -343,6 +357,7 @@ const Arena: React.FC = () => {
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onOpenInit={() => setIsInitModalOpen(true)}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onOpenBanner={handleOpenBannerScreen}
         />
 
         <ArenaChampions 
@@ -394,11 +409,13 @@ const Arena: React.FC = () => {
             arenaMinPoints={arenaMinPoints} 
             isCustomMode={isCustomMode} 
             activeStreamMatchId={activeStreamMatchId}
+            activeBannerMatchId={activeBannerMatchId}
             onDeclareWinner={handleDeclareWinner}
             onClearSlot={handleClearSlot as any}
             onDrop={handleDrop as any}
             onViewProfile={handleViewProfile}
             onPreviewMatch={handlePreviewMatch}
+            onPreviewBanner={handlePreviewBanner}
           />
         </div>
       </div>
