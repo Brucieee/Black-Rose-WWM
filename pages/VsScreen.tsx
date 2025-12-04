@@ -113,9 +113,9 @@ const VsScreen: React.FC = () => {
   return (
     <>
     <style>{`
-        @keyframes breathe {
-            0%, 100% { transform: scale(1) translateY(0); filter: brightness(1); }
-            50% { transform: scale(1.03) translateY(-10px); filter: brightness(1.1); }
+        @keyframes vs-pulse {
+            0%, 100% { transform: scale(15) rotate(-5deg); filter: brightness(1); }
+            50% { transform: scale(15.5) rotate(-5deg); filter: brightness(1.2); }
         }
         @keyframes slide-in-left {
             0% { transform: translateX(-100%); opacity: 0; }
@@ -125,10 +125,10 @@ const VsScreen: React.FC = () => {
             0% { transform: translateX(100%); opacity: 0; }
             100% { transform: translateX(0); opacity: 1; }
         }
-        .animate-breathe {
-            animation: breathe 4s ease-in-out infinite;
+        .animate-vs-pulse {
+            animation: vs-pulse 3s ease-in-out infinite;
         }
-        .text-stroke { -webkit-text-stroke: 2px black; }
+        .text-stroke-vs { -webkit-text-stroke: 3px white; }
     `}</style>
 
     <div className="h-screen w-screen bg-black overflow-hidden relative font-sans select-none flex">
@@ -169,8 +169,8 @@ const VsScreen: React.FC = () => {
 
         {/* VS CENTER */}
         <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="relative transform scale-[15] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
-                <span className="font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-500 to-red-700 italic tracking-tighter" style={{ WebkitTextStroke: '1px white' }}>
+            <div className="relative animate-vs-pulse drop-shadow-[0_0_50px_rgba(255,100,0,0.6)]">
+                <span className="font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-orange-500 to-red-600 italic tracking-tighter text-stroke-vs" style={{ fontSize: '15px' }}>
                     VS
                 </span>
             </div>
@@ -189,7 +189,7 @@ const VsScreen: React.FC = () => {
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                 <img 
                     src={p1.photoURL || 'https://via.placeholder.com/800'} 
-                    className="h-[110%] w-auto object-cover animate-breathe filter drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
+                    className="h-[110%] w-auto object-cover filter drop-shadow-[0_0_20px_rgba(59,130,246,0.4)]"
                     style={{ maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)' }}
                 />
             </div>
@@ -201,7 +201,8 @@ const VsScreen: React.FC = () => {
                         {getRoleIcon(p1.role)}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <span className="block text-6xl md:text-8xl lg:text-9xl font-black text-white uppercase tracking-tight leading-none text-stroke drop-shadow-2xl truncate w-full" title={p1.displayName}>
+                        {/* IGN: Removed truncate, reduced size, standard bold font */}
+                        <span className="block text-5xl md:text-7xl font-bold text-white uppercase tracking-tight leading-none drop-shadow-2xl w-full" title={p1.displayName}>
                             {p1.displayName}
                         </span>
                         <span className="text-2xl md:text-4xl font-bold text-blue-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg truncate">
@@ -229,8 +230,8 @@ const VsScreen: React.FC = () => {
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                 <img 
                     src={p2.photoURL || 'https://via.placeholder.com/800'} 
-                    className="h-[110%] w-auto object-cover animate-breathe filter drop-shadow-[0_0_20px_rgba(239,68,68,0.4)] transform scale-x-[-1]"
-                    style={{ animationDelay: '0.5s', maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)' }}
+                    className="h-[110%] w-auto object-cover filter drop-shadow-[0_0_20px_rgba(239,68,68,0.4)] transform scale-x-[-1]"
+                    style={{ maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)' }}
                 />
             </div>
 
@@ -238,7 +239,8 @@ const VsScreen: React.FC = () => {
             <div className="relative z-20 animate-[slide-in-right_0.8s_ease-out] w-full max-w-[85%]">
                 <div className="flex items-end justify-end gap-6 mb-4">
                     <div className="flex-1 min-w-0 flex flex-col items-end">
-                        <span className="block text-6xl md:text-8xl lg:text-9xl font-black text-white uppercase tracking-tight leading-none text-stroke drop-shadow-2xl truncate w-full text-right" title={p2.displayName}>
+                        {/* IGN: Removed truncate, reduced size, standard bold font */}
+                        <span className="block text-5xl md:text-7xl font-bold text-white uppercase tracking-tight leading-none drop-shadow-2xl w-full text-right" title={p2.displayName}>
                             {p2.displayName}
                         </span>
                         <span className="text-2xl md:text-4xl font-bold text-red-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg truncate">
