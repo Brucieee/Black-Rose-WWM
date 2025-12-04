@@ -141,13 +141,6 @@ const VsScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Round banner */}
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 border border-zinc-800 px-8 py-2 rounded-full">
-          <span className="text-xl font-bold text-white uppercase tracking-widest">
-            {activeMatch.isThirdPlace ? "3rd Place Match" : `Round ${activeMatch.round}`}
-          </span>
-        </div>
-
         {/* Character images */}
         <CharacterImage side="left" photoURL={p1.photoURL} color="blue" />
         <CharacterImage side="right" photoURL={p2.photoURL} color="red" />

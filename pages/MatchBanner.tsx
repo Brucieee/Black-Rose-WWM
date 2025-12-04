@@ -210,10 +210,6 @@ const MatchBanner: React.FC = () => {
                             VS
                         </span>
                     </div>
-                    <div className="h-px w-full bg-gradient-to-r from-transparent via-zinc-500 to-transparent mt-2 opacity-50"></div>
-                    <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
-                        {match.isThirdPlace ? "3rd Place" : `Round ${match.round}`}
-                    </span>
                 </div>
 
                 {/* Right Player */}
