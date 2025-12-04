@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { db } from '../services/firebase';
@@ -73,10 +74,10 @@ const VsScreen: React.FC = () => {
   const getRoleIcon = (role?: RoleType) => {
       if (!role) return null;
       switch(role) {
-          case RoleType.DPS: return <Swords size={40} />;
-          case RoleType.TANK: return <Shield size={40} />;
-          case RoleType.HEALER: return <Heart size={40} />;
-          case RoleType.HYBRID: return <Zap size={40} />;
+          case RoleType.DPS: return <Swords size={60} />;
+          case RoleType.TANK: return <Shield size={60} />;
+          case RoleType.HEALER: return <Heart size={60} />;
+          case RoleType.HYBRID: return <Zap size={60} />;
       }
   };
 
@@ -168,7 +169,7 @@ const VsScreen: React.FC = () => {
 
         {/* VS CENTER */}
         <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="relative transform scale-[4] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+            <div className="relative transform scale-[7] rotate-[-5deg] drop-shadow-[0_0_30px_rgba(0,0,0,0.8)]">
                 <span className="font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-orange-500 to-red-700 italic tracking-tighter" style={{ WebkitTextStroke: '1px white' }}>
                     VS
                 </span>
@@ -195,13 +196,13 @@ const VsScreen: React.FC = () => {
 
             {/* Info Panel */}
             <div className="relative z-20 animate-[slide-in-left_0.8s_ease-out]">
-                <div className="flex items-end gap-4 mb-2">
-                    <div className="text-blue-500 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
+                <div className="flex items-end gap-6 mb-4">
+                    <div className="text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)] pb-2">
                         {getRoleIcon(p1.role)}
                     </div>
                     <div>
-                        <span className="block text-5xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-xl">{p1.displayName}</span>
-                        <span className="text-xl font-bold text-blue-400 tracking-[0.3em] uppercase block mt-1">{p1GuildName}</span>
+                        <span className="block text-7xl md:text-9xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-2xl">{p1.displayName}</span>
+                        <span className="text-3xl md:text-4xl font-bold text-blue-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg">{p1GuildName}</span>
                     </div>
                 </div>
                 
@@ -231,12 +232,12 @@ const VsScreen: React.FC = () => {
 
             {/* Info Panel */}
             <div className="relative z-20 animate-[slide-in-right_0.8s_ease-out]">
-                <div className="flex items-end justify-end gap-4 mb-2">
+                <div className="flex items-end justify-end gap-6 mb-4">
                     <div>
-                        <span className="block text-5xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-xl">{p2.displayName}</span>
-                        <span className="text-xl font-bold text-red-400 tracking-[0.3em] uppercase block mt-1">{p2GuildName}</span>
+                        <span className="block text-7xl md:text-9xl font-black text-white italic uppercase tracking-tighter leading-none text-stroke drop-shadow-2xl">{p2.displayName}</span>
+                        <span className="text-3xl md:text-4xl font-bold text-red-400 tracking-[0.2em] uppercase block mt-2 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] text-shadow-lg">{p2GuildName}</span>
                     </div>
-                    <div className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+                    <div className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)] pb-2">
                         {getRoleIcon(p2.role)}
                     </div>
                 </div>
