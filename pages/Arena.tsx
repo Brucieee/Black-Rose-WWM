@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
@@ -136,13 +135,11 @@ const Arena: React.FC = () => {
     setIsChampionBannerVisible(true);
   }, [selectedId, matches]);
 
+  // Data Fetching
   useEffect(() => {
     const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
       const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
       setGuilds(g);
-      if (g.length > 0 && !selectedId) {
-        setSelectedId(g[0].id);
-      }
     });
     const unsubTourneys = db.collection("custom_tournaments").orderBy("createdAt", "desc").onSnapshot(snap => {
         setCustomTournaments(snap.docs.map(d => ({ id: d.id, ...d.data() } as CustomTournament)));
@@ -157,7 +154,31 @@ const Arena: React.FC = () => {
       return () => { unsubGuilds(); unsubUser(); unsubTourneys(); unsubAllUsers(); };
     }
     return () => { unsubGuilds(); unsubTourneys(); unsubAllUsers(); };
-  }, [currentUser, selectedId]);
+  }, [currentUser]);
+
+  // Initial Selection Logic (Auto-select user's guild)
+  useEffect(() => {
+    if (selectedId) return; // Already selected or changed manually
+    if (guilds.length === 0) return; // Wait for guilds to load
+
+    if (!currentUser) {
+        // Guest: Default to first available
+        setSelectedId(guilds[0].id);
+        return;
+    }
+
+    if (userProfile) {
+        // User Loaded: Check for their guild
+        const myGuild = guilds.find(g => g.id === userProfile.guildId);
+        if (myGuild) {
+            setSelectedId(myGuild.id);
+        } else {
+            // Fallback if user's guild not found or invalid
+            setSelectedId(guilds[0].id);
+        }
+    }
+    // If userProfile is null, we wait for it to load to avoid flickering to default
+  }, [guilds, userProfile, currentUser, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
