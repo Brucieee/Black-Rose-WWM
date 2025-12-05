@@ -186,7 +186,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
                                 ? 'bg-red-600 text-white border-red-500 animate-pulse' 
                                 : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700'
                             }`}
-                            title={isStreamLive ? "Currently Streaming" : "Broadcast to Stream Screen"}
+                            title={isStreamLive ? "Stop Streaming" : "Broadcast to Stream Screen"}
                         >
                             {isStreamLive ? <Radio size={14} /> : <Eye size={14} />}
                         </button>
@@ -198,7 +198,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
                                     ? 'bg-blue-600 text-white border-blue-500'
                                     : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700'
                                 }`}
-                                title={isBannerLive ? "Currently on Banner" : "Broadcast to Match Banner"}
+                                title={isBannerLive ? "Remove from Banner" : "Broadcast to Match Banner"}
                             >
                                 <Maximize size={14} />
                             </button>

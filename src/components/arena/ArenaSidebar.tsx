@@ -12,7 +12,6 @@ interface ArenaSidebarProps {
   currentUser: any;
   userProfile: any;
   canManage: boolean;
-  isAdmin: boolean;
   isCustomMode: boolean;
   guilds: Guild[];
   isShuffling: boolean;
@@ -32,7 +31,7 @@ interface ArenaSidebarProps {
 
 export const ArenaSidebar: React.FC<ArenaSidebarProps> = ({
   isOpen, onClose, approvedParticipants, pendingParticipants, currentUserParticipant,
-  currentUser, userProfile, canManage, isAdmin, isCustomMode, guilds, isShuffling, assignedParticipantUids,
+  currentUser, userProfile, canManage, isCustomMode, guilds, isShuffling, assignedParticipantUids,
   onRemoveParticipant, onApprove, onDeny, onEditPoints, onManualAdd, onShuffle, onReset, onClearAll, onJoin, onLeave
 }) => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -169,24 +168,10 @@ export const ArenaSidebar: React.FC<ArenaSidebarProps> = ({
                               {guilds.find(g => g.id === p.originalGuildId || g.id === p.guildId)?.name || 'Custom'}
                             </span>
                             {!isCustomMode && (
-                                <span className="text-[10px] text-zinc-400 mt-0.5 flex items-center gap-1">
-                                    {p.activityPoints} pts
-                                    {canManage && (
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onEditPoints(p);
-                                            }}
-                                            className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
-                                            title="Edit Points"
-                                        >
-                                            <Edit2 size={10} />
-                                        </button>
-                                    )}
-                                </span>
+                                <span className="text-[10px] text-zinc-400 mt-0.5">{p.activityPoints} pts</span>
                             )}
                         </div>
-                        {isAdmin && (
+                        {canManage && (
                             <button 
                                 onClick={() => onRemoveParticipant(p.uid, p.displayName)}
                                 className="text-zinc-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -232,7 +217,7 @@ export const ArenaSidebar: React.FC<ArenaSidebarProps> = ({
                 </>
             )}
 
-            {isAdmin && (
+            {canManage && (
               <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
                   <button onClick={onShuffle} className="text-xs flex items-center justify-center gap-1 bg-white dark:bg-zinc-800 hover:bg-rose-900 hover:text-white px-3 py-2 rounded border border-zinc-200 dark:border-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400">
                       <Shuffle size={12} className={isShuffling ? "animate-spin" : ""} /> Shuffle

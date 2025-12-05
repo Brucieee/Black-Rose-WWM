@@ -64,6 +64,7 @@ const Arena: React.FC = () => {
   const isCustomMode = !!selectedTournament;
 
   const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedId && !isCustomMode);
+  const isAdmin = userProfile?.systemRole === 'Admin';
   const canDeleteCustom = userProfile?.systemRole === 'Admin';
 
   const currentUserParticipant = currentUser ? participants.find(p => p.uid === currentUser.uid) : undefined;
@@ -493,12 +494,20 @@ const Arena: React.FC = () => {
 
   const handlePreviewMatch = async (match: ArenaMatch) => {
       const collection = isCustomMode ? "custom_tournaments" : "guilds";
-      try { await db.collection(collection).doc(selectedId).update({ activeStreamMatchId: match.id }); } catch (e: any) { showAlert(e.message, "error"); }
+      try { 
+          // Toggle off if currently active, else set to match.id
+          const newValue = activeStreamMatchId === match.id ? null : match.id;
+          await db.collection(collection).doc(selectedId).update({ activeStreamMatchId: newValue }); 
+      } catch (e: any) { showAlert(e.message, "error"); }
   };
 
   const handlePreviewBanner = async (match: ArenaMatch) => {
       const collection = isCustomMode ? "custom_tournaments" : "guilds";
-      try { await db.collection(collection).doc(selectedId).update({ activeBannerMatchId: match.id }); } catch (e: any) { showAlert(e.message, "error"); }
+      try { 
+          // Toggle off if currently active, else set to match.id
+          const newValue = activeBannerMatchId === match.id ? null : match.id;
+          await db.collection(collection).doc(selectedId).update({ activeBannerMatchId: newValue }); 
+      } catch (e: any) { showAlert(e.message, "error"); }
   };
 
   const handleOpenBannerScreen = () => window.open(`/#/match-banner?contextId=${selectedId}`, 'MatchBanner', 'width=1200,height=300');
@@ -514,6 +523,7 @@ const Arena: React.FC = () => {
           onSelectId={setSelectedId} 
           userProfile={userProfile} 
           canManage={canManage} 
+          isAdmin={isAdmin}
           isCustomMode={isCustomMode} 
           canDeleteCustom={canDeleteCustom}
           selectedTournament={selectedTournament}
@@ -553,6 +563,7 @@ const Arena: React.FC = () => {
             currentUser={currentUser}
             userProfile={userProfile}
             canManage={canManage}
+            isAdmin={isAdmin}
             isCustomMode={isCustomMode}
             guilds={guilds}
             isShuffling={isShuffling}

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Guild, CustomTournament, UserProfile } from '../../types';
 import { Swords, Globe, Plus, MonitorPlay, Settings, RefreshCw, Menu, Trash2, LayoutTemplate } from 'lucide-react';
@@ -9,6 +10,7 @@ interface ArenaHeaderProps {
   onSelectId: (id: string) => void;
   userProfile: UserProfile | null;
   canManage: boolean;
+  isAdmin: boolean;
   isCustomMode: boolean;
   canDeleteCustom: boolean;
   selectedTournament?: CustomTournament;
@@ -28,6 +30,7 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
   onSelectId,
   userProfile,
   canManage,
+  isAdmin,
   isCustomMode,
   canDeleteCustom,
   selectedTournament,
@@ -129,13 +132,15 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
             >
               <Settings size={18} />
             </button>
-            <button 
-              onClick={onOpenInit}
-              className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
-              title="Setup Bracket"
-            >
-              <RefreshCw size={18} />
-            </button>
+            {isAdmin && (
+                <button 
+                onClick={onOpenInit}
+                className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
+                title="Setup Bracket"
+                >
+                <RefreshCw size={18} />
+                </button>
+            )}
           </div>
         )}
       </div>
