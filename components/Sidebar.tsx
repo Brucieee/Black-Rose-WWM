@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { 
@@ -18,7 +19,8 @@ import {
   Trophy,
   MessageSquarePlus,
   Bell,
-  BellOff
+  BellOff,
+  LogIn
 } from 'lucide-react';
 import { Guild, UserProfile } from '../types';
 import { db } from '../services/firebase';
@@ -245,17 +247,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMuted, onToggleMut
               </NavLink>
             </>
           )}
-          
-          {!currentUser && (
-            <NavLink 
-              to="/register" 
-              onClick={handleLinkClick}
-              className={({ isActive }: any) => isActive ? `${navLinkClasses} ${activeNavLinkClasses}` : navLinkClasses}
-            >
-              <PlusCircle size={18} />
-              Join Guild
-            </NavLink>
-          )}
 
         </nav>
 
@@ -302,14 +293,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMuted, onToggleMut
             </div>
           </div>
         ) : (
-          <div className="p-4 border-t border-zinc-800">
+          <div className="p-4 border-t border-zinc-800 flex items-center gap-3">
              <button 
                 onClick={toggleDarkMode}
-                className="flex items-center justify-center gap-2 w-full p-2 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"
+                className="p-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors border border-zinc-800 hover:border-zinc-700"
+                title={isDarkMode ? 'Light Mode' : 'Dark Mode'}
               >
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-                <span className="text-sm font-medium">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+                {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
               </button>
+              <NavLink 
+                to="/register" 
+                onClick={handleLinkClick}
+                className="flex-1 flex items-center justify-center gap-2 bg-rose-900 hover:bg-rose-950 text-white py-2.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-rose-900/20"
+              >
+                <LogIn size={18} />
+                Sign In
+              </NavLink>
           </div>
         )}
       </aside>
