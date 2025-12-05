@@ -93,30 +93,37 @@ const Arena: React.FC = () => {
   }, [matches, currentUser]);
 
   const getTournamentWinners = () => {
-      if (matches.length === 0) return { first: null, second: null, third: null };
+      if (matches.length === 0) return { first: null, second: null, third: null, fourth: null };
       
       const regularMatches = matches.filter(m => !m.isThirdPlace);
-      if (regularMatches.length === 0) return { first: null, second: null, third: null };
+      if (regularMatches.length === 0) return { first: null, second: null, third: null, fourth: null };
 
       const maxRound = Math.max(...regularMatches.map(m => m.round));
       const finalMatch = regularMatches.find(m => m.round === maxRound);
       const thirdPlaceMatch = matches.find(m => m.isThirdPlace);
 
-      if (!finalMatch || !finalMatch.winner) return { first: null, second: null, third: null };
+      if (!finalMatch || !finalMatch.winner) return { first: null, second: null, third: null, fourth: null };
 
       const first = finalMatch.winner;
       const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
+      
       const third = thirdPlaceMatch?.winner || null;
+      // Calculate 4th place (loser of 3rd place match)
+      let fourth: ArenaParticipant | null = null;
+      if (thirdPlaceMatch && third) {
+          fourth = thirdPlaceMatch.player1?.uid === third.uid ? thirdPlaceMatch.player2 : thirdPlaceMatch.player1;
+      }
 
-      return { first, second, third };
+      return { first, second, third, fourth };
   };
 
-  const { first: liveFirst, second: liveSecond, third: liveThird } = getTournamentWinners();
+  const { first: liveFirst, second: liveSecond, third: liveThird, fourth: liveFourth } = getTournamentWinners();
   const isTournamentDone = !!liveFirst;
 
   const firstPlace = arenaWinners.find(w => w.rank === 1) || (isTournamentDone ? liveFirst : null);
   const secondPlace = arenaWinners.find(w => w.rank === 2) || (isTournamentDone ? liveSecond : null);
   const thirdPlace = arenaWinners.find(w => w.rank === 3) || (isTournamentDone ? liveThird : null);
+  const fourthPlace = arenaWinners.find(w => w.rank === 4) || (isTournamentDone ? liveFourth : null);
 
   const hasWinners = !!firstPlace;
   const showStandardBanner = hasWinners && (!isCustomMode || (isCustomMode && !selectedTournament?.hasGrandFinale));
@@ -178,15 +185,24 @@ const Arena: React.FC = () => {
       const maxRound = Math.max(...regularMatches.map(m => m.round));
       const finalMatch = regularMatches.find(m => m.round === maxRound);
       const thirdPlaceMatch = dbMatches.find(m => m.isThirdPlace);
+      
       if (!finalMatch || !finalMatch.winner) return;
+      
       const first = finalMatch.winner;
       const second = finalMatch.player1?.uid === first.uid ? finalMatch.player2 : finalMatch.player1;
       const third = thirdPlaceMatch?.winner || null;
+      let fourth: ArenaParticipant | null = null;
+      if (thirdPlaceMatch && third) {
+          fourth = thirdPlaceMatch.player1?.uid === third.uid ? thirdPlaceMatch.player2 : thirdPlaceMatch.player1;
+      }
+
       const winners = [
           { rank: 1, uid: first.uid, displayName: first.displayName, photoURL: first.photoURL, wonAt: new Date().toISOString() }
       ];
       if (second) winners.push({ rank: 2, uid: second.uid, displayName: second.displayName, photoURL: second.photoURL, wonAt: new Date().toISOString() });
       if (third) winners.push({ rank: 3, uid: third.uid, displayName: third.displayName, photoURL: third.photoURL, wonAt: new Date().toISOString() });
+      if (fourth) winners.push({ rank: 4, uid: fourth.uid, displayName: fourth.displayName, photoURL: fourth.photoURL, wonAt: new Date().toISOString() });
+
       await db.collection("guilds").doc(selectedId).update({
           lastArenaWinners: winners,
           lastArenaChampion: winners[0] 
@@ -540,6 +556,7 @@ const Arena: React.FC = () => {
           firstPlace={firstPlace} 
           secondPlace={secondPlace} 
           thirdPlace={thirdPlace} 
+          fourthPlace={fourthPlace}
           canManage={canManage}
           showStandardBanner={showStandardBanner}
           showOverlayBanner={!!showOverlayBanner}

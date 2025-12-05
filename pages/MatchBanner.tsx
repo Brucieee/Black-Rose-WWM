@@ -202,7 +202,7 @@ const MatchBanner: React.FC = () => {
                     {leftPlayer ? (
                         <>
                         <div className="flex-col items-end hidden md:flex min-w-0 shrink">
-                            <h3 className="font-black text-white text-xl md:text-3xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-2 py-1">
+                            <h3 className="font-black text-white text-3xl md:text-5xl uppercase italic tracking-tighter leading-none truncate w-full text-right drop-shadow-md pr-2 py-1">
                                 {leftPlayer.displayName}
                             </h3>
                             <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1 text-right">{leftPlayer.guildName}</div>
@@ -235,7 +235,7 @@ const MatchBanner: React.FC = () => {
                 <div className="shrink-0 flex flex-col items-center justify-center z-20 mx-4">
                     {hasWinner ? (
                         <div className="relative px-6 flex flex-col items-center animate-in zoom-in duration-300">
-                            <span className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 tracking-tighter drop-shadow-[0_0_25px_rgba(234,179,8,0.4)]">
+                            <span className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 tracking-tighter drop-shadow-[0_0_25px_rgba(234,179,8,0.4)]">
                                 {score1} - {score2}
                             </span>
                             <span className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-[0.5em] mt-2">
@@ -246,9 +246,9 @@ const MatchBanner: React.FC = () => {
                         <div className="relative px-6 flex flex-col items-center">
                             {(score1 > 0 || score2 > 0) ? (
                                 <>
-                                    <div className="flex items-center gap-4 text-4xl md:text-6xl font-black text-white tracking-tighter">
+                                    <div className="flex items-center gap-4 text-5xl md:text-7xl font-black text-white tracking-tighter">
                                         <span className={score1 > 0 ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" : "text-zinc-600"}>{score1}</span>
-                                        <span className="text-2xl text-zinc-700 mx-1">-</span>
+                                        <span className="text-3xl text-zinc-700 mx-1">-</span>
                                         <span className={score2 > 0 ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" : "text-zinc-600"}>{score2}</span>
                                     </div>
                                     <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
@@ -257,7 +257,7 @@ const MatchBanner: React.FC = () => {
                                 </>
                             ) : (
                                 <>
-                                    <span className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
+                                    <span className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-600 tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-pulse block transform -skew-x-12">
                                         VS
                                     </span>
                                     <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
@@ -283,7 +283,7 @@ const MatchBanner: React.FC = () => {
                             </div>
 
                             <div className="flex-col items-start hidden md:flex min-w-0 shrink">
-                                <h3 className="font-black text-white text-xl md:text-3xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-2 py-1">
+                                <h3 className="font-black text-white text-3xl md:text-5xl uppercase italic tracking-tighter leading-none truncate w-full text-left drop-shadow-md pr-2 py-1">
                                     {rightPlayer.displayName}
                                 </h3>
                                 <div className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1 text-left">{rightPlayer.guildName}</div>

@@ -89,7 +89,9 @@ export const ArenaSidebar: React.FC<ArenaSidebarProps> = ({
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-xs text-zinc-500 flex items-center gap-1">
                                     Points: <strong className="text-zinc-700 dark:text-zinc-300">{p.activityPoints}</strong>
-                                    <button onClick={()=>onEditPoints(p)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1"><Edit2 size={10} /></button>
+                                    {isAdmin && (
+                                        <button onClick={()=>onEditPoints(p)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1"><Edit2 size={10} /></button>
+                                    )}
                                 </span>
                             </div>
                             <div className="flex gap-2">
@@ -171,7 +173,7 @@ export const ArenaSidebar: React.FC<ArenaSidebarProps> = ({
                             {!isCustomMode && (
                                 <span className="text-[10px] text-zinc-400 mt-0.5 flex items-center gap-1">
                                     {p.activityPoints} pts
-                                    {canManage && (
+                                    {isAdmin && (
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();

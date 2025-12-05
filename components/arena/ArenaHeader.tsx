@@ -109,7 +109,7 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
 
         {canManage && (
           <div className="flex gap-2 flex-shrink-0">
-            {onOpenBanner && (
+            {isAdmin && onOpenBanner && (
               <button 
                 onClick={onOpenBanner}
                 className="bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"
@@ -118,13 +118,15 @@ export const ArenaHeader: React.FC<ArenaHeaderProps> = ({
                 <LayoutTemplate size={18} />
               </button>
             )}
-            <button 
-              onClick={onOpenStream}
-              className="bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-1.5 rounded-lg border border-rose-200 dark:border-rose-900 transition-colors animate-pulse"
-              title="Launch Stream Screen"
-            >
-              <MonitorPlay size={18} />
-            </button>
+            {isAdmin && (
+              <button 
+                onClick={onOpenStream}
+                className="bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 p-1.5 rounded-lg border border-rose-200 dark:border-rose-900 transition-colors animate-pulse"
+                title="Launch Stream Screen"
+              >
+                <MonitorPlay size={18} />
+              </button>
+            )}
             <button 
               onClick={onOpenSettings}
               className="bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors"

@@ -381,11 +381,11 @@ const StandbyScreen = () => (
     <div className="z-10 text-center relative flex flex-col items-center">
       <Loader2 className="w-16 h-16 text-red-600 animate-spin mb-6" />
       <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-zinc-500 to-zinc-800 uppercase tracking-widest drop-shadow-2xl">
-        AWAITING SIGNAL
+        WAITING FOR MATCH
       </h1>
       <div className="flex items-center gap-2 mt-4 text-red-500/80 font-mono text-sm tracking-[0.3em] uppercase animate-pulse">
           <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-          <span>Standby Mode</span>
+          <span>Preparing Battlefield</span>
       </div>
     </div>
     

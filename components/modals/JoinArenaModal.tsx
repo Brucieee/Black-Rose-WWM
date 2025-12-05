@@ -54,11 +54,15 @@ export const JoinArenaModal: React.FC<JoinArenaModalProps> = ({ isOpen, onClose,
               type="number" 
               required
               min="0"
+              max="99999"
               placeholder="e.g. 3500"
               value={points}
               onChange={(e) => {
-                  setPoints(e.target.value);
-                  setError('');
+                  const val = e.target.value;
+                  if (val.length <= 5) {
+                      setPoints(val);
+                      setError('');
+                  }
               }}
               className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none text-zinc-900 dark:text-zinc-100"
             />

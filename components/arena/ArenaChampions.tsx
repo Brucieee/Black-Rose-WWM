@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ArenaMatch, RoleType, UserProfile, Guild, ArenaParticipant } from '../../types';
 import { Sparkles, Trash2, Crown, Clock, Swords, Shield, Heart, Zap, X } from 'lucide-react';
@@ -6,6 +7,7 @@ interface ArenaChampionsProps {
   firstPlace: any;
   secondPlace: any;
   thirdPlace: any;
+  fourthPlace?: any;
   canManage: boolean;
   showStandardBanner: boolean;
   showOverlayBanner: boolean;
@@ -20,7 +22,7 @@ interface ArenaChampionsProps {
 }
 
 export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
-  firstPlace, secondPlace, thirdPlace, canManage, showStandardBanner, showOverlayBanner,
+  firstPlace, secondPlace, thirdPlace, fourthPlace, canManage, showStandardBanner, showOverlayBanner,
   userActiveMatch, currentUser, isChampionBannerVisible,
   onRemoveChampion, onViewProfile, onCloseBanner,
   allUsers, guilds
@@ -188,6 +190,8 @@ export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
                   <Sparkles className="absolute bottom-4 right-10 text-yellow-500/20" size={40} />
 
                   <div className="relative z-10 flex items-end gap-6 md:gap-16 scale-90 origin-bottom">
+                      
+                      {/* 2nd Place */}
                       {secondPlace && (
                           <div className="flex flex-col items-center group cursor-pointer" onClick={() => onViewProfile(secondPlace.uid)}>
                               <div className="relative mb-2">
@@ -198,6 +202,7 @@ export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
                           </div>
                       )}
 
+                      {/* 1st Place */}
                       {firstPlace && (
                           <div className="flex flex-col items-center -mt-8 group cursor-pointer" onClick={() => onViewProfile(firstPlace.uid)}>
                               <div className="relative mb-3">
@@ -209,6 +214,7 @@ export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
                           </div>
                       )}
 
+                      {/* 3rd Place */}
                       {thirdPlace && (
                           <div className="flex flex-col items-center group cursor-pointer" onClick={() => onViewProfile(thirdPlace.uid)}>
                               <div className="relative mb-2">
@@ -216,6 +222,17 @@ export const ArenaChampions: React.FC<ArenaChampionsProps> = ({
                                   <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-orange-700 text-white text-xs font-bold px-2 py-0.5 rounded-full border-2 border-white shadow-md">#3</div>
                               </div>
                               <h3 className="font-bold text-zinc-300 text-xs md:text-sm mt-3">{thirdPlace.displayName}</h3>
+                          </div>
+                      )}
+
+                      {/* 4th Place */}
+                      {fourthPlace && (
+                          <div className="flex flex-col items-center group cursor-pointer opacity-80 scale-90" onClick={() => onViewProfile(fourthPlace.uid)}>
+                              <div className="relative mb-2">
+                                  <img src={fourthPlace.photoURL || 'https://via.placeholder.com/150'} className="w-14 h-14 md:w-16 md:h-16 rounded-full border-4 border-zinc-700 object-cover shadow-lg" />
+                                  <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-zinc-700 text-zinc-300 text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-zinc-500 shadow-md">#4</div>
+                              </div>
+                              <h3 className="font-bold text-zinc-400 text-xs mt-3">{fourthPlace.displayName}</h3>
                           </div>
                       )}
                   </div>
