@@ -22,6 +22,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ userProfile }) =
   const [editingLeaderboardEntry, setEditingLeaderboardEntry] = useState<LeaderboardEntry | null>(null);
   const [deleteConf, setDeleteConf] = useState<{ isOpen: boolean; action: () => Promise<void> }>({ isOpen: false, action: async () => {} });
 
+  const isAdmin = userProfile.systemRole === 'Admin';
   const isOfficer = userProfile.systemRole === 'Officer';
   const selectedBranchId = isOfficer ? userProfile.guildId : ''; // For filtering
 
@@ -106,7 +107,9 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ userProfile }) =
                                     setEditingLeaderboardEntry(entry);
                                     setIsLeaderboardModalOpen(true);
                                 }} className="text-zinc-400 hover:text-blue-500"><Edit size={16}/></button>
-                                <button onClick={() => handleLeaderboardDelete(entry)} className="text-zinc-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                {isAdmin && (
+                                    <button onClick={() => handleLeaderboardDelete(entry)} className="text-zinc-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                )}
                             </td>
                         </tr>
                     ))}
