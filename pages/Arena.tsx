@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
@@ -31,6 +32,7 @@ const Arena: React.FC = () => {
   
   const [selectedId, setSelectedId] = useState<string>(''); 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
   const [matches, setMatches] = useState<ArenaMatch[]>([]);
@@ -150,35 +152,37 @@ const Arena: React.FC = () => {
     if (currentUser) {
       const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot(snap => {
         if (snap.exists) setUserProfile(snap.data() as UserProfile);
+        setProfileLoading(false);
       });
       return () => { unsubGuilds(); unsubUser(); unsubTourneys(); unsubAllUsers(); };
+    } else {
+        setProfileLoading(false);
     }
     return () => { unsubGuilds(); unsubTourneys(); unsubAllUsers(); };
   }, [currentUser]);
 
-  // Initial Selection Logic (Auto-select user's guild)
+  // Initial Selection Logic - Updated to prioritize user's guild branch
   useEffect(() => {
-    if (selectedId) return; // Already selected or changed manually
-    if (guilds.length === 0) return; // Wait for guilds to load
+    if (selectedId) return; // Already selected, don't overwrite
+    if (guilds.length === 0) return; // Data not ready
 
-    if (!currentUser) {
-        // Guest: Default to first available
-        setSelectedId(guilds[0].id);
-        return;
-    }
+    // If profile is still loading, wait
+    if (currentUser && profileLoading) return;
 
-    if (userProfile) {
-        // User Loaded: Check for their guild
+    if (currentUser && userProfile?.guildId) {
+        // Try to find the user's guild in the loaded guilds list
         const myGuild = guilds.find(g => g.id === userProfile.guildId);
         if (myGuild) {
             setSelectedId(myGuild.id);
-        } else {
-            // Fallback if user's guild not found or invalid
-            setSelectedId(guilds[0].id);
+            return;
         }
     }
-    // If userProfile is null, we wait for it to load to avoid flickering to default
-  }, [guilds, userProfile, currentUser, selectedId]);
+
+    // Fallback: Default to first available guild
+    if (guilds.length > 0) {
+        setSelectedId(guilds[0].id);
+    }
+  }, [guilds, userProfile, currentUser, selectedId, profileLoading]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -490,7 +494,6 @@ const Arena: React.FC = () => {
       // Calculate Winning Score based on Best Of setting
       // Best of 1 -> Win at 1
       // Best of 3 -> Win at 2
-      // Generic: ceil(bestOf / 2)
       const winningScore = Math.ceil(bestOf / 2);
 
       // Clamp between 0 and winningScore

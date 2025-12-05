@@ -40,14 +40,11 @@ export const GlobalAdSystem: React.FC = () => {
   useEffect(() => {
     if (!config?.isActive) return;
 
-    // NOTE: Removed the immediate setIsOpen(true) here to prevent showing on global load.
-    // It will now only show via the location trigger below or the interval.
-
     const minutes = config.intervalMinutes || 30;
     const ms = minutes * 60 * 1000;
 
     intervalRef.current = setInterval(() => {
-      // Only trigger interval if on Arena page
+      // Only trigger interval if currently on Arena page
       if (location.pathname === '/arena') {
         setIsOpen(true);
         setInputValue(''); // Reset input
@@ -60,8 +57,9 @@ export const GlobalAdSystem: React.FC = () => {
     };
   }, [config?.isActive, config?.intervalMinutes, location.pathname]);
 
-  // 3. Trigger on Arena Page Visit
+  // 3. Trigger on Arena Page Visit (Navigation)
   useEffect(() => {
+    // Only trigger if active, on arena page, and not already open
     if (config?.isActive && location.pathname === '/arena') {
         setIsOpen(true);
         setInputValue('');
@@ -81,7 +79,7 @@ export const GlobalAdSystem: React.FC = () => {
   }, [isOpen, config?.images]);
 
   const handleFakeClose = () => {
-    // Determine strictness: 80% chance it closes but comes back
+    // Fake close logic: Close but come back shortly if still on Arena
     setIsClosing(true);
     setTimeout(() => {
         setIsOpen(false);
@@ -120,10 +118,10 @@ export const GlobalAdSystem: React.FC = () => {
 
   return createPortal(
     <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md transition-opacity duration-300 ${isClosing ? 'opacity-0' : 'opacity-100'}`}>
-      <div className="bg-zinc-900 border-2 border-rose-900/50 w-full max-w-3xl rounded-2xl shadow-[0_0_50px_rgba(136,19,55,0.3)] relative overflow-hidden flex flex-col">
+      <div className="bg-zinc-900 border-2 border-rose-900/50 w-full max-w-3xl rounded-2xl shadow-[0_0_50px_rgba(136,19,55,0.3)] relative overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="bg-zinc-950 p-3 flex justify-between items-center border-b border-zinc-800">
+        <div className="bg-zinc-950 p-3 flex justify-between items-center border-b border-zinc-800 flex-shrink-0">
             <span className="text-xs font-black text-rose-500 uppercase tracking-widest">ADS</span>
             <button 
                 onClick={handleFakeClose}
@@ -135,10 +133,10 @@ export const GlobalAdSystem: React.FC = () => {
         </div>
 
         {/* Content */}
-        <div className="p-0 relative flex flex-col">
+        <div className="p-0 relative flex flex-col flex-1 overflow-y-auto">
             {/* Image Gallery */}
             {config.images && config.images.length > 0 ? (
-                <div className="relative h-96 w-full bg-black">
+                <div className="relative h-96 w-full bg-black shrink-0">
                     {config.images.map((img, idx) => (
                         <img 
                             key={idx}
@@ -149,16 +147,18 @@ export const GlobalAdSystem: React.FC = () => {
                     ))}
                 </div>
             ) : (
-                <div className="h-40 bg-zinc-900 flex items-center justify-center border-b border-zinc-800">
+                <div className="h-40 bg-zinc-900 flex items-center justify-center border-b border-zinc-800 shrink-0">
                     <span className="text-zinc-700 italic">No images configured</span>
                 </div>
             )}
 
-            <div className="p-6 bg-zinc-900 border-t border-zinc-800">
-                <h2 className="text-2xl font-black text-white mb-2">{config.title}</h2>
-                <p className="text-zinc-300 text-sm leading-relaxed mb-6">
-                    {config.description}
-                </p>
+            <div className="p-6 bg-zinc-900 border-t border-zinc-800 flex flex-col gap-4">
+                <div>
+                    <h2 className="text-2xl font-black text-white mb-2">{config.title}</h2>
+                    <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
+                        {config.description}
+                    </p>
+                </div>
 
                 {/* Challenge Section */}
                 <div className="bg-black/40 p-4 rounded-xl border border-rose-900/30">
@@ -166,7 +166,7 @@ export const GlobalAdSystem: React.FC = () => {
                         <input 
                             type="text" 
                             autoFocus
-                            placeholder="Enter passphrase to close..."
+                            placeholder="Type the passphrase..."
                             className={`flex-1 bg-zinc-900 border ${error ? 'border-red-500 animate-shake' : 'border-zinc-700'} rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-500`}
                             value={inputValue}
                             onChange={e => setInputValue(e.target.value)}
