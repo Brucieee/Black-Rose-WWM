@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { BaseModal } from './BaseModal';
-import { LayoutGrid, AlertTriangle, Swords } from 'lucide-react';
+import { LayoutGrid, AlertTriangle, Swords, Medal } from 'lucide-react';
 import { ArenaParticipant } from '../../types';
 
 export interface BracketSetupConfig {
     mode: 'standard' | 'custom';
     size?: number;
     customMatches?: { p1: ArenaParticipant | null; p2: ArenaParticipant | null }[];
+    bestOf: number;
 }
 
 interface InitializeBracketModalProps {
@@ -21,6 +23,9 @@ export const InitializeBracketModal: React.FC<InitializeBracketModalProps> = ({ 
   
   // Standard Mode State
   const [size, setSize] = useState<number>(8);
+  
+  // Match Format
+  const [bestOf, setBestOf] = useState<number>(3); // 3 = Bo3 (First to 2), 1 = Bo1 (First to 1)
 
   // Custom Mode State
   const [customMatchCount, setCustomMatchCount] = useState<number>(1);
@@ -29,21 +34,20 @@ export const InitializeBracketModal: React.FC<InitializeBracketModalProps> = ({ 
       if (isOpen) {
           setSize(8);
           setCustomMatchCount(1);
+          setBestOf(3);
           setActiveTab('standard');
       }
   }, [isOpen]);
 
   const handleStandardSubmit = () => {
-    onConfirm({ mode: 'standard', size });
+    onConfirm({ mode: 'standard', size, bestOf });
     onClose();
   };
 
   const handleCustomSubmit = () => {
     // Generate empty matches based on the selected count
-    // Each match is just an object with null players
     const emptyMatches = Array.from({ length: customMatchCount }).map(() => ({ p1: null, p2: null }));
-    
-    onConfirm({ mode: 'custom', customMatches: emptyMatches });
+    onConfirm({ mode: 'custom', customMatches: emptyMatches, bestOf });
     onClose();
   };
 
@@ -85,6 +89,40 @@ export const InitializeBracketModal: React.FC<InitializeBracketModalProps> = ({ 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
           {activeTab === 'standard' ? (
               <div className="p-6 md:p-8 flex flex-col items-center min-h-full">
+                  <div className="w-full max-w-lg mb-8">
+                      <label className="block text-sm font-bold text-zinc-500 uppercase mb-4 text-center">Match Format</label>
+                      <div className="grid grid-cols-2 gap-4">
+                          <button
+                              onClick={() => setBestOf(3)}
+                              className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                  bestOf === 3
+                                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-600 dark:border-rose-500 text-rose-900 dark:text-rose-100 shadow-md'
+                                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                              }`}
+                          >
+                              <Swords size={24} />
+                              <div>
+                                  <div className="font-black text-lg">Best of 3</div>
+                                  <div className="text-xs opacity-70">First to 2 Wins</div>
+                              </div>
+                          </button>
+                          <button
+                              onClick={() => setBestOf(1)}
+                              className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                  bestOf === 1
+                                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-600 dark:border-rose-500 text-rose-900 dark:text-rose-100 shadow-md'
+                                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                              }`}
+                          >
+                              <Medal size={24} />
+                              <div>
+                                  <div className="font-black text-lg">Best of 1</div>
+                                  <div className="text-xs opacity-70">Elimination Round</div>
+                              </div>
+                          </button>
+                      </div>
+                  </div>
+
                   <label className="block text-sm font-bold text-zinc-500 uppercase mb-4 text-center">Select Tournament Size</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-md mb-8">
                         {[4, 8, 16, 32, 64].map(s => (
@@ -115,6 +153,32 @@ export const InitializeBracketModal: React.FC<InitializeBracketModalProps> = ({ 
                       <p className="text-zinc-500 text-sm max-w-md mx-auto">
                           Select the number of empty match slots to generate.
                       </p>
+                  </div>
+
+                  <div className="w-full max-w-lg mx-auto mb-8">
+                      <label className="block text-sm font-bold text-zinc-500 uppercase mb-4 text-center">Match Format</label>
+                      <div className="grid grid-cols-2 gap-4">
+                          <button
+                              onClick={() => setBestOf(3)}
+                              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                                  bestOf === 3
+                                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-600 dark:border-rose-500 text-rose-900 dark:text-rose-100'
+                                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                              }`}
+                          >
+                              <span className="font-bold">Best of 3</span>
+                          </button>
+                          <button
+                              onClick={() => setBestOf(1)}
+                              className={`p-3 rounded-xl border-2 text-center transition-all ${
+                                  bestOf === 1
+                                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-600 dark:border-rose-500 text-rose-900 dark:text-rose-100'
+                                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                              }`}
+                          >
+                              <span className="font-bold">Best of 1</span>
+                          </button>
+                      </div>
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 mb-8 max-w-3xl mx-auto w-full">

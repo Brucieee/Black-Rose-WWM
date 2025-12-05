@@ -49,6 +49,7 @@ export interface Guild {
   name: string;
   memberCap: number;
   arenaMinPoints?: number; // Added for arena threshold
+  bestOf?: number; // 1 or 3
   activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
   activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
   lastArenaChampion?: {
@@ -196,6 +197,7 @@ export interface CustomTournament {
   createdBy: string;
   hasGrandFinale?: boolean;
   hideRankings?: boolean;
+  bestOf?: number; // 1 or 3
   activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
   activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
 }
@@ -237,4 +239,13 @@ export interface AuditLogEntry {
   performedByName: string; 
   timestamp: string;
   category: 'System' | 'Guild' | 'Queue' | 'Event' | 'Announcement' | 'Member';
+}
+
+export interface AdConfig {
+  isActive: boolean;
+  title: string;
+  description: string;
+  images: string[];
+  passphrase: string;
+  intervalMinutes: number;
 }

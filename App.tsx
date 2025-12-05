@@ -14,6 +14,7 @@ import VsScreen from './pages/VsScreen';
 import MatchBanner from './pages/MatchBanner';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
+import { GlobalAdSystem } from './components/GlobalAdSystem';
 
 const { HashRouter, Routes, Route, Navigate } = ReactRouterDOM as any;
 
@@ -22,6 +23,7 @@ function App() {
     <AlertProvider>
       <AuthProvider>
         <HashRouter>
+          <GlobalAdSystem />
           <Routes>
             {/* Fullscreen Views */}
             <Route path="/vs-screen" element={<VsScreen />} />

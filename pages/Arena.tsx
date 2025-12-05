@@ -63,6 +63,9 @@ const Arena: React.FC = () => {
   const selectedTournament = customTournaments.find(t => t.id === selectedId);
   const isCustomMode = !!selectedTournament;
 
+  // Determine Best Of (Default to 3 if not set)
+  const bestOf = isCustomMode ? (selectedTournament?.bestOf || 3) : (selectedGuild?.bestOf || 3);
+
   const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedId && !isCustomMode);
   const isAdmin = userProfile?.systemRole === 'Admin';
   const canDeleteCustom = userProfile?.systemRole === 'Admin';
@@ -210,14 +213,20 @@ const Arena: React.FC = () => {
   };
 
   const handleInitializeBracket = async (config: BracketSetupConfig) => {
-    const { mode, size, customMatches } = config;
+    const { mode, size, customMatches, bestOf } = config;
     const batch = db.batch();
     try {
+      // 1. Update Tournament/Guild Settings with BestOf
+      const collectionName = isCustomMode ? "custom_tournaments" : "guilds";
+      batch.update(db.collection(collectionName).doc(selectedId), { bestOf: bestOf });
+
+      // 2. Clear existing matches
       const existingMatchesQuery = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
       existingMatchesQuery.forEach(doc => {
           batch.delete(doc.ref);
       });
 
+      // 3. Create new bracket
       if (mode === 'standard' && size) {
           let round = 1;
           let matchCount = size / 2;
@@ -241,7 +250,7 @@ const Arena: React.FC = () => {
       }
 
       await batch.commit();
-      showAlert(`Bracket initialized.`, 'success');
+      showAlert(`Bracket initialized (${bestOf === 1 ? 'Best of 1' : 'Best of 3'}).`, 'success');
     } catch (err: any) {
        console.error("Failed to init bracket", err);
        showAlert(`Failed to initialize: ${err.message}`, 'error');
@@ -324,7 +333,7 @@ const Arena: React.FC = () => {
   const handleCreateTournament = async (title: string, importedParticipants: ArenaParticipant[], hasGrandFinale: boolean, hideRankings: boolean) => {
       try {
           const tourneyRef = await db.collection("custom_tournaments").add({
-              title, createdAt: new Date().toISOString(), createdBy: userProfile?.uid || 'Admin', hasGrandFinale, hideRankings
+              title, createdAt: new Date().toISOString(), createdBy: userProfile?.uid || 'Admin', hasGrandFinale, hideRankings, bestOf: 3 // Default
           });
           const batch = db.batch();
           importedParticipants.forEach(p => {
@@ -457,9 +466,15 @@ const Arena: React.FC = () => {
       const currentScore = slot === 'player1' ? (match.score1 || 0) : (match.score2 || 0);
       let newScore = currentScore + (increment ? 1 : -1);
       
-      // Clamp between 0 and 2
+      // Calculate Winning Score based on Best Of setting
+      // Best of 1 -> Win at 1
+      // Best of 3 -> Win at 2
+      // Generic: ceil(bestOf / 2)
+      const winningScore = Math.ceil(bestOf / 2);
+
+      // Clamp between 0 and winningScore
       if (newScore < 0) newScore = 0;
-      if (newScore > 2) newScore = 2;
+      if (newScore > winningScore) newScore = winningScore;
       
       if (newScore === currentScore) return;
 
@@ -468,15 +483,15 @@ const Arena: React.FC = () => {
       };
 
       // Auto-Win logic
-      if (newScore === 2) {
+      if (newScore === winningScore) {
            const winner = slot === 'player1' ? match.player1 : match.player2;
            if(winner && match.winner?.uid !== winner.uid) {
                 await db.collection("arena_matches").doc(match.id).update(updateData);
                 handleDeclareWinner(match, winner);
                 return;
            }
-      } else if (match.winner && newScore < 2) {
-          // If reducing score below 2, and player was winner, remove winner status
+      } else if (match.winner && newScore < winningScore) {
+          // If reducing score below winning threshold, and player was winner, remove winner status
           const currentWinnerUid = match.winner.uid;
           const playerUid = slot === 'player1' ? match.player1?.uid : match.player2?.uid;
           
@@ -604,6 +619,7 @@ const Arena: React.FC = () => {
             isCustomMode={isCustomMode} 
             activeStreamMatchId={activeStreamMatchId}
             activeBannerMatchId={activeBannerMatchId}
+            bestOf={bestOf}
             onDeclareWinner={handleDeclareWinner}
             onClearSlot={handleClearSlot as any}
             onDrop={handleDrop as any}

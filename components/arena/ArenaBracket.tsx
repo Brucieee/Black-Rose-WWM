@@ -10,6 +10,7 @@ interface ArenaBracketProps {
   isCustomMode: boolean;
   activeStreamMatchId?: string;
   activeBannerMatchId?: string;
+  bestOf?: number;
   onDeclareWinner: (match: ArenaMatch, winner: ArenaParticipant) => void;
   onClearSlot: (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => void;
   onDrop: (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => void;
@@ -20,7 +21,7 @@ interface ArenaBracketProps {
 }
 
 export const ArenaBracket: React.FC<ArenaBracketProps> = ({
-  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId,
+  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId, bestOf = 3,
   onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch, onPreviewBanner, onScoreUpdate
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -40,6 +41,8 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
 
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
+  
+  const winningScore = Math.ceil(bestOf / 2);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button') || 
@@ -149,7 +152,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
                           <button 
                             onClick={() => onScoreUpdate(match, slot, true)} 
                             className="p-1 hover:bg-white dark:hover:bg-zinc-600 text-green-600 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                            disabled={score >= 2}
+                            disabled={score >= winningScore}
                             title="Increase Score"
                           >
                             <Plus size={10} strokeWidth={3} />
@@ -239,7 +242,12 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 <Trophy size={18} className="text-rose-900 dark:text-rose-500" /> Tournament Bracket
             </h3>
-            {arenaMinPoints > 0 && !isCustomMode && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
+            <div className="flex gap-4 items-center">
+                <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">
+                    {bestOf === 1 ? 'Best of 1' : `Best of ${bestOf}`}
+                </span>
+                {arenaMinPoints > 0 && !isCustomMode && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
+            </div>
         </div>
 
         <div className="absolute top-16 right-4 z-20 flex flex-col gap-2 bg-white dark:bg-zinc-800 p-2 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700">

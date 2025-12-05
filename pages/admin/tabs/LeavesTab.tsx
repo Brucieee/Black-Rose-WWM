@@ -56,10 +56,10 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({ userProfile }) => {
                                 <p className="font-bold text-zinc-900 dark:text-zinc-100">{leave.displayName}</p>
                                 <p className="text-xs text-zinc-500">{leave.guildName}</p>
                             </td>
-                            <td className="p-4 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                            <td className="p-4 text-zinc-600 dark:text-zinc-400">
                                 {new Date(leave.startDate).toLocaleDateString()} <span className="mx-1">→</span> {new Date(leave.endDate).toLocaleDateString()}
                             </td>
-                            <td className="p-4 text-zinc-500 italic whitespace-pre-wrap">{leave.reason || "No reason provided"}</td>
+                            <td className="p-4 text-zinc-500 italic truncate max-w-xs">{leave.reason || "No reason provided"}</td>
                             <td className="p-4 text-right">
                                 {isAdmin && (
                                     <button onClick={() => {

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import * as ReactRouterDOM from "react-router-dom";
 import { db } from "../services/firebase";
-import { ArenaMatch, RoleType, UserProfile, Guild } from "../types";
+import { ArenaMatch, RoleType, UserProfile, Guild, CustomTournament } from "../types";
 import { Swords, Shield, Heart, Zap, Clock, Loader2, Crown } from "lucide-react";
 
 const { useSearchParams } = ReactRouterDOM as any;
@@ -17,6 +17,7 @@ const MatchBanner: React.FC = () => {
   const [p1Profile, setP1Profile] = useState<UserProfile | null>(null);
   const [p2Profile, setP2Profile] = useState<UserProfile | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [bestOf, setBestOf] = useState<number>(3); // Default Best of 3
   const [loading, setLoading] = useState(true);
 
   // Fetch Guilds for lookup
@@ -39,6 +40,10 @@ const MatchBanner: React.FC = () => {
                       setMatchId(data.activeBannerMatchId);
                   } else {
                       setMatchId(null);
+                  }
+                  // Update bestOf setting if available
+                  if (data?.bestOf) {
+                      setBestOf(data.bestOf);
                   }
               }
           });
@@ -134,9 +139,13 @@ const MatchBanner: React.FC = () => {
   };
 
   const renderScoreDots = (score: number) => {
+      const winningScore = Math.ceil(bestOf / 2);
+      // Create array length equal to winning score (e.g., 2 for Bo3, 1 for Bo1)
+      const dots = Array.from({ length: winningScore }, (_, i) => i + 1);
+
       return (
           <div className="flex gap-2 mt-3 z-20">
-              {[1, 2].map(i => (
+              {dots.map(i => (
                   <div 
                     key={i} 
                     className={`w-4 h-4 transform rotate-45 border-2 transition-all duration-500 shadow-lg ${
@@ -181,12 +190,13 @@ const MatchBanner: React.FC = () => {
   const leftPlayer = resolvePlayer(match.player1, p1Profile);
   const rightPlayer = resolvePlayer(match.player2, p2Profile);
   
-  // Determine if there is a winner (either DB field or score >= 2)
   const score1 = match.score1 || 0;
   const score2 = match.score2 || 0;
-  const hasWinner = !!match.winner || score1 >= 2 || score2 >= 2;
-  const isLeftWinner = match.winner?.uid === leftPlayer?.uid || score1 >= 2;
-  const isRightWinner = match.winner?.uid === rightPlayer?.uid || score2 >= 2;
+  
+  const winningScore = Math.ceil(bestOf / 2);
+  const hasWinner = !!match.winner || score1 >= winningScore || score2 >= winningScore;
+  const isLeftWinner = match.winner?.uid === leftPlayer?.uid || score1 >= winningScore;
+  const isRightWinner = match.winner?.uid === rightPlayer?.uid || score2 >= winningScore;
 
   return (
     <div className="h-screen w-screen bg-transparent flex flex-col justify-end overflow-hidden">
