@@ -217,7 +217,7 @@ const MatchBanner: React.FC = () => {
                             </div>
                         </div>
                         
-                        <div className="relative group shrink-0 flex flex-col items-center gap-2">
+                        <div className="relative group shrink-0 flex flex-col items-center">
                             {isLeftWinner && <div className="absolute -inset-4 bg-yellow-500/30 rounded-full blur-xl animate-pulse"></div>}
                             <div className={`relative w-20 h-20 md:w-28 md:h-28 rounded-full border-4 ${isLeftWinner ? 'border-yellow-500' : 'border-blue-500/50'} z-10 bg-zinc-900 overflow-hidden shadow-2xl transition-all`}>
                                 <img src={leftPlayer.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
@@ -273,7 +273,7 @@ const MatchBanner: React.FC = () => {
                 <div className={`flex-1 flex items-center justify-start gap-6 min-w-0 pl-4 md:pl-8 transition-all duration-500 ${isLeftWinner ? 'opacity-30 grayscale' : ''}`}>
                     {rightPlayer ? (
                         <>
-                            <div className="relative group shrink-0 flex flex-col items-center gap-2">
+                            <div className="relative group shrink-0 flex flex-col items-center">
                                 {isRightWinner && <div className="absolute -inset-4 bg-yellow-500/30 rounded-full blur-xl animate-pulse"></div>}
                                 <div className={`relative w-20 h-20 md:w-28 md:h-28 rounded-full border-4 ${isRightWinner ? 'border-yellow-500' : 'border-red-500/50'} z-10 bg-zinc-900 overflow-hidden shadow-2xl transition-all`}>
                                     <img src={rightPlayer.photoURL || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />

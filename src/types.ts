@@ -1,4 +1,3 @@
-
 export enum RoleType {
   DPS = 'DPS',
   TANK = 'Tank',

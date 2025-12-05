@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { ArenaMatch, ArenaParticipant, RoleType } from '../../types';
 import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio, Maximize } from 'lucide-react';

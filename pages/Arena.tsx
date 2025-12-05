@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
@@ -48,9 +49,6 @@ const Arena: React.FC = () => {
   const [editingPointsParticipant, setEditingPointsParticipant] = useState<ArenaParticipant | null>(null);
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
 
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  
   // Mobile Participant List Toggle
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -209,19 +207,19 @@ const Arena: React.FC = () => {
           while (matchCount >= 1) {
               for (let i = 0; i < matchCount; i++) {
                   const matchRef = db.collection("arena_matches").doc();
-                  batch.set(matchRef, { guildId: selectedId, round: round, position: i, player1: null, player2: null, winner: null });
+                  batch.set(matchRef, { guildId: selectedId, round: round, position: i, player1: null, player2: null, winner: null, score1: 0, score2: 0 });
               }
               matchCount /= 2;
               round++;
           }
           if (size >= 4) {
               const thirdPlaceRef = db.collection("arena_matches").doc();
-              batch.set(thirdPlaceRef, { guildId: selectedId, round: 99, position: 0, player1: null, player2: null, winner: null, isThirdPlace: true });
+              batch.set(thirdPlaceRef, { guildId: selectedId, round: 99, position: 0, player1: null, player2: null, winner: null, isThirdPlace: true, score1: 0, score2: 0 });
           }
       } else if (mode === 'custom' && customMatches) {
           customMatches.forEach((m, idx) => {
               const matchRef = db.collection("arena_matches").doc();
-              batch.set(matchRef, { guildId: selectedId, round: 1, position: idx, player1: m.p1 || null, player2: m.p2 || null, winner: null });
+              batch.set(matchRef, { guildId: selectedId, round: 1, position: idx, player1: m.p1 || null, player2: m.p2 || null, winner: null, score1: 0, score2: 0 });
           });
       }
 
@@ -258,7 +256,7 @@ const Arena: React.FC = () => {
         parts.forEach(doc => batch.delete(doc.ref));
         matches.forEach(m => {
              const ref = db.collection("arena_matches").doc(m.id);
-             batch.update(ref, { player1: null, player2: null, winner: null });
+             batch.update(ref, { player1: null, player2: null, winner: null, score1: 0, score2: 0 });
         });
         await batch.commit();
         showAlert("All participants cleared.", 'success');
@@ -275,7 +273,7 @@ const Arena: React.FC = () => {
         const batch = db.batch();
         matches.forEach(m => {
             const matchRef = db.collection("arena_matches").doc(m.id);
-            batch.update(matchRef, { player1: null, player2: null, winner: null });
+            batch.update(matchRef, { player1: null, player2: null, winner: null, score1: 0, score2: 0 });
         });
         let participantIndex = 0;
         for (const match of round1Matches) {
@@ -353,8 +351,8 @@ const Arena: React.FC = () => {
         const activeMatches = matches.filter(m => m.player1?.uid === currentUser.uid || m.player2?.uid === currentUser.uid || m.winner?.uid === currentUser.uid);
         activeMatches.forEach(m => {
             const updates: any = {};
-            if (m.player1?.uid === currentUser.uid) updates.player1 = null;
-            if (m.player2?.uid === currentUser.uid) updates.player2 = null;
+            if (m.player1?.uid === currentUser.uid) { updates.player1 = null; updates.score1 = 0; }
+            if (m.player2?.uid === currentUser.uid) { updates.player2 = null; updates.score2 = 0; }
             if (m.winner?.uid === currentUser.uid) updates.winner = null;
             batch.update(db.collection("arena_matches").doc(m.id), updates);
         });
@@ -372,8 +370,8 @@ const Arena: React.FC = () => {
               const activeMatches = matches.filter(m => m.player1?.uid === uid || m.player2?.uid === uid || m.winner?.uid === uid);
               activeMatches.forEach(m => {
                 const updates: any = {};
-                if (m.player1?.uid === uid) updates.player1 = null;
-                if (m.player2?.uid === uid) updates.player2 = null;
+                if (m.player1?.uid === uid) { updates.player1 = null; updates.score1 = 0; }
+                if (m.player2?.uid === uid) { updates.player2 = null; updates.score2 = 0; }
                 if (m.winner?.uid === uid) updates.winner = null;
                 batch.update(db.collection("arena_matches").doc(m.id), updates);
               });
@@ -420,7 +418,7 @@ const Arena: React.FC = () => {
             if (thirdPlaceMatch && loser) {
                 const slot = match.position % 2 === 0 ? 'player1' : 'player2';
                 const thirdRef = db.collection("arena_matches").doc(thirdPlaceMatch.id);
-                batch.update(thirdRef, { [slot]: loser });
+                batch.update(thirdRef, { [slot]: loser, [slot === 'player1' ? 'score1' : 'score2']: 0 });
             }
         }
         const nextPosition = Math.floor(match.position / 2);
@@ -429,17 +427,54 @@ const Arena: React.FC = () => {
         let isChampion = false;
         if (!nextMatchQuery.empty) {
             const nextMatchDoc = nextMatchQuery.docs[0];
-            batch.update(nextMatchDoc.ref, { [nextSlot]: winner, winner: null });
+            batch.update(nextMatchDoc.ref, { [nextSlot]: winner, winner: null, [nextSlot === 'player1' ? 'score1' : 'score2']: 0 });
         } else if (match.round === maxRoundNum) { isChampion = true; }
         await batch.commit();
         if (!isCustomMode && (isChampion || match.isThirdPlace)) { setTimeout(() => saveGuildWinners(), 500); }
     } catch (err: any) { showAlert(`Error updating bracket: ${err.message}`, 'error'); }
   };
 
+  const handleScoreUpdate = async (match: ArenaMatch, slot: 'player1' | 'player2', increment: boolean) => {
+      if (!canManage) return;
+      
+      const currentScore = slot === 'player1' ? (match.score1 || 0) : (match.score2 || 0);
+      let newScore = currentScore + (increment ? 1 : -1);
+      
+      // Clamp between 0 and 2
+      if (newScore < 0) newScore = 0;
+      if (newScore > 2) newScore = 2;
+      
+      if (newScore === currentScore) return;
+
+      const updateData: any = {
+          [slot === 'player1' ? 'score1' : 'score2']: newScore
+      };
+
+      // Auto-Win logic
+      if (newScore === 2) {
+           const winner = slot === 'player1' ? match.player1 : match.player2;
+           if(winner && match.winner?.uid !== winner.uid) {
+                await db.collection("arena_matches").doc(match.id).update(updateData);
+                handleDeclareWinner(match, winner);
+                return;
+           }
+      } else if (match.winner && newScore < 2) {
+          // If reducing score below 2, and player was winner, remove winner status
+          const currentWinnerUid = match.winner.uid;
+          const playerUid = slot === 'player1' ? match.player1?.uid : match.player2?.uid;
+          
+          if (currentWinnerUid === playerUid) {
+              updateData.winner = null;
+          }
+      }
+
+      await db.collection("arena_matches").doc(match.id).update(updateData);
+  };
+
   const handleClearSlot = async (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => {
       e.stopPropagation();
       if (!canManage) return;
-      await db.collection("arena_matches").doc(matchId).update({ [slot]: null, winner: null });
+      await db.collection("arena_matches").doc(matchId).update({ [slot]: null, winner: null, [slot === 'player1' ? 'score1' : 'score2']: 0 });
   };
 
   const handleDrop = async (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => {
@@ -448,7 +483,7 @@ const Arena: React.FC = () => {
     const data = e.dataTransfer.getData("application/json");
     if (!data) return;
     const droppedUser: ArenaParticipant = JSON.parse(data);
-    await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null });
+    await db.collection("arena_matches").doc(match.id).update({ [slot]: droppedUser, winner: null, [slot === 'player1' ? 'score1' : 'score2']: 0 });
   };
 
   const handleOpenStreamScreen = () => {
@@ -547,6 +582,7 @@ const Arena: React.FC = () => {
             onViewProfile={handleViewProfile}
             onPreviewMatch={handlePreviewMatch}
             onPreviewBanner={handlePreviewBanner}
+            onScoreUpdate={handleScoreUpdate}
           />
         </div>
       </div>
