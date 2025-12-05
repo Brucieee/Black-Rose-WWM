@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, Guild } from '../../../types';
 import { db } from '../../../services/firebase';
@@ -68,7 +69,33 @@ export const MembersTab: React.FC<MembersTabProps> = ({ userProfile }) => {
                                 </td>
                                 <td className="p-4 font-mono text-zinc-500">{u.inGameId}</td>
                                 <td className="p-4 text-zinc-600 dark:text-zinc-400">{u.role}</td>
-                                <td className="p-4 text-zinc-600 dark:text-zinc-400">{guilds.find(g => g.id === u.guildId)?.name}</td>
+                                <td className="p-4 text-zinc-600 dark:text-zinc-400">
+                                    {isAdmin ? (
+                                        <select
+                                            value={u.guildId || ''}
+                                            onChange={async (e) => {
+                                                const newGuildId = e.target.value;
+                                                const newGuildName = guilds.find(g => g.id === newGuildId)?.name || 'Unknown';
+                                                
+                                                try {
+                                                    await db.collection("users").doc(u.uid).update({ guildId: newGuildId });
+                                                    await logAction('Change Branch', `Moved ${u.displayName} to ${newGuildName}`, userProfile, 'Member');
+                                                    showAlert(`Moved ${u.displayName} to ${newGuildName}`, 'success');
+                                                } catch (err: any) {
+                                                    showAlert(`Failed to change branch: ${err.message}`, 'error');
+                                                }
+                                            }}
+                                            className="bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs font-medium text-zinc-900 dark:text-white max-w-[120px] focus:ring-2 focus:ring-rose-500 outline-none"
+                                        >
+                                            <option value="" className="bg-white dark:bg-zinc-900">No Branch</option>
+                                            {guilds.map(g => (
+                                                <option key={g.id} value={g.id} className="bg-white dark:bg-zinc-900">{g.name}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        guilds.find(g => g.id === u.guildId)?.name || 'No Branch'
+                                    )}
+                                </td>
                                 <td className="p-4 text-zinc-500 text-xs">
                                     {u.lastSeen ? new Date(u.lastSeen).toLocaleDateString() : 'N/A'}
                                 </td>

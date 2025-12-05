@@ -147,11 +147,81 @@ const Profile: React.FC = () => {
         dataToSave.status = 'online';
       }
 
-      // Use setDoc with merge: true to handle both create and update
-      // FIX: Use Firebase v8 compat syntax
+      // 1. Update User Profile
       await db.collection("users").doc(currentUser.uid).set(dataToSave, { merge: true });
+
+      // 2. Cascade Updates (Batch Operation) to ensure live sync across the app
+      const batch = db.batch();
+
+      // Update Arena Participants (Sidebar)
+      const arenaPartsSnap = await db.collection("arena_participants").where("uid", "==", currentUser.uid).get();
+      arenaPartsSnap.forEach(doc => {
+          batch.update(doc.ref, {
+              displayName: formData.displayName,
+              photoURL: selectedAvatar,
+              role: formData.role // Also sync role change if needed
+          });
+      });
+
+      // Update Active Parties (Party Finder)
+      const partiesSnap = await db.collection("parties").where("memberUids", "array-contains", currentUser.uid).get();
+      partiesSnap.forEach(doc => {
+          const party = doc.data();
+          const updatedMembers = party.currentMembers.map((m: any) => {
+              if (m.uid === currentUser.uid) {
+                  return { ...m, name: formData.displayName, photoURL: selectedAvatar, role: formData.role };
+              }
+              return m;
+          });
+          let updates: any = { currentMembers: updatedMembers };
+          if (party.leaderId === currentUser.uid) {
+              updates.leaderName = formData.displayName;
+          }
+          batch.update(doc.ref, updates);
+      });
+
+      // Update Active Arena Matches (Bracket) - This requires finding matches where user is player1 or player2
+      // We do this in two queries to catch both slots
+      const matchesP1Snap = await db.collection("arena_matches").where("player1.uid", "==", currentUser.uid).get();
+      matchesP1Snap.forEach(doc => {
+          const matchData = doc.data();
+          batch.update(doc.ref, {
+              "player1.displayName": formData.displayName,
+              "player1.photoURL": selectedAvatar,
+              "player1.role": formData.role
+          });
+          // If they are also the winner of this match, update winner field
+          if (matchData.winner?.uid === currentUser.uid) {
+              batch.update(doc.ref, {
+                  "winner.displayName": formData.displayName,
+                  "winner.photoURL": selectedAvatar,
+                  "winner.role": formData.role
+              });
+          }
+      });
+
+      const matchesP2Snap = await db.collection("arena_matches").where("player2.uid", "==", currentUser.uid).get();
+      matchesP2Snap.forEach(doc => {
+          const matchData = doc.data();
+          batch.update(doc.ref, {
+              "player2.displayName": formData.displayName,
+              "player2.photoURL": selectedAvatar,
+              "player2.role": formData.role
+          });
+          // If they are also the winner of this match, update winner field
+          if (matchData.winner?.uid === currentUser.uid) {
+              batch.update(doc.ref, {
+                  "winner.displayName": formData.displayName,
+                  "winner.photoURL": selectedAvatar,
+                  "winner.role": formData.role
+              });
+          }
+      });
+
+      // Commit all cascade updates
+      await batch.commit();
       
-      setProfileExists(true); // Now it exists
+      setProfileExists(true);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
