@@ -43,9 +43,21 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
         return;
     }
 
-    if (new Date(endDate) < new Date(startDate)) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (end < start) {
       showAlert("End date cannot be before start date.", 'error');
       return;
+    }
+
+    // Calculate duration in days
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 3 && !reason.trim()) {
+        showAlert("A reason is required for leaves exceeding 3 days.", 'error');
+        return;
     }
 
     setIsSubmitting(true);
@@ -141,7 +153,7 @@ export const FileLeaveModal: React.FC<FileLeaveModalProps> = ({ isOpen, onClose,
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Reason (Optional)</label>
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Reason <span className="font-normal normal-case text-zinc-400">(Required if > 3 days)</span></label>
             <div className="relative">
               <textarea 
                 className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:outline-none text-sm min-h-[80px]"

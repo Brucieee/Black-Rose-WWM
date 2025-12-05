@@ -61,10 +61,12 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({ userProfile }) => {
                             </td>
                             <td className="p-4 text-zinc-500 italic truncate max-w-xs">{leave.reason || "No reason provided"}</td>
                             <td className="p-4 text-right">
-                                <button onClick={() => {
-                                    db.collection("leaves").doc(leave.id).delete();
-                                    showAlert("Leave request removed.", 'info');
-                                }} className="text-zinc-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                {isAdmin && (
+                                    <button onClick={() => {
+                                        db.collection("leaves").doc(leave.id).delete();
+                                        showAlert("Leave request removed.", 'info');
+                                    }} className="text-zinc-400 hover:text-red-500"><Trash2 size={16}/></button>
+                                )}
                             </td>
                         </tr>
                     ))}
