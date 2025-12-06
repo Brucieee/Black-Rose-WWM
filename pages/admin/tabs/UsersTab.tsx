@@ -33,18 +33,16 @@ export const UsersTab: React.FC = () => {
                     <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 font-bold text-xs uppercase border-b border-zinc-200 dark:border-zinc-700">
                         <tr>
                             <th className="p-4">User</th>
-                            <th className="p-4">Email</th>
                             <th className="p-4">System Role</th>
                             <th className="p-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 text-sm">
                         {allUsers
-                            .filter(u => u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))
+                            .filter(u => u.displayName.toLowerCase().includes(userSearch.toLowerCase()))
                             .map(u => (
                             <tr key={u.uid} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                                 <td className="p-4 font-medium text-zinc-900 dark:text-zinc-100">{u.displayName}</td>
-                                <td className="p-4 text-zinc-500">{u.email}</td>
                                 <td className="p-4">
                                     <select 
                                         value={u.systemRole}
