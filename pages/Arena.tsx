@@ -320,20 +320,59 @@ const Arena: React.FC = () => {
     setIsShuffling(true);
     setTimeout(() => {
         const round1Matches = matches.filter(m => m.round === 1);
-        const shuffled = [...approvedParticipants].sort(() => 0.5 - Math.random());
-        const batch = db.batch();
-        matches.forEach(m => {
-            const matchRef = db.collection("arena_matches").doc(m.id);
-            batch.update(matchRef, { player1: null, player2: null, winner: null, score1: 0, score2: 0 });
+        
+        // Find who is already assigned in Round 1
+        const assignedUids = new Set<string>();
+        round1Matches.forEach(m => {
+            if (m.player1) assignedUids.add(m.player1.uid);
+            if (m.player2) assignedUids.add(m.player2.uid);
         });
+
+        // Filter approved participants to find those NOT in the bracket yet
+        const availableParticipants = approvedParticipants.filter(p => !assignedUids.has(p.uid));
+        
+        // Shuffle the available ones
+        const shuffled = [...availableParticipants].sort(() => 0.5 - Math.random());
+        
+        const batch = db.batch();
         let participantIndex = 0;
-        for (const match of round1Matches) {
-            if (participantIndex >= shuffled.length) break;
-            const player1 = shuffled[participantIndex++];
-            const player2 = (participantIndex < shuffled.length) ? shuffled[participantIndex++] : null;
-            batch.update(db.collection("arena_matches").doc(match.id), { player1, player2 });
-        }
-        batch.commit().then(() => { setTimeout(() => setIsShuffling(false), 500); });
+        
+        round1Matches.forEach(match => {
+            // NEW LOGIC: Skip match if it has ANY participant assigned (manually locked)
+            if (match.player1 || match.player2) {
+                return;
+            }
+
+            let updates: any = {};
+            let changed = false;
+
+            // Fill slot 1 if empty
+            if (!match.player1 && participantIndex < shuffled.length) {
+                updates.player1 = shuffled[participantIndex++];
+                changed = true;
+            }
+            
+            // Fill slot 2 if empty
+            if (!match.player2 && participantIndex < shuffled.length) {
+                updates.player2 = shuffled[participantIndex++];
+                changed = true;
+            }
+
+            if (changed) {
+                // Reset match state for the newly filled match
+                updates.winner = null;
+                updates.score1 = 0;
+                updates.score2 = 0;
+                batch.update(db.collection("arena_matches").doc(match.id), updates);
+            }
+        });
+        
+        batch.commit().then(() => { 
+            setTimeout(() => setIsShuffling(false), 500); 
+        }).catch(err => {
+            console.error(err);
+            setIsShuffling(false);
+        });
     }, 600); 
   };
 
