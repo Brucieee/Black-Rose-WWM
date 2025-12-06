@@ -387,8 +387,14 @@ const Arena: React.FC = () => {
     if (userProfile.guildId !== selectedId) { showAlert("You can only join the Arena for your own Guild Branch.", 'error'); return; }
     try {
       await db.collection("arena_participants").doc(userProfile.uid).set({
-        uid: userProfile.uid, displayName: userProfile.displayName, photoURL: userProfile.photoURL, guildId: selectedId,
-        activityPoints: points, status: 'pending', role: userProfile.role, originalGuildId: userProfile.guildId
+        uid: userProfile.uid, 
+        displayName: userProfile.displayName, 
+        photoURL: userProfile.photoURL || null, // Sanitize
+        guildId: selectedId,
+        activityPoints: points, 
+        status: 'pending', 
+        role: userProfile.role || 'DPS', // Sanitize
+        originalGuildId: userProfile.guildId
       });
       setIsJoinModalOpen(false); showAlert("Entry submitted!", 'success');
     } catch (err: any) { showAlert(`Error: ${err.message}`, 'error'); }
@@ -482,7 +488,16 @@ const Arena: React.FC = () => {
       if (participants.some(p => p.uid === user.uid)) { showAlert("User is already in the participant list.", 'info'); return; }
       try {
           const docRef = isCustomMode ? db.collection("arena_participants").doc() : db.collection("arena_participants").doc(user.uid);
-          await docRef.set({ uid: user.uid, displayName: user.displayName, photoURL: user.photoURL, guildId: selectedId, originalGuildId: user.guildId, activityPoints: 0, status: 'approved', role: user.role });
+          await docRef.set({ 
+              uid: user.uid, 
+              displayName: user.displayName, 
+              photoURL: user.photoURL || null, // Sanitize undefined
+              guildId: selectedId, 
+              originalGuildId: user.guildId || null, // Sanitize undefined
+              activityPoints: 0, 
+              status: 'approved', 
+              role: user.role || 'DPS' // Sanitize undefined
+          });
           setIsAddParticipantModalOpen(false); showAlert("Participant added.", 'success');
       } catch (err: any) { showAlert(`Error: ${err.message}`, 'error'); }
   };
@@ -677,7 +692,8 @@ const Arena: React.FC = () => {
 
           <ArenaBracket 
             matches={matches} 
-            canManage={canManage} 
+            canManage={canManage}
+            isAdmin={isAdmin} 
             arenaMinPoints={arenaMinPoints} 
             isCustomMode={isCustomMode} 
             activeStreamMatchId={activeStreamMatchId}
@@ -701,8 +717,9 @@ const Arena: React.FC = () => {
               <SearchableUserSelect 
                   users={allUsers.filter(u => {
                       const isAlreadyIn = participants.some(p => p.uid === u.uid);
-                      const isSameBranch = userProfile?.systemRole === 'Admin' || u.guildId === selectedId;
-                      return !isAlreadyIn && isSameBranch;
+                      // Allow if Admin, or if Custom Tournament (any user), or if same branch for Guild Arena
+                      const isVisible = isAdmin || isCustomMode || u.guildId === selectedId;
+                      return !isAlreadyIn && isVisible;
                   })}
                   selectedUid=""
                   onSelect={handleManualAddParticipant}

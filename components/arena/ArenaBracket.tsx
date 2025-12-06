@@ -6,6 +6,7 @@ import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio, Maximi
 interface ArenaBracketProps {
   matches: ArenaMatch[];
   canManage: boolean;
+  isAdmin: boolean;
   arenaMinPoints: number;
   isCustomMode: boolean;
   activeStreamMatchId?: string;
@@ -21,7 +22,7 @@ interface ArenaBracketProps {
 }
 
 export const ArenaBracket: React.FC<ArenaBracketProps> = ({
-  matches, canManage, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId, bestOf = 3,
+  matches, canManage, isAdmin, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId, bestOf = 3,
   onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch, onPreviewBanner, onScoreUpdate
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -77,7 +78,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   const zoomOut = () => setZoom(z => Math.max(z - 0.1, 0.2));
   const resetView = () => { setZoom(1); setPan({x: 50, y: 50}); };
 
-  const handleDragOver = (e: React.DragEvent) => { if (canManage) e.preventDefault(); };
+  const handleDragOver = (e: React.DragEvent) => { if (isAdmin) e.preventDefault(); };
 
   const getRoleBadge = (role?: RoleType) => {
       if (!role) return null;
@@ -101,14 +102,16 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
 
         const handleClick = (e: React.MouseEvent) => {
             if (!player) return;
-            if (canManage && !match.winner && !onScoreUpdate) onDeclareWinner(match, player);
+            // Only Admin can click to win directly (bypass score)
+            // Officers must use score controls to win
+            if (isAdmin && !match.winner && !onScoreUpdate) onDeclareWinner(match, player);
             else onViewProfile(player.uid);
         };
 
         return (
             <div 
                 onDragOver={handleDragOver}
-                onDrop={(e) => onDrop(e, match, slot)}
+                onDrop={(e) => isAdmin && onDrop(e, match, slot)}
                 className={`p-2 rounded flex items-center justify-between transition-all min-h-[44px] relative
                     ${isWinner 
                         ? 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900' 
@@ -133,7 +136,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
                 )}
                 
                 <div className="flex items-center">
-                  {/* Admin Score Controls */}
+                  {/* Admin & Officer Score Controls */}
                   {canManage && player && onScoreUpdate && (
                       <div className="flex items-center gap-1 mr-2 bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded border border-zinc-200 dark:border-zinc-700" onClick={(e) => e.stopPropagation()}>
                           <button 
@@ -167,7 +170,8 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
 
                   {isWinner && <Crown size={16} className="text-yellow-500 fill-yellow-500 animate-in zoom-in" />}
                   
-                  {canManage && player && (
+                  {/* Only Admin can clear slot */}
+                  {isAdmin && player && (
                       <button onClick={(e) => onClearSlot(e, match.id, slot)} className="text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
                           <X size={14} />
                       </button>
@@ -180,7 +184,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
     return (
         <div key={match.id} className="match-card match-card-3d relative flex items-center z-10 w-full mb-8 last:mb-0 perspective-container">
             <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : isStreamLive ? 'border-red-500 ring-2 ring-red-500/50 shadow-red-500/20' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20 transition-all`}>
-                {canManage && match.player1 && match.player2 && (
+                {isAdmin && match.player1 && match.player2 && (
                     <div className="absolute -top-3 -right-3 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={(e) => { e.stopPropagation(); onPreviewMatch(match); }}
