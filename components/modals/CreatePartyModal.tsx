@@ -54,6 +54,7 @@ export const CreatePartyModal: React.FC<CreatePartyModalProps> = ({ isOpen, onCl
             <option value="Outpost Challenge">Outpost Challenge</option>
             <option value="Hero's Realm">Hero's Realm</option>
             <option value="Sword Trial">Sword Trial</option>
+            <option value="Prison Break">Prison Break</option>
           </select>
         </div>
 
