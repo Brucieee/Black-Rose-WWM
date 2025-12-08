@@ -249,3 +249,23 @@ export interface AdConfig {
   passphrase: string;
   intervalMinutes: number;
 }
+
+export interface AudioFile {
+  id: string;
+  name: string;
+  url: string;
+  uploadedBy: string;
+  timestamp: string;
+}
+
+export interface ScheduledNotification {
+  id: string;
+  guildId: string;
+  audioFileId: string;
+  audioName: string;
+  audioUrl: string;
+  label: string; // "War Start", "Gathering"
+  time: string; // 24h format "HH:mm"
+  days?: string[]; // Array of days ['Monday', 'Wednesday']
+  createdBy: string;
+}

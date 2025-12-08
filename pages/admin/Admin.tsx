@@ -17,13 +17,14 @@ import { LeavesTab } from './tabs/LeavesTab';
 import { SuggestionsTab } from './tabs/SuggestionsTab';
 import { AuditLogTab } from './tabs/AuditLogTab';
 import { AdsTab } from './tabs/AdsTab';
+import { NotifierTab } from './tabs/NotifierTab';
 
 const Admin: React.FC = () => {
   const { currentUser } = useAuth();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   
-  const defaultTabs = ['guilds', 'events', 'announcements', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves', 'suggestions', 'audit', 'ads'];
+  const defaultTabs = ['guilds', 'events', 'announcements', 'notifier', 'breakingArmy', 'herosRealm', 'leaderboard', 'winnerLogs', 'members', 'users', 'leaves', 'suggestions', 'audit', 'ads'];
   
   const [tabOrder, setTabOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('adminTabOrder');
@@ -65,7 +66,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
       if (!loadingProfile && isOfficer) {
-          const allowedTabs = ['events', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members', 'leaderboard', 'winnerLogs'];
+          const allowedTabs = ['events', 'notifier', 'breakingArmy', 'herosRealm', 'leaves', 'announcements', 'members', 'leaderboard', 'winnerLogs'];
           if (!allowedTabs.includes(activeTab)) setActiveTab('events');
       }
   }, [loadingProfile, isOfficer, activeTab]);
@@ -89,7 +90,7 @@ const Admin: React.FC = () => {
       breakingArmy: 'Breaking Army', herosRealm: "Hero's Realm", 
       leaderboard: 'Leaderboard', winnerLogs: 'Winner Logs', members: 'Members', 
       users: 'Users', leaves: 'Leaves', suggestions: 'Suggestions', audit: 'Audit Log',
-      ads: 'Ad System'
+      ads: 'Ad System', notifier: 'Notifier'
   };
 
   return (
@@ -138,6 +139,7 @@ const Admin: React.FC = () => {
           {activeTab === 'guilds' && <GuildsTab />}
           {activeTab === 'events' && <EventsTab userProfile={userProfile} />}
           {activeTab === 'announcements' && <AnnouncementsTab userProfile={userProfile} />}
+          {activeTab === 'notifier' && <NotifierTab userProfile={userProfile} />}
           {activeTab === 'breakingArmy' && <BreakingArmyTab userProfile={userProfile} />}
           {activeTab === 'herosRealm' && <HerosRealmTab userProfile={userProfile} />}
           {activeTab === 'leaderboard' && <LeaderboardTab userProfile={userProfile} />}

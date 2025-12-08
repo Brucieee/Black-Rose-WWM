@@ -7,6 +7,9 @@ interface TimePickerProps {
 }
 
 export const TimePicker: React.FC<TimePickerProps> = ({ value, onChange }) => {
+  // Generate minutes 00, 05, 10 ... 55
+  const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+
   return (
     <div className="flex border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden bg-white dark:bg-zinc-800">
       <select 
@@ -22,7 +25,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({ value, onChange }) => {
           value={value.minute} 
           onChange={e => onChange({...value, minute: e.target.value})}
         >
-          {['00','15','30','45'].map(m=><option key={m} value={m} className="text-zinc-900 dark:text-white bg-white dark:bg-zinc-800">{m}</option>)}
+          {minutes.map(m=><option key={m} value={m} className="text-zinc-900 dark:text-white bg-white dark:bg-zinc-800">{m}</option>)}
         </select>
       </div>
       <select 
