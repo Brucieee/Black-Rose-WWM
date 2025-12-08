@@ -9,22 +9,19 @@ import {
   ChevronDown, 
   ChevronRight, 
   Settings, 
-  PlusCircle, 
   LogOut,
   Swords,
   X,
   Moon,
   Sun,
   Plane,
-  Trophy,
   MessageSquarePlus,
   Bell,
   BellOff,
   LogIn
 } from 'lucide-react';
-import { Guild, UserProfile } from '../types';
-import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { FileLeaveModal } from './modals/FileLeaveModal';
 import { SuggestionModal } from './modals/SuggestionModal';
 
@@ -40,11 +37,17 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMuted, onToggleMute }) => {
   const [isGuildsOpen, setIsGuildsOpen] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  
   const { logout, currentUser } = useAuth();
+  const { guilds, users } = useData();
+  
   const [isFileLeaveModalOpen, setIsFileLeaveModalOpen] = useState(false);
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
+
+  // Derive UserProfile from DataContext to avoid extra read
+  const userProfile = React.useMemo(() => {
+      return users.find(u => u.uid === currentUser?.uid) || null;
+  }, [users, currentUser]);
 
   useEffect(() => {
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -55,34 +58,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isMuted, onToggleMut
       setIsDarkMode(false);
     }
   }, []);
-
-  useEffect(() => {
-    // FIX: Use Firebase v8 compat syntax
-    const q = db.collection("guilds").orderBy("name");
-    const unsubscribe = q.onSnapshot((snapshot) => {
-      const guildsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Guild[];
-      setGuilds(guildsData);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      // FIX: Use Firebase v8 compat syntax
-      const userDocRef = db.collection("users").doc(currentUser.uid);
-      const unsub = userDocRef.onSnapshot((doc) => {
-        if (doc.exists) {
-          setUserProfile(doc.data() as UserProfile);
-        }
-      });
-      return () => unsub();
-    } else {
-      setUserProfile(null);
-    }
-  }, [currentUser]);
 
   const toggleDarkMode = () => {
     if (isDarkMode) {

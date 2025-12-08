@@ -14,6 +14,7 @@ import VsScreen from './pages/VsScreen';
 import MatchBanner from './pages/MatchBanner';
 import { AuthProvider } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
+import { DataProvider } from './contexts/DataContext';
 import { GlobalAdSystem } from './components/GlobalAdSystem';
 
 const { HashRouter, Routes, Route, Navigate } = ReactRouterDOM as any;
@@ -22,30 +23,32 @@ function App() {
   return (
     <AlertProvider>
       <AuthProvider>
-        <HashRouter>
-          <GlobalAdSystem />
-          <Routes>
-            {/* Fullscreen Views */}
-            <Route path="/vs-screen" element={<VsScreen />} />
-            <Route path="/match-banner" element={<MatchBanner />} />
-            
-            <Route path="/*" element={
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/members" element={<Members />} />
-                  <Route path="/guild/:guildId" element={<GuildDashboard />} />
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="/events" element={<Events />} />
-                  <Route path="/arena" element={<Arena />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Layout>
-            } />
-          </Routes>
-        </HashRouter>
+        <DataProvider>
+          <HashRouter>
+            <GlobalAdSystem />
+            <Routes>
+              {/* Fullscreen Views */}
+              <Route path="/vs-screen" element={<VsScreen />} />
+              <Route path="/match-banner" element={<MatchBanner />} />
+              
+              <Route path="/*" element={
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/members" element={<Members />} />
+                    <Route path="/guild/:guildId" element={<GuildDashboard />} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="/events" element={<Events />} />
+                    <Route path="/arena" element={<Arena />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Layout>
+              } />
+            </Routes>
+          </HashRouter>
+        </DataProvider>
       </AuthProvider>
     </AlertProvider>
   );

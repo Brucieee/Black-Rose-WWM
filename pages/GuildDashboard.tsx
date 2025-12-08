@@ -1,21 +1,21 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { Party, RoleType, Guild, GuildEvent, UserProfile, Announcement, HerosRealmConfig } from '../types';
-import { Users, Plus, Sword, Crown, Trash2, Calendar, Activity, LogOut, Megaphone, Edit, Clock, ArrowRight, Shield, ChevronLeft, ChevronRight, User, Sparkles } from 'lucide-react';
+import { Party, RoleType, Guild, Announcement, HerosRealmConfig, UserProfile } from '../types';
+import { Users, Plus, Sword, Megaphone, Clock, ArrowRight, Shield, ChevronLeft, ChevronRight, User, Activity, LogOut, Trash2, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { CreatePartyModal } from '../components/modals/CreatePartyModal';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { HerosRealmModal } from '../components/modals/HerosRealmModal';
-import { RichText } from '../components/RichText';
 import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
 import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
 import { logAction } from '../services/auditLogger';
 
-const { useParams, useNavigate, Link } = ReactRouterDOM as any;
+const { useParams, useNavigate } = ReactRouterDOM as any;
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -29,16 +29,11 @@ const GuildDashboard: React.FC = () => {
   const { guildId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { guilds, users: allUsers, events } = useData();
   const { showAlert } = useAlert();
 
-  const [guild, setGuild] = useState<Guild | null>(null);
-  const [allGuilds, setAllGuilds] = useState<Guild[]>([]); // New State for looking up other branches
-  const [loading, setLoading] = useState(true);
   const [parties, setParties] = useState<Party[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
   const [memberCount, setMemberCount] = useState(0);
-  const [events, setEvents] = useState<GuildEvent[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   
@@ -47,12 +42,16 @@ const GuildDashboard: React.FC = () => {
   
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
-  // Announcement Carousel State
+  // Carousel State
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
   const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
 
   // Global Party State
   const [userActiveParty, setUserActiveParty] = useState<Party | null>(null);
+
+  // Derive Current Guild & User Profile from Context
+  const guild = React.useMemo(() => guilds.find(g => g.id === guildId) || null, [guilds, guildId]);
+  const currentUserProfile = React.useMemo(() => allUsers.find(u => u.uid === currentUser?.uid) || null, [allUsers, currentUser]);
 
   // Force re-render for countdown timers
   const [, setTick] = useState(0);
@@ -77,12 +76,12 @@ const GuildDashboard: React.FC = () => {
 
   const prevParties = usePrevious(parties);
 
-  // Helper to check if a user is online based on lastSeen (within 3 minutes)
+  // Helper to check if a user is online
   const isUserOnline = (user: UserProfile) => {
       if (user.status === 'online') {
           if (!user.lastSeen) return true; 
           const diff = Date.now() - new Date(user.lastSeen).getTime();
-          return diff < 3 * 60 * 1000; // 3 minute inactivity threshold
+          return diff < 3 * 60 * 1000; 
       }
       return false;
   };
@@ -96,7 +95,6 @@ const GuildDashboard: React.FC = () => {
       const userPartyNow = parties.find(p => p.id === userPartyBefore.id);
       if (!userPartyNow) {
         const leader = allUsers.find(u => u.uid === userPartyBefore.leaderId);
-        // Check if leader went offline
         const isLeaderOnline = leader ? isUserOnline(leader) : false;
         
         if (leader && !isLeaderOnline) {
@@ -110,18 +108,16 @@ const GuildDashboard: React.FC = () => {
     }
   }, [parties, prevParties, currentUser, allUsers, showAlert]);
 
-  // Global Party Listener
+  // Global Party Listener (User-specific)
   useEffect(() => {
     if (!currentUser) {
         setUserActiveParty(null);
         return;
     }
-
-    // Listen to ANY party where the user is a member, regardless of guild
+    // Listen to ANY party where the user is a member
     const q = db.collection("parties").where("memberUids", "array-contains", currentUser.uid);
     const unsub = q.onSnapshot(snap => {
        if (!snap.empty) {
-           // User is in at least one party
            setUserActiveParty({ id: snap.docs[0].id, ...snap.docs[0].data() } as Party);
        } else {
            setUserActiveParty(null);
@@ -133,52 +129,25 @@ const GuildDashboard: React.FC = () => {
   useEffect(() => {
     if (!guildId) return;
 
-    // Fetch Current Guild Info
-    const guildRef = db.collection("guilds").doc(guildId);
-    const unsubGuild = guildRef.onSnapshot(docSnap => {
-      if (docSnap.exists) setGuild({ id: docSnap.id, ...docSnap.data() } as Guild);
-      else setGuild(null);
-      setLoading(false);
-    });
-
-    // Fetch ALL Guilds (so we can identify users from other branches)
-    const unsubAllGuilds = db.collection("guilds").onSnapshot(snap => {
-        setAllGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild)));
-    });
-
+    // Parties (specific to guild, so we fetch locally)
     const qParties = db.collection("parties").where("guildId", "==", guildId);
     const unsubParties = qParties.onSnapshot(snapshot => setParties(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Party)));
 
-    const unsubAllUsers = db.collection("users").onSnapshot(snapshot => {
-      const usersData = snapshot.docs.map(doc => doc.data() as UserProfile);
-      setAllUsers(usersData);
-      if (currentUser) {
-        const profile = usersData.find(u => u.uid === currentUser.uid);
-        setCurrentUserProfile(profile || null);
-      } else {
-        setCurrentUserProfile(null);
-      }
-    });
-
-    const qUsersInGuild = db.collection("users").where("guildId", "==", guildId);
-    const unsubUsersCount = qUsersInGuild.onSnapshot(snapshot => setMemberCount(snapshot.size));
-
-    const unsubEvents = db.collection("events").onSnapshot(snapshot => setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as GuildEvent)));
+    // Member Count
+    const count = allUsers.filter(u => u.guildId === guildId).length;
+    setMemberCount(count);
     
-    // Clear announcements before fetching new ones to prevent ghosting
+    // Announcements (specific to guild)
     setAnnouncements([]);
-    
-    // Fetch Announcements for this guild
     const unsubAnnouncements = db.collection("announcements")
       .where("guildId", "==", guildId)
       .onSnapshot(snap => {
         const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
-        // Sort client-side
         data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setAnnouncements(data);
       });
 
-    // Fetch Hero's Realm Config
+    // Hero's Realm Config (System doc)
     const unsubHerosRealmCorrect = db.collection("system").doc("herosRealm").onSnapshot(snap => {
         if (snap.exists) {
             setHerosRealmConfig(snap.data() as HerosRealmConfig);
@@ -186,16 +155,11 @@ const GuildDashboard: React.FC = () => {
     });
 
     return () => { 
-        unsubGuild(); 
-        unsubAllGuilds();
         unsubParties(); 
-        unsubUsersCount(); 
-        unsubEvents(); 
-        unsubAllUsers(); 
         unsubAnnouncements(); 
         unsubHerosRealmCorrect(); 
     };
-  }, [guildId, currentUser]);
+  }, [guildId, currentUser, allUsers]); // Re-run when allUsers changes to update count
 
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
@@ -206,7 +170,6 @@ const GuildDashboard: React.FC = () => {
       parties.forEach(party => {
         const leader = allUsers.find(u => u.uid === party.leaderId);
         
-        // Use lastSeen check for leader (3 min threshold)
         const isLeaderOnline = leader ? isUserOnline(leader) : false;
 
         if (leader && !isLeaderOnline) {
@@ -222,7 +185,6 @@ const GuildDashboard: React.FC = () => {
         
         if (membersToRemove.length > 0) {
             const partyRef = db.collection("parties").doc(party.id);
-            // Remove from both arrays
             batch.update(partyRef, { 
                 currentMembers: firebase.firestore.FieldValue.arrayRemove(...membersToRemove),
                 memberUids: firebase.firestore.FieldValue.arrayRemove(...membersToRemove.map(m => m.uid))
@@ -232,7 +194,7 @@ const GuildDashboard: React.FC = () => {
 
       batch.commit().catch(err => console.error("Party cleanup failed:", err));
 
-    }, 10000); // Check every 10 seconds for responsiveness
+    }, 10000); 
 
     return () => clearInterval(cleanupInterval);
   }, [parties, allUsers]);
@@ -246,15 +208,12 @@ const GuildDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [announcements.length]);
   
-  // This derived state is for UI logic within the current guild dashboard context
   const canCreatePartyInThisBranch = currentUserProfile?.guildId === guildId;
   
-  // Filter events: Must match guildId OR be global (empty), AND must be in the future (or today)
   const now = new Date();
-  // Reset time to start of day for comparison to show events happening today
   now.setHours(0,0,0,0); 
 
-  // Sort events by date ascending (soonest first)
+  // Filter & Sort Events from Context
   const branchEvents = events
     .filter(e => {
         const isCorrectBranch = e.guildId === guildId || !e.guildId || e.guildId === '';
@@ -263,7 +222,9 @@ const GuildDashboard: React.FC = () => {
     })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
+  // Filter Online Members from Context
   const onlineMembers = allUsers.filter(u => u.guildId === guildId && isUserOnline(u));
+  
   const activeHeroSchedule = herosRealmConfig?.schedules?.[guildId || '']?.[0];
   
   const formatTime = (time: string) => {
@@ -300,14 +261,14 @@ const GuildDashboard: React.FC = () => {
             guildId: guildId,
             leaderId: currentUserProfile.uid,
             leaderName: currentUserProfile.displayName,
-            memberUids: [currentUserProfile.uid], // Init with leader uid
+            memberUids: [currentUserProfile.uid], 
             currentMembers: [{
                 uid: currentUserProfile.uid,
                 name: currentUserProfile.displayName,
                 role: currentUserProfile.role,
                 photoURL: currentUserProfile.photoURL,
             }],
-            lastNotificationTime: Date.now() // Initial broadcast timestamp
+            lastNotificationTime: Date.now() 
         });
         await logAction('Create Party', `Created party: ${newPartyData.name} (${newPartyData.activity})`, currentUserProfile, 'Guild');
         setIsCreateModalOpen(false);
@@ -328,7 +289,6 @@ const GuildDashboard: React.FC = () => {
         showAlert("You are already in a party.", 'error');
         return;
     }
-    // Removed restriction to allow cross-branch joining
     if (party.currentMembers.length >= party.maxMembers) {
         showAlert("This party is full.", 'error', "Party Full");
         return;
@@ -356,7 +316,6 @@ const GuildDashboard: React.FC = () => {
     const partyRef = db.collection("parties").doc(party.id);
 
     if (currentUserProfile.uid === party.leaderId) {
-        // Leader leaves, disband party
         openDeleteModal(
             "Disband Party?",
             "As the leader, leaving will disband the party for everyone. Are you sure?",
@@ -367,7 +326,6 @@ const GuildDashboard: React.FC = () => {
             }
         );
     } else {
-        // Member leaves
         const memberToRemove = party.currentMembers.find(m => m.uid === currentUserProfile.uid);
         if (memberToRemove) {
             await partyRef.update({
@@ -382,7 +340,7 @@ const GuildDashboard: React.FC = () => {
   const handleBroadcast = async (party: Party) => {
       const now = Date.now();
       const last = party.lastNotificationTime || 0;
-      const cooldown = 60000; // 1 min
+      const cooldown = 60000; 
 
       if (now - last < cooldown) return;
 
@@ -418,7 +376,6 @@ const GuildDashboard: React.FC = () => {
     );
   };
 
-  if (loading) return <div className="p-8 text-center text-zinc-500">Loading Guild Data...</div>;
   if (!guild) return <div className="p-8 text-center text-red-500 font-bold">Guild Branch Not Found (ID: {guildId})</div>;
 
   return (
@@ -437,10 +394,10 @@ const GuildDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* LEFT COLUMN (Main Content - Announcements & Parties) */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-8">
             
-            {/* Announcements Section - CAROUSEL (Top of Grid) */}
+            {/* Announcements */}
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col h-[320px] relative group">
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
@@ -526,14 +483,13 @@ const GuildDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Party Finder Section */}
+            {/* Party Finder */}
             <div>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Activity className="text-rose-900 dark:text-rose-500" /> Party Finder
                     </h2>
                     
-                    {/* Create Party Button (Now moved here) */}
                     <div className="relative group">
                         <button 
                             onClick={() => setIsCreateModalOpen(true)}
@@ -578,7 +534,6 @@ const GuildDashboard: React.FC = () => {
                         const canBroadcast = now - lastBroadcast >= broadcastCooldown;
                         const remainingSecs = Math.ceil((broadcastCooldown - (now - lastBroadcast)) / 1000);
 
-                        // Other members names for display
                         const otherMemberNames = party.currentMembers
                             .filter(m => m.uid !== party.leaderId)
                             .map(m => m.name);
@@ -592,7 +547,7 @@ const GuildDashboard: React.FC = () => {
                                 <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[10px] uppercase rounded font-bold border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">{party.activity}</span>
                             </div>
                             <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                                <Crown size={14} className="text-yellow-500 flex-shrink-0" /> <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
+                                <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate">{party.leaderName}</span>
                             </p>
                             {otherMemberNames.length > 0 && (
                                 <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
@@ -638,7 +593,7 @@ const GuildDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Party Grid Layout */}
+                        {/* Party Grid */}
                         <div className={party.maxMembers > 5 ? 'grid grid-cols-5 gap-2' : 'flex flex-row gap-2'}>
                             {party.currentMembers.map((member) => {
                                 const memberProfile = allUsers.find(u => u.uid === member.uid);
@@ -683,10 +638,10 @@ const GuildDashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* RIGHT COLUMN (Sidebar - Events, Stats, Online) */}
+        {/* RIGHT COLUMN */}
         <div className="space-y-6">
             
-            {/* NEXT EVENT WIDGET (Redesigned) */}
+            {/* NEXT EVENT WIDGET */}
             <div className="relative group overflow-hidden rounded-2xl h-56 bg-zinc-900 border border-zinc-800 shadow-lg cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl" onClick={() => navigate('/events')}>
                 {branchEvents.length > 0 ? (
                     <>
@@ -844,7 +799,7 @@ const GuildDashboard: React.FC = () => {
         <UserProfileModal 
             user={selectedUser} 
             onClose={() => setSelectedUser(null)} 
-            guilds={allGuilds} // Pass all guilds here for cross-branch lookups
+            guilds={guilds} // Using global guilds context
         />
       )}
 

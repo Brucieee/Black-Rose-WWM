@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, Filter, Sparkles, Megaphone, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Calendar, ArrowRight, Sword, Users, Trophy, Activity, Clock, Globe, User } from 'lucide-react';
 import * as ReactRouterDOM from 'react-router-dom';
-import { UserProfile, QueueEntry, Guild, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig, ScheduleSlot } from '../types';
+import { UserProfile, QueueEntry, GuildEvent, LeaderboardEntry, BreakingArmyConfig, Announcement, HerosRealmConfig } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
 import { QueueModal } from '../components/modals/QueueModal';
-import { RichText } from '../components/RichText';
 import { CreateAnnouncementModal } from '../components/modals/CreateAnnouncementModal';
 import { ViewAnnouncementModal } from '../components/modals/ViewAnnouncementModal';
 import { logAction } from '../services/auditLogger';
@@ -16,18 +17,15 @@ const { Link, useNavigate } = ReactRouterDOM as any;
 
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
+  const { users, guilds, events: allEvents } = useData();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
   
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [events, setEvents] = useState<GuildEvent[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
   const [globalAnnouncements, setGlobalAnnouncements] = useState<Announcement[]>([]);
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
-  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
-
+  
   const [breakingArmyConfig, setBreakingArmyConfig] = useState<BreakingArmyConfig | null>(null);
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
@@ -39,25 +37,21 @@ const Dashboard: React.FC = () => {
   const [leaderboardFilterBoss, setLeaderboardFilterBoss] = useState<string>('All');
   const [leaderboardFilterGuild, setLeaderboardFilterGuild] = useState<string>('All');
 
+  // Filter future events from Context
+  const events = React.useMemo(() => {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); 
+      return allEvents
+        .filter(e => new Date(e.date) >= now)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [allEvents]);
+
+  // Derive Current User Profile
+  const currentUserProfile = React.useMemo(() => {
+      return users.find(u => u.uid === currentUser?.uid) || null;
+  }, [users, currentUser]);
+
   useEffect(() => {
-    // Fetch Guilds
-    const unsubGuilds = db.collection("guilds").onSnapshot(snap => {
-      setGuilds(snap.docs.map(d => ({id: d.id, ...d.data()} as Guild)));
-    });
-
-    // Fetch Events
-    const unsubEvents = db.collection("events")
-      .orderBy("date", "asc")
-      .onSnapshot(snap => {
-        const now = new Date();
-        now.setHours(0, 0, 0, 0); 
-
-        const futureEvents = snap.docs
-            .map(d => ({id: d.id, ...d.data()} as GuildEvent))
-            .filter(e => new Date(e.date) >= now);
-        setEvents(futureEvents);
-      });
-      
     // Fetch Leaderboard
     const unsubLeaderboard = db.collection("leaderboard")
       .orderBy("time", "asc")
@@ -85,11 +79,6 @@ const Dashboard: React.FC = () => {
         setQueue(qData);
     });
     
-    // Fetch Users
-    const unsubUsers = db.collection("users").onSnapshot(snap => {
-        setUsers(snap.docs.map(d => d.data() as UserProfile));
-    });
-
     // Fetch Global Announcements
     const unsubAnnouncements = db.collection("announcements")
       .where("isGlobal", "==", true)
@@ -102,7 +91,7 @@ const Dashboard: React.FC = () => {
       });
 
     return () => {
-        unsubGuilds(); unsubEvents(); unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubUsers(); unsubAnnouncements(); unsubHeroConfig();
+        unsubLeaderboard(); unsubConfig(); unsubQueue(); unsubAnnouncements(); unsubHeroConfig();
     };
   }, []);
 
@@ -114,15 +103,6 @@ const Dashboard: React.FC = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [globalAnnouncements.length]);
-
-  useEffect(() => {
-    if (currentUser && users.length > 0) {
-        const profile = users.find(u => u.uid === currentUser.uid);
-        setCurrentUserProfile(profile || null);
-    } else {
-        setCurrentUserProfile(null);
-    }
-  }, [currentUser, users]);
 
   // Derived state for Breaking Army
   const userGuildId = currentUserProfile?.guildId;
@@ -192,8 +172,6 @@ const Dashboard: React.FC = () => {
 
   const isCooldown = currentUserProfile ? (breakingArmyConfig?.recentWinners?.some(w => w.uid === currentUserProfile.uid && w.branchId === userGuildId) || false) : false;
 
-  const isAdmin = currentUserProfile?.systemRole === 'Admin';
-  
   const myQueueIndex = currentUserProfile ? guildQueue.findIndex(q => q.uid === currentUserProfile.uid) : -1;
   const myQueuePosition = myQueueIndex !== -1 ? myQueueIndex + 1 : null;
 
@@ -476,23 +454,6 @@ const Dashboard: React.FC = () => {
                             ))}
                         </div>
                     )}
-                    
-                    {globalAnnouncements.length > 1 && (
-                        <>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev - 1 + globalAnnouncements.length) % globalAnnouncements.length); }}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
-                            >
-                                <ChevronLeft size={20} />
-                            </button>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setCurrentAnnouncementIndex(prev => (prev + 1) % globalAnnouncements.length); }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black/80 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity text-zinc-800 dark:text-zinc-200 z-20"
-                            >
-                                <ChevronRight size={20} />
-                            </button>
-                        </>
-                    )}
                 </div>
             </div>
 
@@ -556,7 +517,7 @@ const Dashboard: React.FC = () => {
                             className="w-full text-xs p-1.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                         >
                             <option value="All">All Bosses</option>
-                            {uniqueBosses.map(b => <option key={b} value={b}>{b}</option>)}
+                            {Array.from(new Set(leaderboard.map(l => l.boss))).sort().map(b => <option key={b} value={b}>{b}</option>)}
                         </select>
                         <select 
                             value={leaderboardFilterGuild} 
@@ -564,7 +525,7 @@ const Dashboard: React.FC = () => {
                             className="w-full text-xs p-1.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                         >
                             <option value="All">All Branches</option>
-                            {uniqueGuilds.map(g => <option key={g} value={g}>{g}</option>)}
+                            {Array.from(new Set(leaderboard.map(l => l.branch))).sort().map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                     </div>
                  </div>

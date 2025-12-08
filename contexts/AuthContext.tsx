@@ -33,16 +33,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // FIX: Use Firebase v8 compat syntax
       const userDocRef = db.collection("users").doc(uid);
-      // Check if doc exists before updating
-      const docSnap = await userDocRef.get();
-      if (docSnap.exists) {
-        await userDocRef.update({ 
-            status,
-            lastSeen: new Date().toISOString()
-        });
-      }
+      // Optimization: Removed .get() check to save 1 read operation per heartbeat.
+      // Direct update is cheaper. If doc doesn't exist, it will error silently in catch which is fine.
+      await userDocRef.update({ 
+          status,
+          lastSeen: new Date().toISOString()
+      });
     } catch (error) {
-      console.log("Status update skipped (profile might not exist yet)");
+      // User profile might not exist yet (e.g. during registration), ignore.
     }
   };
 
@@ -106,9 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return;
 
     // Heartbeat to keep user 'online' and update lastSeen
+    // Optimization: Increased interval from 30s to 2 minutes to reduce write operations.
     const heartbeatInterval = setInterval(() => {
         updateUserStatus(currentUser.uid, 'online');
-    }, 30000); // Every 30 seconds
+    }, 120000); 
 
     const handleBeforeUnload = () => {
       // This is a best-effort attempt. Modern browsers may not guarantee its execution.

@@ -4,6 +4,7 @@ import * as ReactRouterDOM from 'react-router-dom';
 import { Guild, ArenaParticipant, ArenaMatch, UserProfile, CustomTournament, RoleType } from '../types';
 import { db } from '../services/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { useAlert } from '../contexts/AlertContext';
 import { ConfirmationModal } from '../components/modals/ConfirmationModal';
 import { JoinArenaModal } from '../components/modals/JoinArenaModal';
@@ -24,15 +25,14 @@ const { useNavigate } = ReactRouterDOM as any;
 
 const Arena: React.FC = () => {
   const { currentUser } = useAuth();
+  const { guilds, users: allUsers } = useData();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  
   const [customTournaments, setCustomTournaments] = useState<CustomTournament[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   
   const [selectedId, setSelectedId] = useState<string>(''); 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
   
   const [participants, setParticipants] = useState<ArenaParticipant[]>([]);
   const [matches, setMatches] = useState<ArenaMatch[]>([]);
@@ -137,40 +137,30 @@ const Arena: React.FC = () => {
     setIsChampionBannerVisible(true);
   }, [selectedId, matches]);
 
-  // Data Fetching
+  // Use profile from allUsers context to avoid extra listener, unless strict realtime is needed on profile changes
+  // Actually, we can just use the context user.
   useEffect(() => {
-    const unsubGuilds = db.collection("guilds").orderBy("name").onSnapshot(snap => {
-      const g = snap.docs.map(d => ({ id: d.id, ...d.data() } as Guild));
-      setGuilds(g);
-    });
+      if (currentUser && allUsers.length > 0) {
+          const profile = allUsers.find(u => u.uid === currentUser.uid);
+          setUserProfile(profile || null);
+      }
+  }, [currentUser, allUsers]);
+
+  // Fetch Custom Tournaments (Specific to this page, keep local)
+  useEffect(() => {
     const unsubTourneys = db.collection("custom_tournaments").orderBy("createdAt", "desc").onSnapshot(snap => {
         setCustomTournaments(snap.docs.map(d => ({ id: d.id, ...d.data() } as CustomTournament)));
     });
-    const unsubAllUsers = db.collection("users").onSnapshot(snap => {
-        setAllUsers(snap.docs.map(d => d.data() as UserProfile));
-    });
-    if (currentUser) {
-      const unsubUser = db.collection("users").doc(currentUser.uid).onSnapshot(snap => {
-        if (snap.exists) setUserProfile(snap.data() as UserProfile);
-        setProfileLoading(false);
-      });
-      return () => { unsubGuilds(); unsubUser(); unsubTourneys(); unsubAllUsers(); };
-    } else {
-        setProfileLoading(false);
-    }
-    return () => { unsubGuilds(); unsubTourneys(); unsubAllUsers(); };
-  }, [currentUser]);
+    return () => unsubTourneys();
+  }, []);
 
-  // Initial Selection Logic - Updated to prioritize user's guild branch
+  // Initial Selection Logic
   useEffect(() => {
-    if (selectedId) return; // Already selected, don't overwrite
+    if (selectedId) return; // Already selected
     if (guilds.length === 0) return; // Data not ready
 
-    // If profile is still loading, wait
-    if (currentUser && profileLoading) return;
-
-    if (currentUser && userProfile?.guildId) {
-        // Try to find the user's guild in the loaded guilds list
+    // If we have a user profile, default to their guild
+    if (userProfile?.guildId) {
         const myGuild = guilds.find(g => g.id === userProfile.guildId);
         if (myGuild) {
             setSelectedId(myGuild.id);
@@ -178,14 +168,15 @@ const Arena: React.FC = () => {
         }
     }
 
-    // Fallback: Default to first available guild
+    // Fallback
     if (guilds.length > 0) {
         setSelectedId(guilds[0].id);
     }
-  }, [guilds, userProfile, currentUser, selectedId, profileLoading]);
+  }, [guilds, userProfile, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
+    // Participants and Matches are specific to the selected ID (Guild or Tourney), so local listener is appropriate
     const unsubParticipants = db.collection("arena_participants")
       .where("guildId", "==", selectedId)
       .onSnapshot(snap => {
@@ -338,7 +329,7 @@ const Arena: React.FC = () => {
         let participantIndex = 0;
         
         round1Matches.forEach(match => {
-            // NEW LOGIC: Skip match if it has ANY participant assigned (manually locked)
+            // Skip match if it has ANY participant assigned (manually locked)
             if (match.player1 || match.player2) {
                 return;
             }
@@ -389,11 +380,11 @@ const Arena: React.FC = () => {
       await db.collection("arena_participants").doc(userProfile.uid).set({
         uid: userProfile.uid, 
         displayName: userProfile.displayName, 
-        photoURL: userProfile.photoURL || null, // Sanitize
+        photoURL: userProfile.photoURL || null,
         guildId: selectedId,
         activityPoints: points, 
         status: 'pending', 
-        role: userProfile.role || 'DPS', // Sanitize
+        role: userProfile.role || 'DPS',
         originalGuildId: userProfile.guildId
       });
       setIsJoinModalOpen(false); showAlert("Entry submitted!", 'success');
@@ -491,20 +482,27 @@ const Arena: React.FC = () => {
           await docRef.set({ 
               uid: user.uid, 
               displayName: user.displayName, 
-              photoURL: user.photoURL || null, // Sanitize undefined
+              photoURL: user.photoURL || null, 
               guildId: selectedId, 
-              originalGuildId: user.guildId || null, // Sanitize undefined
+              originalGuildId: user.guildId || null, 
               activityPoints: 0, 
               status: 'approved', 
-              role: user.role || 'DPS' // Sanitize undefined
+              role: user.role || 'DPS' 
           });
           setIsAddParticipantModalOpen(false); showAlert("Participant added.", 'success');
       } catch (err: any) { showAlert(`Error: ${err.message}`, 'error'); }
   };
 
   const handleViewProfile = async (uid: string) => {
-      const doc = await db.collection("users").doc(uid).get();
-      if (doc.exists) setViewingProfile(doc.data() as UserProfile);
+      // Find user from context first to save read
+      const cachedUser = allUsers.find(u => u.uid === uid);
+      if (cachedUser) {
+          setViewingProfile(cachedUser);
+      } else {
+          // Fallback fetch
+          const doc = await db.collection("users").doc(uid).get();
+          if (doc.exists) setViewingProfile(doc.data() as UserProfile);
+      }
   };
 
   const handleDeclareWinner = async (match: ArenaMatch, winner: ArenaParticipant) => {
@@ -545,12 +543,8 @@ const Arena: React.FC = () => {
       const currentScore = slot === 'player1' ? (match.score1 || 0) : (match.score2 || 0);
       let newScore = currentScore + (increment ? 1 : -1);
       
-      // Calculate Winning Score based on Best Of setting
-      // Best of 1 -> Win at 1
-      // Best of 3 -> Win at 2
       const winningScore = Math.ceil(bestOf / 2);
 
-      // Clamp between 0 and winningScore
       if (newScore < 0) newScore = 0;
       if (newScore > winningScore) newScore = winningScore;
       
@@ -560,7 +554,6 @@ const Arena: React.FC = () => {
           [slot === 'player1' ? 'score1' : 'score2']: newScore
       };
 
-      // Auto-Win logic
       if (newScore === winningScore) {
            const winner = slot === 'player1' ? match.player1 : match.player2;
            if(winner && match.winner?.uid !== winner.uid) {
@@ -569,10 +562,8 @@ const Arena: React.FC = () => {
                 return;
            }
       } else if (match.winner && newScore < winningScore) {
-          // If reducing score below winning threshold, and player was winner, remove winner status
           const currentWinnerUid = match.winner.uid;
           const playerUid = slot === 'player1' ? match.player1?.uid : match.player2?.uid;
-          
           if (currentWinnerUid === playerUid) {
               updateData.winner = null;
           }
@@ -604,7 +595,6 @@ const Arena: React.FC = () => {
   const handlePreviewMatch = async (match: ArenaMatch) => {
       const collection = isCustomMode ? "custom_tournaments" : "guilds";
       try { 
-          // Toggle off if currently active, else set to match.id
           const newValue = activeStreamMatchId === match.id ? null : match.id;
           await db.collection(collection).doc(selectedId).update({ activeStreamMatchId: newValue }); 
       } catch (e: any) { showAlert(e.message, "error"); }
@@ -613,7 +603,6 @@ const Arena: React.FC = () => {
   const handlePreviewBanner = async (match: ArenaMatch) => {
       const collection = isCustomMode ? "custom_tournaments" : "guilds";
       try { 
-          // Toggle off if currently active, else set to match.id
           const newValue = activeBannerMatchId === match.id ? null : match.id;
           await db.collection(collection).doc(selectedId).update({ activeBannerMatchId: newValue }); 
       } catch (e: any) { showAlert(e.message, "error"); }
@@ -717,7 +706,6 @@ const Arena: React.FC = () => {
               <SearchableUserSelect 
                   users={allUsers.filter(u => {
                       const isAlreadyIn = participants.some(p => p.uid === u.uid);
-                      // Allow if Admin, or if Custom Tournament (any user), or if same branch for Guild Arena
                       const isVisible = isAdmin || isCustomMode || u.guildId === selectedId;
                       return !isAlreadyIn && isVisible;
                   })}

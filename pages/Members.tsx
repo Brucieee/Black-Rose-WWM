@@ -1,34 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
-import { UserProfile, RoleType, Guild } from '../types';
-import { Search, ShieldCheck, ChevronDown, Sword, Shield, Heart, Zap } from 'lucide-react';
-import { db } from '../services/firebase';
+import React, { useState } from 'react';
+import { UserProfile, RoleType } from '../types';
+import { Search, ShieldCheck, Sword, Shield, Heart, Zap } from 'lucide-react';
 import { UserProfileModal } from '../components/modals/UserProfileModal';
-import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 
 const Members: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { users, guilds } = useData();
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filterRole, setFilterRole] = useState<string>('All');
   const [filterGuild, setFilterGuild] = useState<string>('All');
   const [search, setSearch] = useState('');
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-
-  useEffect(() => {
-    const usersCollection = db.collection("users");
-    const unsubscribe = usersCollection.onSnapshot((snapshot) => {
-      const allUsers = snapshot.docs.map(doc => doc.data() as UserProfile);
-      setUsers(allUsers);
-    });
-    
-    const guildsCollection = db.collection("guilds");
-    guildsCollection.get().then(snapshot => {
-      setGuilds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const isUserOnline = (user: UserProfile) => {
       if (user.status === 'online') {

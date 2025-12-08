@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Edit2, AlertTriangle, Building2, Facebook, Mail, Lock, User, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
@@ -15,7 +17,7 @@ const { useNavigate } = ReactRouterDOM as any;
 
 const Register: React.FC = () => {
   const { currentUser, signInWithGoogle, login, signup, logout } = useAuth();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const { guilds } = useData();
   
   const navigate = useNavigate();
   const { showAlert } = useAlert();
@@ -28,7 +30,7 @@ const Register: React.FC = () => {
   // Rules Modal State
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [rulesAccepted, setRulesAccepted] = useState(false);
-  const [pendingSignup, setPendingSignup] = useState(false); // To track if we need to run signup after rules
+  const [pendingSignup, setPendingSignup] = useState(false); 
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -41,23 +43,11 @@ const Register: React.FC = () => {
   const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
-  // Guild Selection State
   const [isGuildModalOpen, setIsGuildModalOpen] = useState(false);
   const [tempSelectedGuild, setTempSelectedGuild] = useState<Guild | null>(null);
 
-  // Profile Existence Check State
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
-
-  useEffect(() => {
-    const fetchGuilds = async () => {
-      const q = db.collection("guilds").orderBy("name");
-      const snapshot = await q.get();
-      const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
-      setGuilds(guildsData);
-    };
-    fetchGuilds();
-  }, []);
 
   // Monitor Current User & Profile Status
   useEffect(() => {
@@ -69,22 +59,17 @@ const Register: React.FC = () => {
           const docSnap = await docRef.get();
           
           if (docSnap.exists) {
-            // Profile exists, they are fully registered
             setProfileExists(true);
-            // Redirect to dashboard immediately if profile exists to prevent stuck in setup
             navigate('/', { replace: true });
             return; 
           } else {
-            // Profile DOES NOT exist yet (New User)
             setProfileExists(false);
             
-            // Prefill email name
             setFormData(prev => ({ ...prev, displayName: currentUser.displayName || '' }));
             if (currentUser.photoURL && PRESET_AVATARS.includes(currentUser.photoURL)) {
                 setSelectedAvatar(currentUser.photoURL);
             }
 
-            // TRIGGER RULES IF NOT ACCEPTED YET
             if (!rulesAccepted) {
                setIsRulesModalOpen(true);
             }
@@ -98,7 +83,7 @@ const Register: React.FC = () => {
     };
 
     checkUserProfile();
-  }, [currentUser, rulesAccepted, navigate]); // Added navigate to deps
+  }, [currentUser, rulesAccepted, navigate]);
 
   const getFirebaseErrorMessage = (code: string) => {
     switch (code) {
@@ -111,55 +96,44 @@ const Register: React.FC = () => {
     }
   };
 
-  // Called when "Join the Ranks" (Signup) or "Sign In" is clicked
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (isLoginMode) {
-      // Login Flow: No rules needed here, just login. Profile check happens in useEffect.
       try {
         setIsRedirecting(true);
         await login(authEmail, authPass);
-        // Navigation handled by useEffect when profile found
       } catch (error: any) {
         setIsRedirecting(false);
         const msg = getFirebaseErrorMessage(error.code);
         showAlert(msg, 'error', "Login Failed");
       }
     } else {
-      // Signup Flow: Show Rules First
       setPendingSignup(true);
       setIsRulesModalOpen(true);
     }
   };
 
-  // Called when Rules Modal is Confirmed
   const handleRulesConfirm = async () => {
     setRulesAccepted(true);
     setIsRulesModalOpen(false);
 
-    // If we were waiting to signup via Email/Pass
     if (pendingSignup) {
       try {
         await signup(authEmail, authPass);
         setPendingSignup(false);
-        // Auth success will trigger useEffect -> checkUserProfile -> show Profile Form
       } catch (error: any) {
         const msg = getFirebaseErrorMessage(error.code);
         showAlert(msg, 'error', "Sign Up Failed");
         setPendingSignup(false);
-        setRulesAccepted(false); // Reset so they have to accept again if they retry
+        setRulesAccepted(false); 
       }
     }
-    // If it was Google Sign In, the user is already authenticated (currentUser exists).
-    // Setting rulesAccepted=true will cause the Profile Form to be revealed by the render logic below.
   };
 
-  // Called when Rules Modal is Cancelled/Declined
   const handleRulesDecline = async () => {
     setIsRulesModalOpen(false);
     setPendingSignup(false);
-    // If they were already signed in (Google flow) but declined rules, log them out
     if (currentUser && !profileExists) {
         await logout();
         showAlert("You must accept the guild rules to join.", 'info');
@@ -249,7 +223,6 @@ const Register: React.FC = () => {
         systemRole: 'Member'
       });
 
-      // Audit Log for Joining
       const joinedGuild = guilds.find(g => g.id === formData.guildId);
       await logAction(
         'Join Guild', 
@@ -282,7 +255,6 @@ const Register: React.FC = () => {
 
   const availableWeapons = getAvailableWeapons(formData.role);
 
-  // Show loading while redirecting OR checking profile status
   if (isRedirecting || isProfileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
@@ -294,9 +266,7 @@ const Register: React.FC = () => {
     );
   }
 
-  // Logic to determine what to render
   const showProfileForm = currentUser && (rulesAccepted || profileExists);
-  // const showAuthForm = !currentUser; // Not used directly but implied by !showProfileForm
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -312,7 +282,6 @@ const Register: React.FC = () => {
           /* --- LOGIN / SIGNUP CARD --- */
           <div className="max-w-md mx-auto w-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
             
-            {/* Logo Header */}
             <div className="pt-8 pb-4 text-center">
                <div className="w-32 h-32 mx-auto mb-4 relative transition-transform duration-700 hover:scale-105">
                   <img src="https://hvfncvygrmnxfdavwzkx.supabase.co/storage/v1/object/public/black-rose-wwm/logo/br-black.png" alt="Logo" className="w-full h-full object-contain dark:hidden drop-shadow-lg" />
@@ -322,7 +291,6 @@ const Register: React.FC = () => {
                <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium tracking-widest uppercase mt-1">Guild</p>
             </div>
 
-            {/* Switcher */}
             <div className="px-8 mb-6">
               <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl relative">
                 <div 
@@ -392,12 +360,9 @@ const Register: React.FC = () => {
               <div className="space-y-3">
                 <button 
                   onClick={async () => {
-                      // For Google, we allow Auth FIRST, then check if rules needed in useEffect
                       try {
                         await signInWithGoogle();
-                        // If success, useEffect will handle rule check for new users
                       } catch (err) {
-                        // Error handled in context/alert
                       }
                   }} 
                   className="w-full flex items-center justify-center gap-3 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors font-medium text-sm group"

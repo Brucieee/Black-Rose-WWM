@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, Guild, UserProfile } from '../types';
+import { RoleType, WEAPON_LIST, Weapon, WEAPON_ROLE_MAP, UserProfile } from '../types';
 import { Check, Sword, Shield, Cross, Zap, Save, Edit2, Lock, User, Hash, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { db } from '../services/firebase';
 import { useAlert } from '../contexts/AlertContext';
 import { PRESET_AVATARS } from '../services/mockData';
@@ -10,8 +11,8 @@ import { AvatarSelectionModal } from '../components/modals/AvatarSelectionModal'
 
 const Profile: React.FC = () => {
   const { currentUser } = useAuth();
+  const { guilds } = useData();
   const { showAlert } = useAlert();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -34,13 +35,6 @@ const Profile: React.FC = () => {
       if (!currentUser) return;
       
       try {
-        // Fetch Guilds
-        // FIX: Use Firebase v8 compat syntax
-        const q = db.collection("guilds").orderBy("name");
-        const snapshot = await q.get();
-        const guildsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Guild[];
-        setGuilds(guildsData);
-
         // Fetch Current Profile
         // FIX: Use Firebase v8 compat syntax
         const docRef = db.collection("users").doc(currentUser.uid);
@@ -65,8 +59,8 @@ const Profile: React.FC = () => {
             if (currentUser.displayName) {
                 setFormData(prev => ({...prev, displayName: currentUser.displayName!}));
             }
-            if (guildsData.length > 0) {
-                setFormData(prev => ({...prev, guildId: guildsData[0].id}));
+            if (guilds.length > 0) {
+                setFormData(prev => ({...prev, guildId: guilds[0].id}));
             }
         }
       } catch (err) {
@@ -76,7 +70,7 @@ const Profile: React.FC = () => {
       }
     };
     fetchData();
-  }, [currentUser]);
+  }, [currentUser, guilds]); // Added guilds dependency to update default if needed
 
   const getAvailableWeapons = (role: RoleType): Weapon[] => {
     if (role === RoleType.HYBRID) {
@@ -159,7 +153,7 @@ const Profile: React.FC = () => {
           batch.update(doc.ref, {
               displayName: formData.displayName,
               photoURL: selectedAvatar,
-              role: formData.role // Also sync role change if needed
+              role: formData.role 
           });
       });
 
@@ -180,8 +174,7 @@ const Profile: React.FC = () => {
           batch.update(doc.ref, updates);
       });
 
-      // Update Active Arena Matches (Bracket) - This requires finding matches where user is player1 or player2
-      // We do this in two queries to catch both slots
+      // Update Active Arena Matches (Bracket)
       const matchesP1Snap = await db.collection("arena_matches").where("player1.uid", "==", currentUser.uid).get();
       matchesP1Snap.forEach(doc => {
           const matchData = doc.data();
@@ -190,7 +183,6 @@ const Profile: React.FC = () => {
               "player1.photoURL": selectedAvatar,
               "player1.role": formData.role
           });
-          // If they are also the winner of this match, update winner field
           if (matchData.winner?.uid === currentUser.uid) {
               batch.update(doc.ref, {
                   "winner.displayName": formData.displayName,
@@ -208,7 +200,6 @@ const Profile: React.FC = () => {
               "player2.photoURL": selectedAvatar,
               "player2.role": formData.role
           });
-          // If they are also the winner of this match, update winner field
           if (matchData.winner?.uid === currentUser.uid) {
               batch.update(doc.ref, {
                   "winner.displayName": formData.displayName,
@@ -218,7 +209,6 @@ const Profile: React.FC = () => {
           }
       });
 
-      // Commit all cascade updates
       await batch.commit();
       
       setProfileExists(true);

@@ -1,32 +1,20 @@
 
-
-
-
-import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Image as ImageIcon } from 'lucide-react';
-import { db } from '../services/firebase';
-import { GuildEvent, Guild } from '../types';
+import React from 'react';
+import { Calendar, Clock } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
 import { RichText } from '../components/RichText';
 
 const Events: React.FC = () => {
-  const [events, setEvents] = useState<GuildEvent[]>([]);
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const { events, guilds } = useData();
 
-  useEffect(() => {
-    // FIX: Use Firebase v8 compat syntax
-    const qEvents = db.collection("events").orderBy("date", "desc");
-    const unsubEvents = qEvents.onSnapshot(snap => {
-      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuildEvent)));
-    });
-    
-    // FIX: Use Firebase v8 compat syntax
-    const guildsCollection = db.collection("guilds");
-    guildsCollection.get().then(snap => {
-      setGuilds(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guild)));
-    });
-
-    return () => unsubEvents();
-  }, []);
+  // Filter and sort for display
+  const displayEvents = React.useMemo(() => {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); // Include today's events even if time passed
+      return events
+        .filter(e => new Date(e.date) >= now)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Descending order as per original file? Original was desc.
+  }, [events]);
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-6">
@@ -43,12 +31,12 @@ const Events: React.FC = () => {
         </div>
         
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {events.length === 0 ? (
+          {displayEvents.length === 0 ? (
             <div className="p-8 text-center text-zinc-500 dark:text-zinc-400">
               No upcoming events found. Check back later!
             </div>
           ) : (
-            events.map(event => {
+            displayEvents.map(event => {
               const branchName = guilds.find(g => g.id === event.guildId)?.name || 'Global';
               const eventDate = new Date(event.date);
               
