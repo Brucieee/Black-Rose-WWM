@@ -19,7 +19,8 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   
   // Import Options
-  const [importWinners, setImportWinners] = useState(true); // Top 3
+  const [importWinners, setImportWinners] = useState(true); // Top X
+  const [topRankToImport, setTopRankToImport] = useState<number>(3);
   const [importLosers, setImportLosers] = useState(false); // Everyone else
   const [hasGrandFinale, setHasGrandFinale] = useState(true); // Exaggerated Top 1 Banner
   const [hideRankings, setHideRankings] = useState(false); // Hide Top 3 Banner completely
@@ -59,10 +60,12 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
             
           const guildParticipants = partsSnap.docs.map(d => d.data() as ArenaParticipant);
           
-          // Identify Winners (Top 3)
+          // Identify Winners
           let winnerUids: string[] = [];
           if (guild?.lastArenaWinners) {
-              winnerUids = guild.lastArenaWinners.map(w => w.uid);
+              winnerUids = guild.lastArenaWinners
+                .filter(w => w.rank <= topRankToImport)
+                .map(w => w.uid);
           }
 
           guildParticipants.forEach(p => {
@@ -92,6 +95,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
       setTitle('');
       setSelectedGuilds([]);
       setImportWinners(true);
+      setTopRankToImport(3);
       setImportLosers(false);
       setHasGrandFinale(true);
       setHideRankings(false);
@@ -159,11 +163,40 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
                   />
                   <label htmlFor="importWinners" className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 cursor-pointer select-none">
                       <Trophy size={14} className="text-yellow-500" />
-                      Import Top 3 Winners
+                      Import Top Winners
                   </label>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4 pl-7">
+                  <div className="flex items-center gap-2">
+                      <input 
+                          type="radio" 
+                          id="top3" 
+                          name="topRank" 
+                          value={3} 
+                          checked={topRankToImport === 3} 
+                          onChange={() => setTopRankToImport(3)}
+                          disabled={!importWinners}
+                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                      />
+                      <label htmlFor="top3" className="text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">Top 3</label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <input 
+                          type="radio" 
+                          id="top4" 
+                          name="topRank" 
+                          value={4} 
+                          checked={topRankToImport === 4} 
+                          onChange={() => setTopRankToImport(4)}
+                          disabled={!importWinners}
+                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                      />
+                      <label htmlFor="top4" className="text-sm text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">Top 4</label>
+                  </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-700/50">
                   <input 
                     type="checkbox" 
                     id="importLosers"
@@ -173,7 +206,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({ is
                   />
                   <label htmlFor="importLosers" className="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 cursor-pointer select-none">
                       <Users size={14} className="text-zinc-400" />
-                      Import Non-Winners (Losers)
+                      Import Non-Winners
                   </label>
               </div>
           </div>
