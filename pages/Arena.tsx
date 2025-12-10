@@ -64,8 +64,12 @@ const Arena: React.FC = () => {
   const selectedTournament = customTournaments.find(t => t.id === selectedId);
   const isCustomMode = !!selectedTournament;
 
-  // Determine Best Of (Default to 3 if not set)
-  const bestOf = isCustomMode ? (selectedTournament?.bestOf || 3) : (selectedGuild?.bestOf || 3);
+  // Determine Best Of (Default to 3 if not set), and handle legacy "best of 2"
+  const getEffectiveBestOf = () => {
+    const value = isCustomMode ? (selectedTournament?.bestOf || 3) : (selectedGuild?.bestOf || 3);
+    return value === 2 ? 3 : value;
+  };
+  const bestOf = getEffectiveBestOf();
 
   const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedId && !isCustomMode);
   const isAdmin = userProfile?.systemRole === 'Admin';
@@ -77,7 +81,7 @@ const Arena: React.FC = () => {
   const pendingParticipants = participants.filter(p => p.status === 'pending');
 
   const arenaMinPoints = selectedGuild?.arenaMinPoints || 0;
-  const arenaWinners = selectedGuild?.lastArenaWinners || (selectedGuild?.lastArenaChampion ? [{...selectedGuild.lastArenaChampion, rank: 1}] : []);
+  const arenaWinners = isCustomMode ? [] : (selectedGuild?.lastArenaWinners || (selectedGuild?.lastArenaChampion ? [{...selectedGuild.lastArenaChampion, rank: 1}] : []));
 
   const activeStreamMatchId = isCustomMode ? selectedTournament?.activeStreamMatchId : selectedGuild?.activeStreamMatchId;
   const activeBannerMatchId = isCustomMode ? selectedTournament?.activeBannerMatchId : selectedGuild?.activeBannerMatchId;
@@ -173,6 +177,11 @@ const Arena: React.FC = () => {
         setSelectedId(guilds[0].id);
     }
   }, [guilds, userProfile, selectedId]);
+
+  useEffect(() => {
+    setMatches([]);
+    setParticipants([]);
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -543,7 +552,7 @@ const Arena: React.FC = () => {
       const currentScore = slot === 'player1' ? (match.score1 || 0) : (match.score2 || 0);
       let newScore = currentScore + (increment ? 1 : -1);
       
-      const winningScore = Math.ceil(bestOf / 2);
+      const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
 
       if (newScore < 0) newScore = 0;
       if (newScore > winningScore) newScore = winningScore;

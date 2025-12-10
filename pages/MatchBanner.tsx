@@ -139,8 +139,8 @@ const MatchBanner: React.FC = () => {
   };
 
   const renderScoreDots = (score: number) => {
-      const winningScore = Math.ceil(bestOf / 2);
-      // Create array length equal to winning score (e.g., 2 for Bo3, 1 for Bo1)
+      const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
+      // Create array length equal to winning score (e.g., 3 for Bo3, 1 for Bo1)
       const dots = Array.from({ length: winningScore }, (_, i) => i + 1);
 
       return (
@@ -193,7 +193,7 @@ const MatchBanner: React.FC = () => {
   const score1 = match.score1 || 0;
   const score2 = match.score2 || 0;
   
-  const winningScore = Math.ceil(bestOf / 2);
+  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
   const hasWinner = !!match.winner || score1 >= winningScore || score2 >= winningScore;
   const isLeftWinner = match.winner?.uid === leftPlayer?.uid || score1 >= winningScore;
   const isRightWinner = match.winner?.uid === rightPlayer?.uid || score2 >= winningScore;

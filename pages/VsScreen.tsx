@@ -18,6 +18,7 @@ const VsScreen: React.FC = () => {
   const [guilds, setGuilds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [streamMatchId, setStreamMatchId] = useState<string | null>(null);
+  const [bestOf, setBestOf] = useState(3);
 
   useEffect(() => {
     const unsub = db.collection("guilds").onSnapshot((snap: any) => {
@@ -36,11 +37,8 @@ const VsScreen: React.FC = () => {
           return db.collection(collection).doc(contextId).onSnapshot((doc: any) => {
               if (doc.exists) {
                   const data = doc.data();
-                  if (data?.activeStreamMatchId) {
-                      setStreamMatchId(data.activeStreamMatchId);
-                  } else {
-                      setStreamMatchId(null);
-                  }
+                  setStreamMatchId(data?.activeStreamMatchId || null);
+                  setBestOf(data?.bestOf || 3);
               }
           });
       };
@@ -51,7 +49,8 @@ const VsScreen: React.FC = () => {
       db.collection("guilds").doc(contextId).get().then((doc: any) => {
           if (doc.exists) {
               unsubscribe = setupListener("guilds");
-          } else {
+          }
+          else {
               unsubscribe = setupListener("custom_tournaments");
           }
       });
@@ -115,6 +114,7 @@ const VsScreen: React.FC = () => {
   const p2Weapons = p2Profile?.weapons || [];
   const p1GuildName = guilds[p1.originalGuildId || p1.guildId] || "Challenger";
   const p2GuildName = guilds[p2.originalGuildId || p2.guildId] || "Challenger";
+  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
 
   return (
     <>
@@ -172,14 +172,21 @@ const VsScreen: React.FC = () => {
                     </span>
                 </div>
             ) : (
-                <div className="relative flex items-center justify-center gap-12">
-                    <span className="text-9xl font-black text-white drop-shadow-[0_0_30px_rgba(59,130,246,0.8)] tabular-nums">
-                        {activeMatch.score1 || 0}
-                    </span>
-                    <div className="h-32 w-2 bg-white/20 rounded-full"></div>
-                    <span className="text-9xl font-black text-white drop-shadow-[0_0_30px_rgba(239,68,68,0.8)] tabular-nums">
-                        {activeMatch.score2 || 0}
-                    </span>
+                <div className="flex flex-col items-center">
+                    <div className="relative flex items-center justify-center gap-12">
+                        <span className="text-9xl font-black text-white drop-shadow-[0_0_30px_rgba(59,130,246,0.8)] tabular-nums">
+                            {activeMatch.score1 || 0}
+                        </span>
+                        <div className="h-32 w-2 bg-white/20 rounded-full"></div>
+                        <span className="text-9xl font-black text-white drop-shadow-[0_0_30px_rgba(239,68,68,0.8)] tabular-nums">
+                            {activeMatch.score2 || 0}
+                        </span>
+                    </div>
+                    {winningScore > 1 && (
+                    <div className="text-2xl font-bold uppercase tracking-widest mt-6 bg-black/50 px-6 py-2 rounded-full backdrop-blur-md border border-white/10 text-white/80">
+                        First to {winningScore}
+                    </div>
+                    )}
                 </div>
             )}
         </div>

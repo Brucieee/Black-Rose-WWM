@@ -43,7 +43,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
   
-  const winningScore = Math.ceil(bestOf / 2);
+  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button') || 
