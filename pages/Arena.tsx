@@ -64,12 +64,8 @@ const Arena: React.FC = () => {
   const selectedTournament = customTournaments.find(t => t.id === selectedId);
   const isCustomMode = !!selectedTournament;
 
-  // Determine Best Of (Default to 3 if not set), and handle legacy "best of 2"
-  const getEffectiveBestOf = () => {
-    const value = isCustomMode ? (selectedTournament?.bestOf || 3) : (selectedGuild?.bestOf || 3);
-    return value === 2 ? 3 : value;
-  };
-  const bestOf = getEffectiveBestOf();
+  const bestOf = (isCustomMode ? selectedTournament?.bestOf : selectedGuild?.bestOf) || 1;
+  const raceTo = isCustomMode ? selectedTournament?.raceTo : selectedGuild?.raceTo;
 
   const canManage = userProfile?.systemRole === 'Admin' || (userProfile?.systemRole === 'Officer' && userProfile.guildId === selectedId && !isCustomMode);
   const isAdmin = userProfile?.systemRole === 'Admin';
@@ -238,12 +234,16 @@ const Arena: React.FC = () => {
   };
 
   const handleInitializeBracket = async (config: BracketSetupConfig) => {
-    const { mode, size, customMatches, bestOf } = config;
+    const { mode, size, customMatches, bestOf, raceTo } = config;
     const batch = db.batch();
     try {
-      // 1. Update Tournament/Guild Settings with BestOf
+      // 1. Update Tournament/Guild Settings
       const collectionName = isCustomMode ? "custom_tournaments" : "guilds";
-      batch.update(db.collection(collectionName).doc(selectedId), { bestOf: bestOf });
+      const settings: { bestOf: number; raceTo?: number } = { bestOf };
+      if (raceTo) {
+        settings.raceTo = raceTo;
+      }
+      batch.update(db.collection(collectionName).doc(selectedId), settings);
 
       // 2. Clear existing matches
       const existingMatchesQuery = await db.collection("arena_matches").where("guildId", "==", selectedId).get();
@@ -275,7 +275,7 @@ const Arena: React.FC = () => {
       }
 
       await batch.commit();
-      showAlert(`Bracket initialized (${bestOf === 1 ? 'Best of 1' : 'Best of 3'}).`, 'success');
+      showAlert(`Bracket initialized (Best of ${bestOf}, Race to ${raceTo}).`, 'success');
     } catch (err: any) {
        console.error("Failed to init bracket", err);
        showAlert(`Failed to initialize: ${err.message}`, 'error');
@@ -403,7 +403,7 @@ const Arena: React.FC = () => {
   const handleCreateTournament = async (title: string, importedParticipants: ArenaParticipant[], hasGrandFinale: boolean, hideRankings: boolean) => {
       try {
           const tourneyRef = await db.collection("custom_tournaments").add({
-              title, createdAt: new Date().toISOString(), createdBy: userProfile?.uid || 'Admin', hasGrandFinale, hideRankings, bestOf: 3 // Default
+              title, createdAt: new Date().toISOString(), createdBy: userProfile?.uid || 'Admin', hasGrandFinale, hideRankings, bestOf: 3, raceTo: 2 // Default
           });
           const batch = db.batch();
           importedParticipants.forEach(p => {
@@ -546,13 +546,25 @@ const Arena: React.FC = () => {
     } catch (err: any) { showAlert(`Error updating bracket: ${err.message}`, 'error'); }
   };
 
+  const handleUpdateMatch = async (matchId: string, settings: { bestOf: number; raceTo?: number }) => {
+    try {
+      await db.collection("arena_matches").doc(matchId).update(settings);
+      showAlert("Match format updated.", "success");
+    } catch (err: any) {
+      showAlert(`Error: ${err.message}`, "error");
+    }
+  };
+
   const handleScoreUpdate = async (match: ArenaMatch, slot: 'player1' | 'player2', increment: boolean) => {
       if (!canManage) return;
       
       const currentScore = slot === 'player1' ? (match.score1 || 0) : (match.score2 || 0);
       let newScore = currentScore + (increment ? 1 : -1);
+
+      const matchBestOf = match.bestOf || bestOf;
+      const matchRaceTo = match.raceTo || raceTo;
       
-      const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
+      const winningScore = matchRaceTo || (matchBestOf === 1 ? 1 : Math.ceil(matchBestOf / 2));
 
       if (newScore < 0) newScore = 0;
       if (newScore > winningScore) newScore = winningScore;
@@ -697,6 +709,7 @@ const Arena: React.FC = () => {
             activeStreamMatchId={activeStreamMatchId}
             activeBannerMatchId={activeBannerMatchId}
             bestOf={bestOf}
+            raceTo={raceTo}
             onDeclareWinner={handleDeclareWinner}
             onClearSlot={handleClearSlot as any}
             onDrop={handleDrop as any}
@@ -704,6 +717,7 @@ const Arena: React.FC = () => {
             onPreviewMatch={handlePreviewMatch}
             onPreviewBanner={handlePreviewBanner}
             onScoreUpdate={handleScoreUpdate}
+            onUpdateMatch={handleUpdateMatch}
           />
         </div>
       </div>

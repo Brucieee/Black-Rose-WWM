@@ -18,6 +18,7 @@ const MatchBanner: React.FC = () => {
   const [p2Profile, setP2Profile] = useState<UserProfile | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [bestOf, setBestOf] = useState<number>(3); // Default Best of 3
+  const [raceTo, setRaceTo] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
 
   // Fetch Guilds for lookup
@@ -44,6 +45,9 @@ const MatchBanner: React.FC = () => {
                   // Update bestOf setting if available
                   if (data?.bestOf) {
                       setBestOf(data.bestOf);
+                  }
+                  if (data?.raceTo) {
+                      setRaceTo(data.raceTo);
                   }
               }
           });
@@ -139,8 +143,7 @@ const MatchBanner: React.FC = () => {
   };
 
   const renderScoreDots = (score: number) => {
-      const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
-      // Create array length equal to winning score (e.g., 3 for Bo3, 1 for Bo1)
+      // Create array length equal to winning score
       const dots = Array.from({ length: winningScore }, (_, i) => i + 1);
 
       return (
@@ -192,8 +195,11 @@ const MatchBanner: React.FC = () => {
   
   const score1 = match.score1 || 0;
   const score2 = match.score2 || 0;
+
+  const matchBestOf = match.bestOf || bestOf;
+  const matchRaceTo = match.raceTo || raceTo;
   
-  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
+  const winningScore = matchRaceTo || (matchBestOf === 1 ? 1 : Math.ceil(matchBestOf / 2));
   const hasWinner = !!match.winner || score1 >= winningScore || score2 >= winningScore;
   const isLeftWinner = match.winner?.uid === leftPlayer?.uid || score1 >= winningScore;
   const isRightWinner = match.winner?.uid === rightPlayer?.uid || score2 >= winningScore;
@@ -262,7 +268,7 @@ const MatchBanner: React.FC = () => {
                                         <span className={score2 > 0 ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" : "text-zinc-600"}>{score2}</span>
                                     </div>
                                     <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
-                                        MATCHUP
+                                        {matchBestOf > 1 ? `Best of ${matchBestOf}` : ''}{matchRaceTo ? ` / Race to ${matchRaceTo}`: ''}
                                     </span>
                                 </>
                             ) : (
@@ -271,7 +277,7 @@ const MatchBanner: React.FC = () => {
                                         VS
                                     </span>
                                     <span className="text-[10px] md:text-xs font-bold text-zinc-500 uppercase tracking-[0.5em] mt-2">
-                                        MATCHUP
+                                        {matchBestOf > 1 ? `Best of ${matchBestOf}` : ''}{matchRaceTo ? ` / Race to ${matchRaceTo}`: ''}
                                     </span>
                                 </>
                             )}

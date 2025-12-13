@@ -19,6 +19,7 @@ const VsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [streamMatchId, setStreamMatchId] = useState<string | null>(null);
   const [bestOf, setBestOf] = useState(3);
+  const [raceTo, setRaceTo] = useState<number | undefined>();
 
   useEffect(() => {
     const unsub = db.collection("guilds").onSnapshot((snap: any) => {
@@ -39,6 +40,7 @@ const VsScreen: React.FC = () => {
                   const data = doc.data();
                   setStreamMatchId(data?.activeStreamMatchId || null);
                   setBestOf(data?.bestOf || 3);
+                  setRaceTo(data?.raceTo);
               }
           });
       };
@@ -114,7 +116,9 @@ const VsScreen: React.FC = () => {
   const p2Weapons = p2Profile?.weapons || [];
   const p1GuildName = guilds[p1.originalGuildId || p1.guildId] || "Challenger";
   const p2GuildName = guilds[p2.originalGuildId || p2.guildId] || "Challenger";
-  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
+  const matchBestOf = activeMatch.bestOf || bestOf;
+  const matchRaceTo = activeMatch.raceTo || raceTo;
+  const winningScore = matchRaceTo || (matchBestOf === 1 ? 1 : Math.ceil(matchBestOf / 2));
 
   return (
     <>
@@ -185,6 +189,11 @@ const VsScreen: React.FC = () => {
                     {winningScore > 1 && (
                     <div className="text-2xl font-bold uppercase tracking-widest mt-6 bg-black/50 px-6 py-2 rounded-full backdrop-blur-md border border-white/10 text-white/80">
                         First to {winningScore}
+                    </div>
+                    )}
+                     {(matchBestOf > 1 || matchRaceTo) && (
+                    <div className="text-lg font-bold uppercase tracking-widest mt-6 bg-black/50 px-6 py-2 rounded-full backdrop-blur-md border border-white/10 text-white/80">
+                        {matchBestOf > 1 ? `Best of ${matchBestOf}` : ''}{matchRaceTo ? ` / Race to ${matchRaceTo}`: ''}
                     </div>
                     )}
                 </div>

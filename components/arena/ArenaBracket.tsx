@@ -1,7 +1,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ArenaMatch, ArenaParticipant, RoleType } from '../../types';
-import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio, Maximize } from 'lucide-react';
+import { Trophy, Crown, X, Plus, Minus, RotateCcw, RefreshCw, Eye, Radio, Maximize, Pencil } from 'lucide-react';
+import { EditMatchModal } from '../modals/EditMatchModal';
 
 interface ArenaBracketProps {
   matches: ArenaMatch[];
@@ -12,6 +13,7 @@ interface ArenaBracketProps {
   activeStreamMatchId?: string;
   activeBannerMatchId?: string;
   bestOf?: number;
+  raceTo?: number;
   onDeclareWinner: (match: ArenaMatch, winner: ArenaParticipant) => void;
   onClearSlot: (e: React.MouseEvent, matchId: string, slot: 'player1' | 'player2') => void;
   onDrop: (e: React.DragEvent, match: ArenaMatch, slot: 'player1' | 'player2') => void;
@@ -19,12 +21,14 @@ interface ArenaBracketProps {
   onPreviewMatch: (match: ArenaMatch) => void;
   onPreviewBanner?: (match: ArenaMatch) => void;
   onScoreUpdate?: (match: ArenaMatch, slot: 'player1' | 'player2', increment: boolean) => void;
+  onUpdateMatch?: (matchId: string, settings: { bestOf: number; raceTo?: number }) => void;
 }
 
 export const ArenaBracket: React.FC<ArenaBracketProps> = ({
-  matches, canManage, isAdmin, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId, bestOf = 3,
-  onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch, onPreviewBanner, onScoreUpdate
+  matches, canManage, isAdmin, arenaMinPoints, isCustomMode, activeStreamMatchId, activeBannerMatchId, bestOf = 3, raceTo,
+  onDeclareWinner, onClearSlot, onDrop, onViewProfile, onPreviewMatch, onPreviewBanner, onScoreUpdate, onUpdateMatch
 }) => {
+  const [editingMatch, setEditingMatch] = useState<ArenaMatch | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 50, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
@@ -43,7 +47,12 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   const round1MatchCount = matches.filter(m => m.round === 1).length || 1;
   const minContainerHeight = Math.max(800, round1MatchCount * 140);
   
-  const winningScore = bestOf === 3 ? 3 : Math.ceil(bestOf / 2);
+  const handleUpdateMatch = (settings: { bestOf: number; raceTo?: number }) => {
+    if (editingMatch && onUpdateMatch) {
+      onUpdateMatch(editingMatch.id, settings);
+    }
+    setEditingMatch(null);
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button') || 
@@ -94,6 +103,10 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   const renderMatch = (match: ArenaMatch) => {
     const isStreamLive = activeStreamMatchId === match.id;
     const isBannerLive = activeBannerMatchId === match.id;
+
+    const matchBestOf = match.bestOf || bestOf;
+    const matchRaceTo = match.raceTo || raceTo;
+    const winningScore = matchRaceTo || (matchBestOf === 1 ? 1 : Math.ceil(matchBestOf / 2));
 
     const renderPlayer = (player: ArenaParticipant | null, slot: 'player1' | 'player2') => {
         const isWinner = match.winner?.uid === player?.uid;
@@ -186,6 +199,15 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
             <div className={`bg-zinc-50 dark:bg-zinc-950 border ${match.isThirdPlace ? 'border-orange-300 dark:border-orange-800 bg-white dark:bg-black' : isStreamLive ? 'border-red-500 ring-2 ring-red-500/50 shadow-red-500/20' : 'border-zinc-200 dark:border-zinc-800'} rounded-lg p-2 w-64 shadow-sm group relative z-20 transition-all`}>
                 {isAdmin && match.player1 && match.player2 && (
                     <div className="absolute -top-3 -right-3 flex gap-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {onUpdateMatch && (
+                          <button
+                              onClick={(e) => { e.stopPropagation(); setEditingMatch(match); }}
+                              className="p-1.5 rounded-full shadow-md border bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700"
+                              title="Edit Match Format"
+                          >
+                              <Pencil size={14} />
+                          </button>
+                        )}
                         <button
                             onClick={(e) => { e.stopPropagation(); onPreviewMatch(match); }}
                             className={`p-1.5 rounded-full shadow-md border transition-all ${
@@ -217,6 +239,9 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
                 {renderPlayer(match.player1, 'player1')}
                 <div className="text-[10px] text-zinc-500 dark:text-zinc-400 text-center font-black py-0.5 tracking-wider">VS</div>
                 {renderPlayer(match.player2, 'player2')}
+                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 text-center font-bold uppercase mt-1">
+                    {matchBestOf === 1 ? 'Best of 1' : `Best of ${matchBestOf}${matchRaceTo ? ` / Race to ${matchRaceTo}` : ''}`}
+                </div>
             </div>
             
             {!match.isThirdPlace && match.round < maxRound && (
@@ -238,6 +263,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
   };
 
   return (
+    <>
     <div 
         className="flex-1 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden flex flex-col z-0 min-h-0"
         ref={containerRef}
@@ -248,7 +274,7 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
             </h3>
             <div className="flex gap-4 items-center">
                 <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">
-                    {bestOf === 1 ? 'Best of 1' : `Best of ${bestOf}`}
+                    {bestOf === 1 ? 'Best of 1' : `Best of ${bestOf}${raceTo ? ` / Race to ${raceTo}` : ''}`}
                 </span>
                 {arenaMinPoints > 0 && !isCustomMode && <span className="text-xs text-zinc-500">Min Points: {arenaMinPoints}</span>}
             </div>
@@ -323,5 +349,12 @@ export const ArenaBracket: React.FC<ArenaBracketProps> = ({
             </div>
         </div>
     </div>
+    <EditMatchModal 
+      isOpen={!!editingMatch}
+      onClose={() => setEditingMatch(null)}
+      onConfirm={handleUpdateMatch}
+      match={editingMatch}
+    />
+    </>
   );
 };

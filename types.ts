@@ -49,7 +49,8 @@ export interface Guild {
   name: string;
   memberCap: number;
   arenaMinPoints?: number; // Added for arena threshold
-  bestOf?: number; // 1 or 3
+  bestOf?: number;
+  raceTo?: number;
   activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
   activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
   lastArenaChampion?: {
@@ -197,7 +198,8 @@ export interface CustomTournament {
   createdBy: string;
   hasGrandFinale?: boolean;
   hideRankings?: boolean;
-  bestOf?: number; // 1 or 3
+  bestOf?: number;
+  raceTo?: number;
   activeStreamMatchId?: string; // ID of the match currently being broadcasted on VS Screen
   activeBannerMatchId?: string; // ID of the match currently being broadcasted on Match Banner
 }
@@ -213,6 +215,8 @@ export interface ArenaMatch {
   isThirdPlace?: boolean; // Flag for 3rd place match
   score1?: number; // Score for player 1
   score2?: number; // Score for player 2
+  bestOf?: number;
+  raceTo?: number;
 }
 
 export interface HerosRealmRequest {
