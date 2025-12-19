@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { Party, RoleType, Guild, Announcement, HerosRealmConfig, UserProfile } from '../types';
-import { Users, Plus, Sword, Megaphone, Clock, ArrowRight, Shield, ChevronLeft, ChevronRight, User, Activity, LogOut, Trash2, Calendar } from 'lucide-react';
+import { Users, Plus, Sword, Megaphone, Clock, ArrowRight, Shield, ChevronLeft, ChevronRight, User, Activity, LogOut, Trash2, Calendar, ListTodo, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { db } from '../services/firebase';
@@ -35,10 +35,12 @@ const GuildDashboard: React.FC = () => {
   const [parties, setParties] = useState<Party[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [realmQueue, setRealmQueue] = useState<any[]>([]);
   const [herosRealmConfig, setHerosRealmConfig] = useState<HerosRealmConfig | null>(null);
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isHerosRealmModalOpen, setIsHerosRealmModalOpen] = useState(false);
+  const [isOnlineListOpen, setIsOnlineListOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
@@ -147,6 +149,16 @@ const GuildDashboard: React.FC = () => {
         setAnnouncements(data);
       });
 
+    // Hero's Realm Queue
+    const unsubRealmQueue = db.collection("heros_realm_queue")
+        .where("guildId", "==", guildId)
+        .onSnapshot(snap => {
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort by joinedAt in memory to avoid index requirements
+            data.sort((a: any, b: any) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+            setRealmQueue(data);
+        });
+
     // Hero's Realm Config (System doc)
     const unsubHerosRealmCorrect = db.collection("system").doc("herosRealm").onSnapshot(snap => {
         if (snap.exists) {
@@ -155,7 +167,7 @@ const GuildDashboard: React.FC = () => {
     });
 
     return () => { 
-        unsubParties(); 
+        unsubParties(); unsubRealmQueue();
         unsubAnnouncements(); 
         unsubHerosRealmCorrect(); 
     };
@@ -354,6 +366,40 @@ const GuildDashboard: React.FC = () => {
       }
   };
 
+  const handleJoinRealmQueue = async () => {
+      if (!currentUserProfile) return;
+      if (currentUserProfile.guildId !== guildId) {
+          showAlert("You can only join the Hero's Realm queue for your own guild branch.", 'error');
+          return;
+      }
+      try {
+          await db.collection("heros_realm_queue").doc(currentUserProfile.uid).set({
+              uid: currentUserProfile.uid,
+              displayName: currentUserProfile.displayName,
+              role: currentUserProfile.role,
+              guildId: guildId,
+              photoURL: currentUserProfile.photoURL,
+              joinedAt: new Date().toISOString()
+          });
+          await logAction('Join Realm Queue', `Joined Hero's Realm list`, currentUserProfile, 'Guild');
+          showAlert("Added to Hero's Realm list.", 'success');
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
+  const handleLeaveRealmQueue = async (uid: string) => {
+      try {
+          await db.collection("heros_realm_queue").doc(uid).delete();
+          if (currentUserProfile && uid === currentUserProfile.uid) {
+             await logAction('Leave Realm Queue', `Marked Hero's Realm as done`, currentUserProfile, 'Guild');
+          }
+          showAlert(uid === currentUser?.uid ? "Marked as done!" : "User removed from list.", 'success');
+      } catch (err: any) {
+          showAlert(err.message, 'error');
+      }
+  };
+
   const kickMember = async (e: React.MouseEvent, party: Party, memberUid: string) => {
     e.stopPropagation();
     e.preventDefault();
@@ -382,13 +428,60 @@ const GuildDashboard: React.FC = () => {
     <div className="max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
       
       {/* HEADER */}
-      <div className="mb-8 flex justify-between items-center">
+      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
                 <Shield size={32} className="text-rose-900 dark:text-rose-500" />
                 {guild.name}
             </h1>
             <p className="text-zinc-500 dark:text-zinc-400 mt-1">Branch Dashboard</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+            {/* Total Members */}
+            <div className="bg-white dark:bg-zinc-900 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center gap-2">
+                <Users size={16} className="text-zinc-500" />
+                <span className="font-bold text-zinc-900 dark:text-zinc-100">{memberCount}</span>
+                <span className="text-xs text-zinc-500 font-medium uppercase">Members</span>
+            </div>
+
+            {/* Online Members Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setIsOnlineListOpen(!isOnlineListOpen)}
+                    className={`px-4 py-2 rounded-xl border shadow-sm flex items-center gap-2 transition-all ${isOnlineListOpen ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-900 dark:text-green-400' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-green-500/50'}`}
+                >
+                    <div className={`w-2 h-2 rounded-full ${onlineMembers.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-zinc-400'}`}></div>
+                    <span className="font-bold">{onlineMembers.length}</span>
+                    <span className="text-xs font-medium uppercase opacity-80">Online</span>
+                </button>
+
+                {isOnlineListOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2">
+                        <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                            <h4 className="text-xs font-bold text-zinc-500 uppercase">Online Now</h4>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                            {onlineMembers.length === 0 ? (
+                                <p className="text-center text-xs text-zinc-400 py-4">No one is online.</p>
+                            ) : (
+                                onlineMembers.map(u => (
+                                    <div key={u.uid} onClick={() => { setSelectedUser(u); setIsOnlineListOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg cursor-pointer">
+                                        <div className="relative">
+                                            <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-8 h-8 rounded-full object-cover" alt="" />
+                                            <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border border-white dark:border-zinc-900 rounded-full"></div>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{u.displayName}</p>
+                                            <p className="text-[10px] text-zinc-500">{u.role}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
       </div>
 
@@ -682,21 +775,70 @@ const GuildDashboard: React.FC = () => {
                 )}
             </div>
 
-            {/* Compact Stats Grid */}
-            <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col items-center justify-center text-center hover:border-blue-500/30 transition-colors">
-                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg mb-2">
-                        <Users size={20} />
-                    </div>
-                    <p className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">{memberCount}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1">Members</p>
+            {/* Guild Hero's Realm (Queue) */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <h3 className="font-bold text-lg text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <ListTodo className="text-purple-600 dark:text-purple-400" size={20} /> Guild Hero's Realm
+                    </h3>
+                    {!realmQueue.some(q => q.uid === currentUser?.uid) ? (
+                        <button
+                            onClick={handleJoinRealmQueue}
+                            disabled={currentUserProfile?.guildId !== guildId}
+                            className="text-xs font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Plus size={14} /> Join
+                        </button>
+                    ) : (
+                        <span className="text-xs font-bold text-green-600 dark:text-green-400 flex items-center gap-1">
+                            <Check size={14} /> You are on the list
+                        </span>
+                    )}
                 </div>
-                <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col items-center justify-center text-center hover:border-rose-500/30 transition-colors">
-                    <div className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-lg mb-2">
-                        <Sword size={20} />
-                    </div>
-                    <p className="text-xl font-black text-zinc-900 dark:text-zinc-100 leading-none">{parties.length}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1">Parties</p>
+                
+                <div className="p-4">
+                    {realmQueue.length === 0 ? (
+                        <div className="text-center py-6 px-4">
+                            <p className="text-zinc-900 dark:text-zinc-100 font-medium mb-1">
+                                The list is currently empty!
+                            </p>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Not yet done with GHR? Join the list so we can help you get it done!
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2">
+                            {realmQueue.map(entry => {
+                                const isMe = entry.uid === currentUser?.uid;
+                                const canRemove = isMe || currentUserProfile?.systemRole === 'Admin' || currentUserProfile?.systemRole === 'Officer';
+                                
+                                return (
+                                    <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
+                                        <div className="flex items-center gap-3">
+                                            <img 
+                                                src={entry.photoURL || 'https://via.placeholder.com/150'} 
+                                                alt={entry.displayName} 
+                                                className="w-8 h-8 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700"
+                                            />
+                                            <div>
+                                                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-none">{entry.displayName}</p>
+                                                <p className="text-[10px] text-zinc-500 mt-1">{entry.role}</p>
+                                            </div>
+                                        </div>
+                                        {canRemove && (
+                                            <button
+                                                onClick={() => handleLeaveRealmQueue(entry.uid)}
+                                                className={`p-1.5 rounded-md transition-colors ${isMe ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-200 text-zinc-500 hover:bg-red-100 hover:text-red-600 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'}`}
+                                                title={isMe ? "Mark as Done" : "Remove from list"}
+                                            >
+                                                {isMe ? <Check size={14} /> : <X size={14} />}
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -728,44 +870,6 @@ const GuildDashboard: React.FC = () => {
                             View Polls & Vote
                         </button>
                     </div>
-                </div>
-            </div>
-
-            {/* Online Members Sidebar */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm max-h-[600px] flex flex-col">
-                <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-4">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <h3 className="font-bold text-zinc-900 dark:text-zinc-100">Online Members</h3>
-                    <span className="ml-auto text-xs font-bold bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">
-                        {onlineMembers.length}
-                    </span>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
-                    {onlineMembers.length === 0 ? (
-                        <p className="text-sm text-zinc-400 text-center py-4">No one is online.</p>
-                    ) : (
-                        onlineMembers.map(u => (
-                            <div 
-                                key={u.uid} 
-                                onClick={() => setSelectedUser(u)}
-                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer transition-colors group"
-                            >
-                                <div className="relative">
-                                    <img src={u.photoURL || 'https://via.placeholder.com/150'} className="w-9 h-9 rounded-full object-cover bg-zinc-200 dark:bg-zinc-700" alt={u.displayName} />
-                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-zinc-900 rounded-full"></div>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-rose-900 dark:group-hover:text-rose-400 transition-colors">
-                                        {u.displayName}
-                                    </p>
-                                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wide">
-                                        {u.role}
-                                    </p>
-                                </div>
-                            </div>
-                        ))
-                    )}
                 </div>
             </div>
 
